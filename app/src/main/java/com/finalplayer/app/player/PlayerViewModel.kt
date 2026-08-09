@@ -601,10 +601,6 @@ class PlayerViewModel(
             }
 
             if (bStyle == "box") {
-                runCatching {
-                    MPVLib.setPropertyString("sub-box", "yes")
-                    MPVLib.setOptionString("sub-box", "yes")
-                }
                 MPVLib.setPropertyString("sub-border-style", "background-box")
                 MPVLib.setOptionString("sub-border-style", "background-box")
                 MPVLib.setPropertyString("sub-back-color", bgHex)
@@ -612,10 +608,6 @@ class PlayerViewModel(
                 MPVLib.setPropertyString("sub-bg-color", bgHex)
                 MPVLib.setOptionString("sub-bg-color", bgHex)
             } else {
-                runCatching {
-                    MPVLib.setPropertyString("sub-box", "no")
-                    MPVLib.setOptionString("sub-box", "no")
-                }
                 MPVLib.setPropertyString("sub-border-style", "outline-and-shadow")
                 MPVLib.setOptionString("sub-border-style", "outline-and-shadow")
                 MPVLib.setPropertyString("sub-back-color", "#00000000")
@@ -680,10 +672,6 @@ class PlayerViewModel(
                     val bgHex = formatLongToHex(effectiveBgCLong)
 
                     if (style == "box") {
-                        runCatching {
-                            MPVLib.setPropertyString("sub-box", "yes")
-                            MPVLib.setOptionString("sub-box", "yes")
-                        }
                         MPVLib.setPropertyString("sub-border-style", "background-box")
                         MPVLib.setOptionString("sub-border-style", "background-box")
                         MPVLib.setPropertyString("sub-back-color", bgHex)
@@ -691,10 +679,6 @@ class PlayerViewModel(
                         MPVLib.setPropertyString("sub-bg-color", bgHex)
                         MPVLib.setOptionString("sub-bg-color", bgHex)
                     } else {
-                        runCatching {
-                            MPVLib.setPropertyString("sub-box", "no")
-                            MPVLib.setOptionString("sub-box", "no")
-                        }
                         MPVLib.setPropertyString("sub-border-style", "outline-and-shadow")
                         MPVLib.setOptionString("sub-border-style", "outline-and-shadow")
                         MPVLib.setPropertyString("sub-back-color", "#00000000")

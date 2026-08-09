@@ -12,6 +12,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
+import com.finalplayer.app.data.database.entities.SecureMediaEntity
+import com.finalplayer.app.data.mapper.toEntity
+import com.finalplayer.app.utils.FileOperationsUtil
+import java.io.File
+
 class VideoRepositoryImpl(
     private val videoDao: VideoDao,
     private val secureMediaDao: SecureMediaDao,
@@ -89,5 +94,96 @@ class VideoRepositoryImpl(
 
     override suspend fun deleteVideo(videoId: String) {
         videoDao.deleteVideo(videoId)
+    }
+
+    override suspend fun hideVideosToSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
+        return try {
+            val files = videos.map { FileOperationsUtil.getVideoFile(it) }
+            FileOperationsUtil.hideFiles(context, files)
+            for (video in videos) {
+                val fullPath = if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
+                secureMediaDao.insert(
+                    SecureMediaEntity(
+                        videoId = video.id,
+                        originalPath = fullPath
+                    )
+                )
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun renameVideo(video: VideoItem, newName: String, context: android.content.Context): Result<File> {
+        return try {
+            val file = FileOperationsUtil.getVideoFile(video)
+            val result = FileOperationsUtil.renameFile(context, file, newName)
+            val targetFile = result.getOrNull() ?: File(file.parentFile ?: File(video.folderPath), newName)
+
+            val updatedEntity = video.toEntity().copy(
+                title = newName,
+                uri = if (targetFile.exists()) targetFile.absolutePath else video.uri
+            )
+            videoDao.insertVideos(listOf(updatedEntity))
+            Result.success(targetFile)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun moveVideos(videos: List<VideoItem>, destination: File, context: android.content.Context): Result<List<File>> {
+        return try {
+            val files = videos.map { FileOperationsUtil.getVideoFile(it) }
+            val diskResult = FileOperationsUtil.moveFiles(context, files, destination)
+            val movedFiles = diskResult.getOrDefault(emptyList())
+
+            val updatedEntities = videos.map { video ->
+                val targetFile = File(destination, video.title)
+                video.toEntity().copy(
+                    folderPath = destination.absolutePath,
+                    uri = if (targetFile.exists()) targetFile.absolutePath else "${destination.absolutePath}/${video.title}"
+                )
+            }
+            videoDao.insertVideos(updatedEntities)
+            Result.success(movedFiles)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun copyVideos(videos: List<VideoItem>, destination: File, context: android.content.Context): Result<List<File>> {
+        return try {
+            val files = videos.map { FileOperationsUtil.getVideoFile(it) }
+            val diskResult = FileOperationsUtil.copyFiles(context, files, destination)
+            val copiedFiles = diskResult.getOrDefault(emptyList())
+
+            val newEntities = videos.mapIndexed { idx, video ->
+                val targetFile = File(destination, video.title)
+                video.toEntity().copy(
+                    id = "${video.id}_copy_${System.currentTimeMillis()}_$idx",
+                    folderPath = destination.absolutePath,
+                    uri = if (targetFile.exists()) targetFile.absolutePath else "${destination.absolutePath}/${video.title}",
+                    dateAdded = System.currentTimeMillis() / 1000L
+                )
+            }
+            videoDao.insertVideos(newEntities)
+            Result.success(copiedFiles)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun deleteVideos(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
+        return try {
+            val files = videos.map { FileOperationsUtil.getVideoFile(it) }
+            FileOperationsUtil.deleteFiles(context, files)
+            for (video in videos) {
+                videoDao.deleteVideo(video.id)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

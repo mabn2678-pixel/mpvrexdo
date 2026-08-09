@@ -57,6 +57,13 @@ import com.finalplayer.app.ui.home.components.SortBottomSheet
 import com.finalplayer.app.ui.recents.RecentsScreen
 import com.finalplayer.app.ui.shorts.ShortsScreen
 import com.finalplayer.app.ui.securefolder.SecureFolderViewModel
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.finalplayer.app.ui.components.VideoContextMenuSheet
+import com.finalplayer.app.utils.FileOperationsUtil
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,8 +81,12 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
     var showSortSheet by remember { mutableStateOf(false) }
-    var showSecureConfirm by remember { mutableStateOf<VideoItem?>(null) }
+    var contextMenuVideo by remember { mutableStateOf<VideoItem?>(null) }
     val sortSheetState = rememberModalBottomSheetState()
 
     val lazyListState = rememberLazyListState()
@@ -98,6 +109,7 @@ fun HomeScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (uiState.selectedTab == HomeTab.HOME) {
                 HomeTopBar(
@@ -185,7 +197,7 @@ fun HomeScreen(
                                                 video = video,
                                                 isOpened = uiState.playedVideoIds.contains(video.id) || uiState.playedVideoIds.contains(video.uri),
                                                 onClick = { onRecentVideoClick(video.uri, video.title) },
-                                                onLongClick = { showSecureConfirm = video }
+                                                onLongClick = { contextMenuVideo = video }
                                             )
                                         }
                                     }
@@ -205,7 +217,7 @@ fun HomeScreen(
                                                 video = video,
                                                 isOpened = uiState.playedVideoIds.contains(video.id) || uiState.playedVideoIds.contains(video.uri),
                                                 onClick = { onRecentVideoClick(video.uri, video.title) },
-                                                onLongClick = { showSecureConfirm = video }
+                                                onLongClick = { contextMenuVideo = video }
                                             )
                                         }
                                     }
@@ -338,20 +350,42 @@ fun HomeScreen(
         )
     }
 
-    showSecureConfirm?.let { video ->
-        AlertDialog(
-            onDismissRequest = { showSecureConfirm = null },
-            title = { Text("إضافة للمجلد الآمن") },
-            text = { Text("هل تريد إخفاء \"${video.title}\" في المجلد الآمن؟ لن يظهر في الشاشة الرئيسية.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    secureFolderViewModel.addToSecureFolder(video.id, video.uri)
-                    showSecureConfirm = null
-                }) { Text("إضافة") }
+    contextMenuVideo?.let { video ->
+        VideoContextMenuSheet(
+            selectedItems = listOf(video),
+            onDismiss = { contextMenuVideo = null },
+            onPlay = { selectedVideo ->
+                onRecentVideoClick(selectedVideo.uri, selectedVideo.title)
             },
-            dismissButton = {
-                TextButton(onClick = { showSecureConfirm = null }) { Text("إلغاء") }
-            }
+            onShare = { items ->
+                FileOperationsUtil.shareVideos(context, items)
+            },
+            onRename = { selectedVideo, newName ->
+                viewModel.renameVideo(selectedVideo, newName, context) { _, message ->
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
+            },
+            onMove = { items, destination ->
+                viewModel.moveVideos(items, destination, context) { _, message ->
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
+            },
+            onCopy = { items, destination ->
+                viewModel.copyVideos(items, destination, context) { _, message ->
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
+            },
+            onHide = { items ->
+                viewModel.hideVideosToSecureFolder(items, context) { _, message ->
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
+            },
+            onDelete = { items ->
+                viewModel.deleteVideos(items, context) { _, message ->
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
+            },
+            onInfo = { /* Handled internally in sheet */ }
         )
     }
 }

@@ -13,4 +13,10 @@ interface VideoRepository {
     fun search(query: String): Flow<SearchResults>
     suspend fun scanDeviceForVideos()
     suspend fun deleteVideo(videoId: String)
+
+    suspend fun hideVideosToSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit>
+    suspend fun renameVideo(video: VideoItem, newName: String, context: android.content.Context): Result<java.io.File>
+    suspend fun moveVideos(videos: List<VideoItem>, destination: java.io.File, context: android.content.Context): Result<List<java.io.File>>
+    suspend fun copyVideos(videos: List<VideoItem>, destination: java.io.File, context: android.content.Context): Result<List<java.io.File>>
+    suspend fun deleteVideos(videos: List<VideoItem>, context: android.content.Context): Result<Unit>
 }

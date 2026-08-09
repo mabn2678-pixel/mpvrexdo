@@ -226,6 +226,13 @@ fun SecureFolderSetupScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("تفعيل البصمة") }
+                    } else {
+                        Text(
+                            "ملاحظة: لم يتم التعرف على بصمة مسجلة في الهاتف. سيتم استخدام رمز PIN للفتح.",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.colorScheme.error.let { MaterialTheme.typography.bodySmall },
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
 
                     TextButton(

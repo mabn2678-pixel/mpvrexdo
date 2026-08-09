@@ -65,21 +65,37 @@ fun SecureFolderScreen(
     val layoutMode by viewModel.layoutMode.collectAsState()
 
     var showPinDialog by remember { mutableStateOf(false) }
-    var showSetup by remember { mutableStateOf(false) }
     var showSortSheet by remember { mutableStateOf(false) }
     val sortSheetState = rememberModalBottomSheetState()
     val activity = LocalContext.current as? FragmentActivity
 
-    if (showSetup) {
+    if (!isPinSet) {
         SecureFolderSetupScreen(
             viewModel = viewModel,
             onSetupComplete = {
-                showSetup = false
                 viewModel.unlock()
             },
-            onBack = { showSetup = false }
+            onBack = onBack
         )
         return
+    }
+
+    androidx.compose.runtime.LaunchedEffect(isUnlocked) {
+        if (!isUnlocked) {
+            if (viewModel.isBiometricEnabled && activity != null && BiometricHelper.canUseBiometric(activity)) {
+                BiometricHelper.authenticate(
+                    activity = activity,
+                    onSuccess = {
+                        viewModel.unlock()
+                        showPinDialog = false
+                    },
+                    onFallback = { showPinDialog = true },
+                    onError = { showPinDialog = true }
+                )
+            } else {
+                showPinDialog = true
+            }
+        }
     }
 
     Scaffold(
@@ -147,9 +163,7 @@ fun SecureFolderScreen(
 
                     Button(
                         onClick = {
-                            if (!isPinSet) {
-                                showSetup = true
-                            } else if (viewModel.isBiometricEnabled &&
+                            if (viewModel.isBiometricEnabled &&
                                 activity != null &&
                                 BiometricHelper.canUseBiometric(activity)) {
                                 BiometricHelper.authenticate(
@@ -254,11 +268,13 @@ fun SecureFolderScreen(
             onBiometric = if (viewModel.isBiometricEnabled && activity != null &&
                 BiometricHelper.canUseBiometric(activity)) {
                 {
-                    showPinDialog = false
                     BiometricHelper.authenticate(
                         activity = activity,
-                        onSuccess = { viewModel.unlock() },
-                        onFallback = { showPinDialog = true },
+                        onSuccess = {
+                            viewModel.unlock()
+                            showPinDialog = false
+                        },
+                        onFallback = {},
                         onError = {}
                     )
                 }

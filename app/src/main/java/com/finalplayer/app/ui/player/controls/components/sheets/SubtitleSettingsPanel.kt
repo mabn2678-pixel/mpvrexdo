@@ -230,10 +230,6 @@ fun SubtitleSettingsPanel(
                                     coroutineScope.launch { subPrefs.backgroundColor.set(longVal) }
                                 }
                                 val hex = String.format("#%02X%02X%02X%02X", bgAlpha, bgRed, bgGreen, bgBlue)
-                                runCatching {
-                                    MPVLib.setPropertyString("sub-box", "yes")
-                                    MPVLib.setOptionString("sub-box", "yes")
-                                }
                                 MPVLib.setPropertyString("sub-border-style", "background-box")
                                 MPVLib.setOptionString("sub-border-style", "background-box")
                                 MPVLib.setPropertyString("sub-back-color", hex)
@@ -241,10 +237,6 @@ fun SubtitleSettingsPanel(
                                 MPVLib.setPropertyString("sub-bg-color", hex)
                                 MPVLib.setOptionString("sub-bg-color", hex)
                             } else {
-                                runCatching {
-                                    MPVLib.setPropertyString("sub-box", "no")
-                                    MPVLib.setOptionString("sub-box", "no")
-                                }
                                 MPVLib.setPropertyString("sub-border-style", "outline-and-shadow")
                                 MPVLib.setOptionString("sub-border-style", "outline-and-shadow")
                                 MPVLib.setPropertyString("sub-back-color", "#00000000")
@@ -746,10 +738,6 @@ private fun applyTypographyToMPV(
     MPVLib.setOptionString("sub-pos", subPos.toString())
 
     if (borderStyle == "box") {
-        runCatching {
-            MPVLib.setPropertyString("sub-box", "yes")
-            MPVLib.setOptionString("sub-box", "yes")
-        }
         MPVLib.setPropertyString("sub-border-style", "background-box")
         MPVLib.setOptionString("sub-border-style", "background-box")
         MPVLib.setPropertyString("sub-back-color", "#A6000000")
@@ -757,10 +745,6 @@ private fun applyTypographyToMPV(
         MPVLib.setPropertyString("sub-bg-color", "#A6000000")
         MPVLib.setOptionString("sub-bg-color", "#A6000000")
     } else {
-        runCatching {
-            MPVLib.setPropertyString("sub-box", "no")
-            MPVLib.setOptionString("sub-box", "no")
-        }
         MPVLib.setPropertyString("sub-border-style", "outline-and-shadow")
         MPVLib.setOptionString("sub-border-style", "outline-and-shadow")
         MPVLib.setPropertyString("sub-back-color", "#00000000")
@@ -792,10 +776,6 @@ private fun applyColorToMPV(target: ColorTarget, a: Int, r: Int, g: Int, b: Int)
             MPVLib.setPropertyString("sub-bg-color", hexColor)
             MPVLib.setOptionString("sub-bg-color", hexColor)
             if (a > 0) {
-                runCatching {
-                    MPVLib.setPropertyString("sub-box", "yes")
-                    MPVLib.setOptionString("sub-box", "yes")
-                }
                 MPVLib.setPropertyString("sub-border-style", "background-box")
                 MPVLib.setOptionString("sub-border-style", "background-box")
             }

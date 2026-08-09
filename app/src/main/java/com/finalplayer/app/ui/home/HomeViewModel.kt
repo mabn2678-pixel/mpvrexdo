@@ -208,5 +208,88 @@ private data class SortConfig(
     fun getVideosInFolder(folderPath: String): Flow<List<VideoItem>> {
         return getVideosByFolderUseCase(folderPath)
     }
+
+    fun hideVideosToSecureFolder(
+        videos: List<VideoItem>,
+        context: android.content.Context,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = videoRepository.hideVideosToSecureFolder(videos, context)
+            if (result.isSuccess) {
+                onComplete(true, "تم إخفاء ${videos.size} ملف ونقله إلى المجلد الآمن بنجاح")
+            } else {
+                val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء الإخفاء"
+                onComplete(false, "فشلت العملية: $msg")
+            }
+        }
+    }
+
+    fun renameVideo(
+        video: VideoItem,
+        newName: String,
+        context: android.content.Context,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = videoRepository.renameVideo(video, newName, context)
+            if (result.isSuccess) {
+                onComplete(true, "تمت إعادة التسمية بنجاح")
+            } else {
+                val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء إعادة التسمية"
+                onComplete(false, "فشلت العملية: $msg")
+            }
+        }
+    }
+
+    fun moveVideos(
+        videos: List<VideoItem>,
+        destination: java.io.File,
+        context: android.content.Context,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = videoRepository.moveVideos(videos, destination, context)
+            if (result.isSuccess) {
+                onComplete(true, "تم نقل ${videos.size} ملف بنجاح")
+            } else {
+                val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء النقل"
+                onComplete(false, "فشلت العملية: $msg")
+            }
+        }
+    }
+
+    fun copyVideos(
+        videos: List<VideoItem>,
+        destination: java.io.File,
+        context: android.content.Context,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = videoRepository.copyVideos(videos, destination, context)
+            if (result.isSuccess) {
+                onComplete(true, "تم نسخ ${videos.size} ملف بنجاح")
+            } else {
+                val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء النسخ"
+                onComplete(false, "فشلت العملية: $msg")
+            }
+        }
+    }
+
+    fun deleteVideos(
+        videos: List<VideoItem>,
+        context: android.content.Context,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val result = videoRepository.deleteVideos(videos, context)
+            if (result.isSuccess) {
+                onComplete(true, "تم حذف ${videos.size} ملف بنجاح")
+            } else {
+                val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء الحذف"
+                onComplete(false, "فشلت العملية: $msg")
+            }
+        }
+    }
 }
 

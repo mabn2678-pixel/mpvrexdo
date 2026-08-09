@@ -29,7 +29,7 @@ class SecureFolderViewModel(
     private val _isUnlocked = MutableStateFlow(false)
     val isUnlocked: StateFlow<Boolean> = _isUnlocked.asStateFlow()
 
-    private val _isPinSet = MutableStateFlow(false)
+    private val _isPinSet = MutableStateFlow(pinPreferences.hasPin.get())
     val isPinSet: StateFlow<Boolean> = _isPinSet.asStateFlow()
 
     private val _sortBy = MutableStateFlow("title")

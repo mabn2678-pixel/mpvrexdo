@@ -41,11 +41,6 @@ fun PinInputDialog(
     var isLocked by remember { mutableStateOf(false) }
     var lockCountdown by remember { mutableLongStateOf(0L) }
 
-    // Auto trigger biometric when dialog opens
-    LaunchedEffect(Unit) {
-        onBiometric?.invoke()
-    }
-
     // Countdown timer لو مقفول
     LaunchedEffect(isLocked) {
         if (isLocked) {

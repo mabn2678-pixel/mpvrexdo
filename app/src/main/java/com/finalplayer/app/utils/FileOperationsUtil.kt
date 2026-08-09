@@ -241,32 +241,97 @@ object FileOperationsUtil {
         if (files.isEmpty()) return
         val uris = ArrayList<Uri>()
         for (file in files) {
-            if (file.exists()) {
-                val uri = try {
-                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                } catch (e: Exception) {
-                    Uri.fromFile(file)
-                }
-                uris.add(uri)
+            val uri = try {
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            } catch (e: Exception) {
+                Uri.fromFile(file)
             }
+            uris.add(uri)
         }
-        if (uris.isEmpty()) return
+
+        val shareTitle = if (files.size == 1) files.first().name else "${files.size} ملفات"
 
         val intent = if (uris.size == 1) {
             Intent(Intent.ACTION_SEND).apply {
                 type = "video/*"
                 putExtra(Intent.EXTRA_STREAM, uris[0])
+                putExtra(Intent.EXTRA_SUBJECT, shareTitle)
+                putExtra(Intent.EXTRA_TEXT, shareTitle)
             }
         } else {
             Intent(Intent.ACTION_SEND_MULTIPLE).apply {
                 type = "video/*"
                 putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                putExtra(Intent.EXTRA_SUBJECT, shareTitle)
+                putExtra(Intent.EXTRA_TEXT, shareTitle)
             }
         }
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        val chooser = Intent.createChooser(intent, "مشاركة الفيديو")
+        val chooser = Intent.createChooser(intent, "مشاركة: $shareTitle")
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(chooser)
+        try {
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun shareVideos(context: Context, items: List<VideoItem>) {
+        if (items.isEmpty()) return
+        val uris = ArrayList<Uri>()
+        val titles = ArrayList<String>()
+
+        for (item in items) {
+            titles.add(item.title)
+            val file = getVideoFile(item)
+            if (file.exists()) {
+                val uri = try {
+                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                } catch (e: Exception) {
+                    if (item.uri.startsWith("content://")) Uri.parse(item.uri) else Uri.fromFile(file)
+                }
+                uris.add(uri)
+            } else if (item.uri.startsWith("content://")) {
+                uris.add(Uri.parse(item.uri))
+            } else if (item.uri.startsWith("http://") || item.uri.startsWith("https://")) {
+                uris.add(Uri.parse(item.uri))
+            } else {
+                uris.add(Uri.fromFile(file))
+            }
+        }
+
+        val shareTitle = if (items.size == 1) items.first().title else "${items.size} فيديوهات"
+
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "video/*"
+                putExtra(Intent.EXTRA_STREAM, uris[0])
+                putExtra(Intent.EXTRA_SUBJECT, shareTitle)
+                putExtra(Intent.EXTRA_TEXT, shareTitle)
+            }
+        } else if (uris.size > 1) {
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "video/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                putExtra(Intent.EXTRA_SUBJECT, shareTitle)
+                putExtra(Intent.EXTRA_TEXT, shareTitle)
+            }
+        } else {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, shareTitle)
+                putExtra(Intent.EXTRA_TEXT, titles.joinToString("\n"))
+            }
+        }
+
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val chooser = Intent.createChooser(intent, "مشاركة: $shareTitle")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun scanFile(context: Context, file: File) = withContext(Dispatchers.IO) {
