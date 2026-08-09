@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Remix Remix FinalPlayer",
+  "description": "A professional mpv-based Android video player built with Jetpack Compose and modern Kotlin architecture for high-performance playback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
