@@ -32,9 +32,14 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
@@ -45,6 +50,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,6 +58,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -62,6 +69,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -108,6 +116,10 @@ fun MusicLibraryScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val playerState by viewModel.controller.state.collectAsState()
+
+    val sortBy by viewModel.sortBy.collectAsState()
+    val sortAscending by viewModel.sortAscending.collectAsState()
+    var showSortSheet by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     var showPermissionRationale by remember { mutableStateOf(false) }
@@ -197,6 +209,12 @@ fun MusicLibraryScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showSortSheet = true }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = "فرز وترتيب الأغاني"
+                        )
+                    }
                     IconButton(onClick = {
                         if (isSearchActive) {
                             viewModel.onSearchQueryChange("")
@@ -218,7 +236,9 @@ fun MusicLibraryScreen(
                 MusicMiniPlayer(
                     state = playerState,
                     onPlayPauseClick = { viewModel.controller.togglePlayPause() },
+                    onPreviousClick = { viewModel.controller.skipToPrevious() },
                     onNextClick = { viewModel.controller.skipToNext() },
+                    onCloseClick = { viewModel.controller.stop() },
                     onClick = onOpenPlayer
                 )
 
@@ -267,14 +287,14 @@ fun MusicLibraryScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = isLoading,
+            onRefresh = { viewModel.refresh() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (searchQuery.isNotBlank()) {
+            if (searchQuery.isNotBlank()) {
                 SearchResultsContent(
                     songs = songs,
                     albums = albums,
@@ -292,10 +312,14 @@ fun MusicLibraryScreen(
                     when (page) {
                         0 -> SongsTabContent(
                             songs = songs,
+                            sortBy = sortBy,
+                            sortAscending = sortAscending,
                             onSongClick = { song -> viewModel.playSong(song, songs) },
                             onSongOptionsClick = { song -> selectedSongForSheet = song },
                             onPlayAll = { viewModel.playAll() },
-                            onShuffleAll = { viewModel.shuffleAll() }
+                            onShuffleAll = { viewModel.shuffleAll() },
+                            onOpenSort = { showSortSheet = true },
+                            onToggleSortOrder = { viewModel.toggleSortOrder() }
                         )
                         1 -> AlbumsTabContent(
                             albums = albums,
@@ -319,6 +343,98 @@ fun MusicLibraryScreen(
                     onNavigateToAlbum = onAlbumClick,
                     onNavigateToArtist = onArtistClick
                 )
+            }
+
+            if (showSortSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showSortSheet = false },
+                    sheetState = rememberModalBottomSheetState()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                    ) {
+                        Text(
+                            text = "ترتيب وفرز الأغاني",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        val sortOptions = listOf(
+                            "date" to "تاريخ الإضافة (الأحدث أولاً)",
+                            "title" to "عنوان الأغنية (أ - ي)",
+                            "artist" to "اسم الفنان",
+                            "duration" to "مدة الأغنية"
+                        )
+
+                        sortOptions.forEach { (key, label) ->
+                            val isSelected = sortBy == key
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        viewModel.setSortBy(key)
+                                        showSortSheet = false
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Ascending / Descending Toggle Buttons
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { viewModel.setSortAscending(false) },
+                                modifier = Modifier.weight(1f),
+                                colors = if (!sortAscending) ButtonDefaults.outlinedButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                ) else ButtonDefaults.outlinedButtonColors()
+                            ) {
+                                Icon(Icons.Default.ArrowDownward, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("تنازلي")
+                            }
+
+                            OutlinedButton(
+                                onClick = { viewModel.setSortAscending(true) },
+                                modifier = Modifier.weight(1f),
+                                colors = if (sortAscending) ButtonDefaults.outlinedButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                ) else ButtonDefaults.outlinedButtonColors()
+                            ) {
+                                Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("تصاعدي")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+                }
             }
 
             if (showPermissionRationale) {
@@ -350,10 +466,14 @@ fun MusicLibraryScreen(
 @Composable
 private fun SongsTabContent(
     songs: List<Song>,
+    sortBy: String = "date",
+    sortAscending: Boolean = false,
     onSongClick: (Song) -> Unit,
     onSongOptionsClick: (Song) -> Unit,
     onPlayAll: () -> Unit,
-    onShuffleAll: () -> Unit
+    onShuffleAll: () -> Unit,
+    onOpenSort: () -> Unit = {},
+    onToggleSortOrder: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         if (songs.any { PreviewSongs.isPreviewSong(it) }) {
@@ -407,6 +527,56 @@ private fun SongsTabContent(
                     Icon(Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("خلط")
+                }
+            }
+
+            // Sort indicator and trigger bar
+            val sortLabel = when (sortBy) {
+                "date" -> "تاريخ الإضافة (الأحدث)"
+                "artist" -> "اسم الفنان"
+                "duration" -> "المدة"
+                else -> "عنوان الأغنية"
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { onOpenSort() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                        contentDescription = "فرز",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "الفرز: $sortLabel",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                IconButton(
+                    onClick = onToggleSortOrder,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                        contentDescription = if (sortAscending) "تصاعدي" else "تنازلي",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

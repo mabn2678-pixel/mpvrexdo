@@ -60,6 +60,7 @@ fun GestureHandler(
     isShortsMode: Boolean = false,
     onNextClick: () -> Unit = {},
     onPreviousClick: () -> Unit = {},
+    onUserInteraction: () -> Unit = {},
     modifier: Modifier = Modifier,
     gesturePrefs: GesturePreferences = koinInject(),
     playerPrefs: PlayerPreferences = koinInject(),
@@ -73,7 +74,9 @@ fun GestureHandler(
     val playerHorizontalSeekEnabled by playerPrefs.enableHorizontalSeek.asFlow().collectAsState(initial = true)
     val pinchEnabled by gesturePrefs.pinchToZoom.asFlow().collectAsState(initial = true)
     val playerPinchEnabled by playerPrefs.enablePinchToZoom.asFlow().collectAsState(initial = true)
-    val enableSubtitleDrag by playerPrefs.enableSubtitleDrag.asFlow().collectAsState(initial = false)
+    val enableSubtitleDrag by playerPrefs.enableSubtitleDrag.asFlow().collectAsState(initial = true)
+    val gestSubDrag by gesturePrefs.subtitleDrag.asFlow().collectAsState(initial = true)
+    val effectiveSubtitleDrag = enableSubtitleDrag || gestSubDrag
     val enableSubtitleSeekGesture by playerPrefs.enableSubtitleSeekGesture.asFlow().collectAsState(initial = true)
     val seekSensitivity by playerPrefs.seekSensitivity.asFlow().collectAsState(initial = 50)
     val allowPanelGestures by playerPrefs.allowPanelGestures.asFlow().collectAsState(initial = false)
@@ -110,6 +113,7 @@ fun GestureHandler(
                 isPinchAllowed,
                 swapVolBright,
                 enableSubtitleDrag,
+                effectiveSubtitleDrag,
                 enableSubtitleSeekGesture,
                 sensitivity,
                 swipeSpeed,
@@ -119,7 +123,8 @@ fun GestureHandler(
                 controlsVisible
             ) {
                 awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val down = awaitFirstDown(requireUnconsumed = true)
+                    onUserInteraction()
                     val downTime = System.currentTimeMillis()
                     val downX = down.position.x
                     val downY = down.position.y
@@ -137,6 +142,7 @@ fun GestureHandler(
                     var activeGesture = ActiveGesture.NONE
                     var longPressTriggered = false
                     var horizontalSeekStarted = false
+                    var isConsumedByChild = down.isConsumed
 
                     var totalDx = 0f
                     var totalDy = 0f
@@ -158,6 +164,9 @@ fun GestureHandler(
                     try {
                         while (true) {
                             val event = awaitPointerEvent()
+                            if (event.changes.any { it.isConsumed }) {
+                                isConsumedByChild = true
+                            }
                             val pressedPointers = event.changes.filter { it.pressed }
 
                             if (pressedPointers.isEmpty()) {
@@ -254,7 +263,12 @@ fun GestureHandler(
                             when (activeGesture) {
                                 ActiveGesture.LONG_PRESS -> {
                                     change.consume()
-                                    if (enableSubtitleDrag && abs(dy) > abs(dx) * 1.2f) {
+                                    if (effectiveSubtitleDrag && (abs(dy) > abs(dx) * 1.1f || abs(totalDy) > 4.dp.toPx())) {
+                                        if (longPressTriggered) {
+                                            onLongPressEnd()
+                                            longPressTriggered = false
+                                        }
+                                        activeGesture = ActiveGesture.SUBTITLE_POSITION
                                         onSubtitlePositionDrag(dy)
                                     } else {
                                         onLongPressDrag(dx)
@@ -313,7 +327,7 @@ fun GestureHandler(
                             onLongPressEnd()
                         } else if (horizontalSeekStarted) {
                             onHorizontalDragEnd()
-                        } else if (activeGesture == ActiveGesture.NONE && totalDist <= touchSlop && duration < 350) {
+                        } else if (!isConsumedByChild && !isAnySheetOpen && activeGesture == ActiveGesture.NONE && totalDist <= touchSlop && duration < 350) {
                             val tapX = downX
                             val tapTime = upTime
 

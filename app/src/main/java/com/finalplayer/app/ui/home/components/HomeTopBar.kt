@@ -37,7 +37,6 @@ fun HomeTopBar(
     onSettingsClick: () -> Unit = {},
     onSortClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
-    onRefreshClick: () -> Unit = {},
     onSecureFolderClick: () -> Unit = {}
 ) {
     TopAppBar(
@@ -124,18 +123,6 @@ fun HomeTopBar(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "Secure Folder",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                IconButton(
-                    onClick = onRefreshClick,
-                    modifier = Modifier.size(38.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh",
-                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                 }

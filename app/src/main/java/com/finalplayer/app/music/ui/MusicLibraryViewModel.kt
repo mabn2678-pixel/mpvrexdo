@@ -41,13 +41,33 @@ class MusicLibraryViewModel(
     private val _currentTab = MutableStateFlow(0)
     val currentTab: StateFlow<Int> = _currentTab.asStateFlow()
 
-    val filteredSongs: StateFlow<List<Song>> = combine(_songs, _searchQuery) { songList, query ->
-        if (query.isBlank()) songList
+    private val _sortBy = MutableStateFlow("date") // "date", "title", "artist", "duration"
+    val sortBy: StateFlow<String> = _sortBy.asStateFlow()
+
+    private val _sortAscending = MutableStateFlow(false)
+    val sortAscending: StateFlow<Boolean> = _sortAscending.asStateFlow()
+
+    val filteredSongs: StateFlow<List<Song>> = combine(
+        _songs,
+        _searchQuery,
+        _sortBy,
+        _sortAscending
+    ) { songList, query, sort, asc ->
+        val filtered = if (query.isBlank()) songList
         else songList.filter {
             it.title.contains(query, ignoreCase = true) ||
             it.artist.contains(query, ignoreCase = true) ||
             it.album.contains(query, ignoreCase = true)
         }
+
+        val sorted = when (sort) {
+            "date" -> filtered.sortedBy { it.dateAdded }
+            "artist" -> filtered.sortedBy { it.artist.lowercase() }
+            "duration" -> filtered.sortedBy { it.duration }
+            else -> filtered.sortedBy { it.title.lowercase() }
+        }
+
+        if (asc) sorted else sorted.reversed()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredAlbums: StateFlow<List<Album>> = combine(_albums, _searchQuery) { albumList, query ->
@@ -75,6 +95,23 @@ class MusicLibraryViewModel(
 
     fun onTabChange(index: Int) {
         _currentTab.value = index
+    }
+
+    fun setSortBy(field: String) {
+        if (_sortBy.value == field) {
+            _sortAscending.value = !_sortAscending.value
+        } else {
+            _sortBy.value = field
+            _sortAscending.value = field == "title" || field == "artist"
+        }
+    }
+
+    fun toggleSortOrder() {
+        _sortAscending.value = !_sortAscending.value
+    }
+
+    fun setSortAscending(asc: Boolean) {
+        _sortAscending.value = asc
     }
 
     fun refresh() {

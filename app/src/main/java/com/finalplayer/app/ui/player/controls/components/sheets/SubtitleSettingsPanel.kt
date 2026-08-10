@@ -230,8 +230,8 @@ fun SubtitleSettingsPanel(
                                     coroutineScope.launch { subPrefs.backgroundColor.set(longVal) }
                                 }
                                 val hex = String.format("#%02X%02X%02X%02X", bgAlpha, bgRed, bgGreen, bgBlue)
-                                MPVLib.setPropertyString("sub-border-style", "background-box")
-                                MPVLib.setOptionString("sub-border-style", "background-box")
+                                MPVLib.setPropertyString("sub-border-style", "opaque-box")
+                                MPVLib.setOptionString("sub-border-style", "opaque-box")
                                 MPVLib.setPropertyString("sub-back-color", hex)
                                 MPVLib.setOptionString("sub-back-color", hex)
                                 MPVLib.setPropertyString("sub-bg-color", hex)
@@ -738,8 +738,8 @@ private fun applyTypographyToMPV(
     MPVLib.setOptionString("sub-pos", subPos.toString())
 
     if (borderStyle == "box") {
-        MPVLib.setPropertyString("sub-border-style", "background-box")
-        MPVLib.setOptionString("sub-border-style", "background-box")
+        MPVLib.setPropertyString("sub-border-style", "opaque-box")
+        MPVLib.setOptionString("sub-border-style", "opaque-box")
         MPVLib.setPropertyString("sub-back-color", "#A6000000")
         MPVLib.setOptionString("sub-back-color", "#A6000000")
         MPVLib.setPropertyString("sub-bg-color", "#A6000000")
@@ -776,8 +776,8 @@ private fun applyColorToMPV(target: ColorTarget, a: Int, r: Int, g: Int, b: Int)
             MPVLib.setPropertyString("sub-bg-color", hexColor)
             MPVLib.setOptionString("sub-bg-color", hexColor)
             if (a > 0) {
-                MPVLib.setPropertyString("sub-border-style", "background-box")
-                MPVLib.setOptionString("sub-border-style", "background-box")
+                MPVLib.setPropertyString("sub-border-style", "opaque-box")
+                MPVLib.setOptionString("sub-border-style", "opaque-box")
             }
         }
     }

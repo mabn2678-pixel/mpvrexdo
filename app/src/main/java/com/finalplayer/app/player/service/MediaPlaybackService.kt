@@ -20,6 +20,8 @@ import com.finalplayer.app.player.PlayerActivity
 import com.finalplayer.app.player.core.MPVController
 import org.koin.android.ext.android.inject
 
+import androidx.media.session.MediaButtonReceiver
+
 class MediaPlaybackService : Service() {
 
     private val binder = LocalBinder()
@@ -100,6 +102,9 @@ class MediaPlaybackService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent?.let {
             val action = it.action
+            if (Intent.ACTION_MEDIA_BUTTON == action) {
+                MediaButtonReceiver.handleIntent(mediaSession, it)
+            }
             when (action) {
                 ACTION_PLAY -> {
                     mpvController.resume()

@@ -224,6 +224,7 @@ fun PlayerControls(
     var dragPositionSeconds by remember { mutableFloatStateOf(0f) }
     var showRemainingTimeText by remember { mutableStateOf(false) }
     var showSleepTimerSheet by remember { mutableStateOf(false) }
+    var interactionKey by remember { mutableIntStateOf(0) }
 
     val isAnySheetOpen = sheetShown !is Sheets.None || showSleepTimerSheet
 
@@ -242,7 +243,7 @@ fun PlayerControls(
     val portraitBottomControlIds = layoutPrefs.parseControlList(portraitBottomRaw)
 
     // Auto-hide controls after configured timeout unless paused, dragging, or sheet open
-    LaunchedEffect(controlsVisible, isPaused, isDraggingSlider, isAnySheetOpen, hideTimeoutMs) {
+    LaunchedEffect(controlsVisible, isPaused, isDraggingSlider, isAnySheetOpen, hideTimeoutMs, interactionKey) {
         if (controlsVisible && !isPaused && !isDraggingSlider && !isAnySheetOpen && hideTimeoutMs > 0) {
             delay(hideTimeoutMs.toLong())
             onToggleControls()
@@ -270,6 +271,7 @@ fun PlayerControls(
         isShortsMode = isShortsMode,
         onNextClick = onNextClick,
         onPreviousClick = onPreviousClick,
+        onUserInteraction = { interactionKey++ },
         modifier = modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {

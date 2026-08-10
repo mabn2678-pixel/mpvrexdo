@@ -224,7 +224,9 @@ fun MusicArtistDetailScreen(
             MusicMiniPlayer(
                 state = playerState,
                 onPlayPauseClick = { viewModel.controller.togglePlayPause() },
+                onPreviousClick = { viewModel.controller.skipToPrevious() },
                 onNextClick = { viewModel.controller.skipToNext() },
+                onCloseClick = { viewModel.controller.stop() },
                 onClick = onOpenPlayer
             )
         }

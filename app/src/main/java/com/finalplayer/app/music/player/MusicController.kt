@@ -211,6 +211,12 @@ class MusicController(private val context: Context) {
         }
     }
 
+    fun stop() {
+        mediaController?.stop()
+        mediaController?.clearMediaItems()
+        _state.value = MusicPlayerState()
+    }
+
     fun getCurrentPosition(): Long {
         return mediaController?.currentPosition?.coerceAtLeast(0L) ?: 0L
     }

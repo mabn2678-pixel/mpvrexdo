@@ -19,6 +19,7 @@ import com.finalplayer.app.data.preferences.DecoderPreferences
 import com.finalplayer.app.data.preferences.PlayerPreferences
 import com.finalplayer.app.data.preferences.SubtitlesPreferences
 import com.finalplayer.app.player.core.MPVController
+import com.finalplayer.app.player.service.MediaPlaybackService
 import com.finalplayer.app.player.core.MPVLib
 import com.finalplayer.app.player.core.TrackSelector
 import com.finalplayer.app.ui.player.ChapterNode
@@ -739,8 +740,8 @@ class PlayerViewModel(
             }
 
             if (bStyle == "box") {
-                MPVLib.setPropertyString("sub-border-style", "background-box")
-                MPVLib.setOptionString("sub-border-style", "background-box")
+                MPVLib.setPropertyString("sub-border-style", "opaque-box")
+                MPVLib.setOptionString("sub-border-style", "opaque-box")
                 MPVLib.setPropertyString("sub-back-color", bgHex)
                 MPVLib.setOptionString("sub-back-color", bgHex)
                 MPVLib.setPropertyString("sub-bg-color", bgHex)
@@ -810,8 +811,8 @@ class PlayerViewModel(
                     val bgHex = formatLongToHex(effectiveBgCLong)
 
                     if (style == "box") {
-                        MPVLib.setPropertyString("sub-border-style", "background-box")
-                        MPVLib.setOptionString("sub-border-style", "background-box")
+                        MPVLib.setPropertyString("sub-border-style", "opaque-box")
+                        MPVLib.setOptionString("sub-border-style", "opaque-box")
                         MPVLib.setPropertyString("sub-back-color", bgHex)
                         MPVLib.setOptionString("sub-back-color", bgHex)
                         MPVLib.setPropertyString("sub-bg-color", bgHex)
@@ -1194,7 +1195,7 @@ class PlayerViewModel(
 
     fun openSheet(sheet: Sheets) {
         _sheetShown.update { sheet }
-        if (sheet != Sheets.None) setControlsShown(false)
+        setControlsShown(true)
     }
 
     fun closeSheet() {
@@ -1653,6 +1654,12 @@ class PlayerViewModel(
                     val next = current - 1
                     if (next <= 0) {
                         pause()
+                        _isBackgroundPlay.value = false
+                        try {
+                            MediaPlaybackService.stopService(context)
+                        } catch (e: Exception) {
+                            Log.e("PlayerViewModel", "Error stopping service on sleep timer end", e)
+                        }
                         0
                     } else {
                         next
@@ -1694,6 +1701,13 @@ class PlayerViewModel(
                         if (autoPlayNext && hasNext) {
                             playNextVideo()
                         } else if (closeAfterPlayback) {
+                            pause()
+                            _isBackgroundPlay.value = false
+                            try {
+                                MediaPlaybackService.stopService(context)
+                            } catch (e: Exception) {
+                                Log.e("PlayerViewModel", "Error stopping service on playback finish", e)
+                            }
                             _finishActivityEvent.tryEmit(Unit)
                         }
                     }

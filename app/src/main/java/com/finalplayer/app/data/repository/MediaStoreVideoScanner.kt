@@ -19,6 +19,7 @@ class MediaStoreVideoScanner(private val context: Context) {
             MediaStore.Video.Media.DURATION,
             MediaStore.Video.Media.SIZE,
             MediaStore.Video.Media.DATE_ADDED,
+            MediaStore.Video.Media.DATE_MODIFIED,
             MediaStore.Video.Media.DATA,
             MediaStore.Video.Media.WIDTH,
             MediaStore.Video.Media.HEIGHT,
@@ -40,6 +41,7 @@ class MediaStoreVideoScanner(private val context: Context) {
                 val durationColumn = c.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
                 val sizeColumn = c.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
                 val dateAddedColumn = c.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
+                val dateModifiedColumn = c.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED)
                 val dataColumn = c.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
                 val widthColumn = c.getColumnIndexOrThrow(MediaStore.Video.Media.WIDTH)
                 val heightColumn = c.getColumnIndexOrThrow(MediaStore.Video.Media.HEIGHT)
@@ -51,13 +53,18 @@ class MediaStoreVideoScanner(private val context: Context) {
                     val duration = c.getLong(durationColumn)
                     val sizeBytes = c.getLong(sizeColumn)
                     val dateAdded = c.getLong(dateAddedColumn)
+                    val dateModified = c.getLong(dateModifiedColumn)
                     val fullPath = c.getString(dataColumn) ?: ""
                     val width = c.getInt(widthColumn)
                     val height = c.getInt(heightColumn)
                     val mimeType = c.getString(mimeTypeColumn) ?: "video/*"
 
+                    val fileOnDisk = if (fullPath.isNotEmpty()) File(fullPath) else null
+                    val fileLmSeconds = if (fileOnDisk != null && fileOnDisk.exists()) fileOnDisk.lastModified() / 1000L else 0L
+                    val trueDateAdded = maxOf(dateAdded, dateModified, fileLmSeconds)
+
                     val folderPath = if (fullPath.isNotEmpty()) {
-                        File(fullPath).parent ?: "/storage/emulated/0"
+                        fileOnDisk?.parent ?: "/storage/emulated/0"
                     } else {
                         "/storage/emulated/0"
                     }
@@ -73,7 +80,7 @@ class MediaStoreVideoScanner(private val context: Context) {
                             duration = duration,
                             sizeBytes = sizeBytes,
                             thumbnailPath = null,
-                            dateAdded = dateAdded,
+                            dateAdded = trueDateAdded,
                             resolution = resolution,
                             folderPath = folderPath,
                             mimeType = mimeType
@@ -92,37 +99,65 @@ class MediaStoreVideoScanner(private val context: Context) {
     }
 
     private fun scanPhysicalDirectories(videoList: MutableList<VideoEntity>) {
-        val existingPaths = videoList.map { 
+        val existingPaths = videoList.mapTo(mutableSetOf()) { 
             if (it.uri.startsWith("file://")) it.uri.substring(7) else it.uri 
-        }.toMutableSet()
+        }
         
-        // Add fullPath from MediaStore entries
         videoList.forEach {
             if (it.folderPath.isNotBlank()) {
                 existingPaths.add("${it.folderPath}/${it.title}")
             }
         }
 
-        val videoExtensions = setOf("mp4", "mkv", "webm", "avi", "mov", "3gp", "flv", "m4v", "ts")
+        val videoExtensions = setOf("mp4", "mkv", "webm", "avi", "mov", "3gp", "flv", "m4v", "ts", "wmv", "asf")
 
-        val directoriesToScan = listOf(
+        val storageRoot = File("/storage/emulated/0")
+        val directoriesToScan = mutableListOf(
             android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
             android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES),
             android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DCIM),
             android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES),
             File("/storage/emulated/0/Download"),
+            File("/storage/emulated/0/Downloads"),
             File("/storage/emulated/0/Movies"),
             File("/storage/emulated/0/DCIM"),
+            File("/storage/emulated/0/DCIM/Camera"),
+            File("/storage/emulated/0/DCIM/Screenrecordings"),
+            File("/storage/emulated/0/DCIM/ScreenRecorder"),
+            File("/storage/emulated/0/Pictures"),
+            File("/storage/emulated/0/Video"),
+            File("/storage/emulated/0/Videos"),
             File("/storage/emulated/0/Telegram"),
+            File("/storage/emulated/0/Telegram/Telegram Video"),
             File("/storage/emulated/0/WhatsApp/Media/WhatsApp Video"),
-            File("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video")
+            File("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video"),
+            File("/storage/emulated/0/Android/media/org.telegram.messenger/Telegram/Telegram Video"),
+            File("/storage/emulated/0/Snaptube"),
+            File("/storage/emulated/0/Vidmate"),
+            File("/storage/emulated/0/Xender"),
+            File("/storage/emulated/0/SHAREit"),
+            File("/storage/emulated/0/ADM"),
+            File("/storage/emulated/0/Bluetooth")
         )
 
-        val unindexedFiles = mutableListOf<File>()
+        if (storageRoot.exists() && storageRoot.isDirectory) {
+            storageRoot.listFiles()?.forEach { file ->
+                if (file.isDirectory && !file.name.startsWith(".") && file.name != "Android") {
+                    directoriesToScan.add(file)
+                }
+            }
+        }
 
-        for (dir in directoriesToScan) {
-            if (dir.exists() && dir.isDirectory) {
+        val unindexedFiles = mutableListOf<File>()
+        val validDirs = directoriesToScan.filter { it.exists() && it.isDirectory }.distinctBy { it.canonicalPath }
+
+        for (dir in validDirs) {
+            try {
                 dir.walkTopDown()
+                    .onEnter { subDir ->
+                        val name = subDir.name
+                        !name.startsWith(".") && name != "Android" && name != "cache"
+                    }
                     .maxDepth(3)
                     .filter { file ->
                         file.isFile && 
@@ -152,6 +187,8 @@ class MediaStoreVideoScanner(private val context: Context) {
                             videoList.add(entity)
                         }
                     }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
 

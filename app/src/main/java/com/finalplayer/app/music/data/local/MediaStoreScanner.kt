@@ -27,6 +27,7 @@ class MediaStoreScanner(private val context: Context) {
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.YEAR,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.DATE_MODIFIED,
             MediaStore.Audio.Media.SIZE
         )
 
@@ -52,6 +53,7 @@ class MediaStoreScanner(private val context: Context) {
                 val trackColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 val yearColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
                 val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
                 val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
 
                 while (cursor.moveToNext()) {
@@ -65,7 +67,12 @@ class MediaStoreScanner(private val context: Context) {
                     val trackNumber = cursor.getInt(trackColumn)
                     val year = cursor.getInt(yearColumn)
                     val dateAdded = cursor.getLong(dateAddedColumn)
+                    val dateModified = cursor.getLong(dateModifiedColumn)
                     val size = cursor.getLong(sizeColumn)
+
+                    val fileOnDisk = if (path.isNotEmpty()) java.io.File(path) else null
+                    val fileLmSeconds = if (fileOnDisk != null && fileOnDisk.exists()) fileOnDisk.lastModified() / 1000L else 0L
+                    val trueDateAdded = maxOf(dateAdded, dateModified, fileLmSeconds)
 
                     val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
                     val albumArtUri = Uri.parse("content://media/external/audio/albumart/$albumId")
@@ -83,7 +90,7 @@ class MediaStoreScanner(private val context: Context) {
                             albumArtUri = albumArtUri,
                             trackNumber = trackNumber,
                             year = year,
-                            dateAdded = dateAdded,
+                            dateAdded = trueDateAdded,
                             size = size
                         )
                     )

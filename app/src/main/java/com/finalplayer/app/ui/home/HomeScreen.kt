@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import com.finalplayer.app.ui.components.thinScrollbar
 import com.finalplayer.app.ui.home.components.FolderCard
 import com.finalplayer.app.ui.home.components.FolderGridCard
@@ -117,7 +119,6 @@ fun HomeScreen(
                     onSettingsClick = onSettingsClick,
                     onSortClick = { showSortSheet = true },
                     onSearchClick = onSearchClick,
-                    onRefreshClick = { viewModel.refreshVideos() },
                     onSecureFolderClick = onSecureFolderClick
                 )
             }
@@ -156,20 +157,25 @@ fun HomeScreen(
                     val isLibraryView = uiState.viewMode == "library"
                     val isGridView = uiState.layoutMode == "grid"
 
-                    // Gesture detector for Pinching on file list to toggle list <-> grid mode
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, _, zoom, _ ->
-                                    if (zoom > 1.25f && !isGridView) {
-                                        viewModel.setLayoutMode("grid")
-                                    } else if (zoom < 0.75f && isGridView) {
-                                        viewModel.setLayoutMode("list")
+                    PullToRefreshBox(
+                        isRefreshing = uiState.isLoading,
+                        onRefresh = { viewModel.refreshVideos() },
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        // Gesture detector for Pinching on file list to toggle list <-> grid mode
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { _, _, zoom, _ ->
+                                        if (zoom > 1.25f && !isGridView) {
+                                            viewModel.setLayoutMode("grid")
+                                        } else if (zoom < 0.75f && isGridView) {
+                                            viewModel.setLayoutMode("list")
+                                        }
                                     }
                                 }
-                            }
-                    ) {
+                        ) {
                         if (uiState.isLoading && uiState.folders.isEmpty() && uiState.allVideos.isEmpty()) {
                             CircularProgressIndicator(
                                 modifier = Modifier.align(Alignment.Center),
@@ -327,6 +333,7 @@ fun HomeScreen(
                         )
                     }
                 }
+            }
             }
         }
     }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -55,11 +56,27 @@ class HomeViewModel(
 
     private var hasAutoScanned = false
     private var contentObserver: android.database.ContentObserver? = null
+    private var periodicScanJob: kotlinx.coroutines.Job? = null
 
     init {
         observeFoldersAndSort()
         registerMediaStoreObserver()
         refreshVideos()
+        startPeriodicScan()
+    }
+
+    private fun startPeriodicScan() {
+        periodicScanJob?.cancel()
+        periodicScanJob = viewModelScope.launch {
+            while (isActive) {
+                kotlinx.coroutines.delay(15_000L)
+                try {
+                    scanForVideosUseCase()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
     }
 
     private fun registerMediaStoreObserver() {

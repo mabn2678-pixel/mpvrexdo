@@ -22,6 +22,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -419,8 +420,14 @@ class PlayerActivity : ComponentActivity() {
         } else {
             viewModel.setControlsShown(true)
             if (wasInPipMode) {
-                closedFromPipMode = true
-                enableBackgroundAudioService()
+                wasInPipMode = false
+                if (lifecycle.currentState != Lifecycle.State.RESUMED || isFinishing) {
+                    closedFromPipMode = true
+                    viewModel.pause()
+                    viewModel.setBackgroundPlay(false)
+                    MediaPlaybackService.stopService(applicationContext)
+                    finish()
+                }
             }
         }
     }
@@ -428,23 +435,32 @@ class PlayerActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         viewModel.saveCurrentProgressNow()
-        val isBgPlay = viewModel.isBackgroundPlay.value
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
-        if (!isBgPlay && !isPipMode && !closedFromPipMode) {
+        val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
+
+        if (isPipMode) {
+            return
+        }
+
+        if (hasActiveSleepTimer) {
+            enableBackgroundAudioService()
+        } else {
             viewModel.pause()
+            viewModel.setBackgroundPlay(false)
+            MediaPlaybackService.stopService(applicationContext)
         }
     }
 
     override fun onStop() {
         super.onStop()
         viewModel.saveCurrentProgressNow()
-        if (closedFromPipMode) {
-            enableBackgroundAudioService()
-        }
-        val isBgPlay = viewModel.isBackgroundPlay.value
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
-        if (!isBgPlay && !isPipMode && !closedFromPipMode) {
+        val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
+
+        if (!isPipMode && !hasActiveSleepTimer) {
             viewModel.pause()
+            viewModel.setBackgroundPlay(false)
+            MediaPlaybackService.stopService(applicationContext)
         }
     }
 
@@ -491,12 +507,10 @@ class PlayerActivity : ComponentActivity() {
                 Log.e(TAG, "Receiver not registered", e)
             }
         }
-        if (closedFromPipMode) {
-            enableBackgroundAudioService()
-        }
-        val isBgPlay = viewModel.isBackgroundPlay.value
-        if (!isBgPlay) {
+        val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
+        if (!hasActiveSleepTimer) {
             viewModel.pause()
+            viewModel.setBackgroundPlay(false)
             MediaPlaybackService.stopService(applicationContext)
             val mpvView = viewModel.mpvController.getAttachedView()
             MpvTeardownCoordinator.destroyActivityCoreAsync("PlayerActivity onDestroy", mpvView)

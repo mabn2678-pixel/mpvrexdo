@@ -313,7 +313,7 @@ fun MusicPlayerScreen(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                        horizontalAlignment = Alignment.End
+                        horizontalAlignment = Alignment.Start
                     ) {
                         itemsIndexed(lrc.lines) { index, line ->
                             val isCurrent = index == currentLineIndex
@@ -332,16 +332,12 @@ fun MusicPlayerScreen(
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isCurrent) Color.White.copy(alpha = 0.12f) else Color.Transparent
-                                    )
                                     .clickable {
                                         userInteracted()
                                         viewModel.seekToLine(line)
                                     }
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                                textAlign = TextAlign.End
+                                textAlign = TextAlign.Right
                             )
                         }
                     }
