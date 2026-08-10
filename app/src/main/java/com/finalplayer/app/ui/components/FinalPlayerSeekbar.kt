@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.finalplayer.app.data.preferences.AppearancePreferences
 import com.finalplayer.app.data.preferences.PlayerLayoutPreferences
+import com.finalplayer.app.data.preferences.PlayerPreferences
 import org.koin.compose.koinInject
 
 @Composable
@@ -43,10 +44,12 @@ fun FinalPlayerSeekbar(
     onValueChangeFinished: (Float) -> Unit,
     modifier: Modifier = Modifier,
     appearancePrefs: AppearancePreferences = koinInject(),
-    layoutPrefs: PlayerLayoutPreferences = koinInject()
+    layoutPrefs: PlayerLayoutPreferences = koinInject(),
+    playerPrefs: PlayerPreferences = koinInject()
 ) {
     val layoutSeekbarStyle by layoutPrefs.seekbarStyle.asFlow().collectAsState(initial = "standard")
     val whiteProgressbar by layoutPrefs.whiteProgressbar.asFlow().collectAsState(initial = false)
+    val playerWhiteSeekBar by playerPrefs.whiteSeekBar.asFlow().collectAsState(initial = false)
     val appSeekbarStyle by appearancePrefs.seekbarStyle.asFlow().collectAsState(initial = "thin")
     val isGlass by appearancePrefs.glassmorphismSeekbar.asFlow().collectAsState(initial = false)
 
@@ -60,7 +63,8 @@ fun FinalPlayerSeekbar(
         else -> 4.dp
     }
 
-    val progressColor = if (whiteProgressbar) Color.White else MaterialTheme.colorScheme.primary
+    val isWhite = whiteProgressbar || playerWhiteSeekBar
+    val progressColor = if (isWhite) Color.White else MaterialTheme.colorScheme.primary
 
     var isDragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(position) }

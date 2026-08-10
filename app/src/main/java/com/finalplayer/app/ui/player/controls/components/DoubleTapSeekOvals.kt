@@ -52,19 +52,25 @@ fun DoubleTapSeekOvals(
     playerPrefs: PlayerPreferences = koinInject()
 ) {
     val showOvals by playerPrefs.showDoubleTapOvals.asFlow().collectAsState(initial = true)
+    val showRipple by playerPrefs.showDoubleTapRipple.asFlow().collectAsState(initial = true)
+    val showSeekTime by playerPrefs.showSeekTimeWhileSeeking.asFlow().collectAsState(initial = true)
+    val reduceMotion by playerPrefs.reduceMotion.asFlow().collectAsState(initial = false)
 
-    if (!showOvals) return
+    if (!showOvals && !showRipple) return
+
+    val enterAnim = if (reduceMotion) fadeIn(tween(0)) else fadeIn(tween(150)) + slideInHorizontally(
+        initialOffsetX = { fullWidth -> if (doubleTapState?.isLeft == true) -fullWidth / 4 else fullWidth / 4 },
+        animationSpec = tween(200)
+    )
+    val exitAnim = if (reduceMotion) fadeOut(tween(0)) else fadeOut(tween(250)) + slideOutHorizontally(
+        targetOffsetX = { fullWidth -> if (doubleTapState?.isLeft == true) -fullWidth / 4 else fullWidth / 4 },
+        animationSpec = tween(200)
+    )
 
     AnimatedVisibility(
         visible = doubleTapState != null,
-        enter = fadeIn(tween(150)) + slideInHorizontally(
-            initialOffsetX = { fullWidth -> if (doubleTapState?.isLeft == true) -fullWidth / 4 else fullWidth / 4 },
-            animationSpec = tween(200)
-        ),
-        exit = fadeOut(tween(250)) + slideOutHorizontally(
-            targetOffsetX = { fullWidth -> if (doubleTapState?.isLeft == true) -fullWidth / 4 else fullWidth / 4 },
-            animationSpec = tween(200)
-        ),
+        enter = enterAnim,
+        exit = exitAnim,
         modifier = modifier.fillMaxSize()
     ) {
         if (doubleTapState == null) return@AnimatedVisibility
@@ -75,61 +81,82 @@ fun DoubleTapSeekOvals(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = if (isLeft) Alignment.CenterStart else Alignment.CenterEnd
         ) {
-            // Semi-capsule edge overlay (matching exact screenshot curve & dark translucent tint)
-            val capsuleShape = if (isLeft) {
-                RoundedCornerShape(
-                    topStart = 0.dp,
-                    bottomStart = 0.dp,
-                    topEnd = 160.dp,
-                    bottomEnd = 160.dp
-                )
-            } else {
-                RoundedCornerShape(
-                    topStart = 160.dp,
-                    bottomStart = 160.dp,
-                    topEnd = 0.dp,
-                    bottomEnd = 0.dp
+            // Ripple layer if enabled
+            if (showRipple) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(200.dp)
+                        .background(
+                            Color.White.copy(alpha = 0.12f),
+                            shape = if (isLeft) {
+                                RoundedCornerShape(topEndPercent = 100, bottomEndPercent = 100)
+                            } else {
+                                RoundedCornerShape(topStartPercent = 100, bottomStartPercent = 100)
+                            }
+                        )
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight(0.82f)
-                    .width(150.dp)
-                    .clip(capsuleShape)
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .testTag(if (isLeft) "double_tap_oval_left" else "double_tap_oval_right"),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(16.dp)
+            if (showOvals) {
+                // Semi-capsule edge overlay
+                val capsuleShape = if (isLeft) {
+                    RoundedCornerShape(
+                        topStart = 0.dp,
+                        bottomStart = 0.dp,
+                        topEnd = 160.dp,
+                        bottomEnd = 160.dp
+                    )
+                } else {
+                    RoundedCornerShape(
+                        topStart = 160.dp,
+                        bottomStart = 160.dp,
+                        topEnd = 0.dp,
+                        bottomEnd = 0.dp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight(0.82f)
+                        .width(150.dp)
+                        .clip(capsuleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .testTag(if (isLeft) "double_tap_oval_left" else "double_tap_oval_right"),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Animated Circular Ring Indicator
-                    CircularSeekRing(isLeft = isLeft)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        // Animated Circular Ring Indicator
+                        CircularSeekRing(isLeft = isLeft, reduceMotion = reduceMotion)
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                        if (showSeekTime) {
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                    // Seconds Text (e.g. "+10s" for forward, "10s-" for rewind)
-                    val timeText = if (isLeft) "${doubleTapState.amountSeconds}s-" else "+${doubleTapState.amountSeconds}s"
-                    Text(
-                        text = timeText,
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 24.sp
-                    )
+                            // Seconds Text (e.g. "+10s" for forward, "10s-" for rewind)
+                            val timeText = if (isLeft) "${doubleTapState.amountSeconds}s-" else "+${doubleTapState.amountSeconds}s"
+                            Text(
+                                text = timeText,
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 24.sp
+                            )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
 
-                    // Label ("Forward" or "Rewind")
-                    val labelText = if (isLeft) "Rewind" else "Forward"
-                    Text(
-                        text = labelText,
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 14.sp
-                    )
+                            // Label ("Forward" or "Rewind")
+                            val labelText = if (isLeft) "Rewind" else "Forward"
+                            Text(
+                                text = labelText,
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -137,13 +164,13 @@ fun DoubleTapSeekOvals(
 }
 
 @Composable
-private fun CircularSeekRing(isLeft: Boolean) {
+private fun CircularSeekRing(isLeft: Boolean, reduceMotion: Boolean = false) {
     val transition = rememberInfiniteTransition(label = "RingRotation")
     val rotationAngle by transition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing)
+            animation = tween(if (reduceMotion) 5000 else 1200, easing = LinearEasing)
         ),
         label = "rotation"
     )

@@ -31,6 +31,9 @@ import com.finalplayer.app.domain.repository.PlaybackRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -170,6 +173,10 @@ class PlayerViewModel(
     private val _isSliderDragging = MutableStateFlow(false)
     val isSliderDragging: StateFlow<Boolean> = _isSliderDragging.asStateFlow()
 
+    val isBuffering: StateFlow<Boolean> = mpvController.playerState
+        .map { it.isBuffering }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private var normalPlaybackSpeed: Float = 1.0f
     private var lastSeekTimeMs: Long = 0L
     private var zoomHideJob: Job? = null
@@ -203,6 +210,9 @@ class PlayerViewModel(
 
     private val _resumePositionSec = MutableStateFlow<Double?>(null)
     val resumePositionSec: StateFlow<Double?> = _resumePositionSec.asStateFlow()
+
+    private val _finishActivityEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val finishActivityEvent: SharedFlow<Unit> = _finishActivityEvent.asSharedFlow()
 
     private val _isLocked = MutableStateFlow(false)
     val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
@@ -330,6 +340,9 @@ class PlayerViewModel(
     }
 
     fun saveCurrentProgressNow() {
+        val saveOnExit = playerPrefs?.savePositionOnQuit?.get() ?: true
+        if (!saveOnExit) return
+
         val videoId = _currentVideoId.value ?: return
         if (videoId.isEmpty()) return
 
@@ -438,18 +451,21 @@ class PlayerViewModel(
     fun checkSavedProgress(videoId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val saveOnExit = playerPrefs?.savePositionOnQuit?.get() ?: true
+                if (!saveOnExit) {
+                    _resumePositionSec.value = null
+                    return@launch
+                }
                 val progress = playbackRepository.getProgress(videoId).first()
                 if (progress != null && !progress.isCompleted && progress.positionMs > 2000L) {
                     val savedTimeInSeconds = (progress.positionMs / 1000L).toInt()
                     lastKnownPositionMs = progress.positionMs
-                    _resumePositionSec.value = savedTimeInSeconds.toDouble()
                     withContext(Dispatchers.Main) {
                         mpvController.setPropertyInt("start", savedTimeInSeconds)
                         MPVLib.setPropertyInt("start", savedTimeInSeconds)
                     }
-                } else {
-                    _resumePositionSec.value = null
                 }
+                _resumePositionSec.value = null
             } catch (e: Exception) {
                 _resumePositionSec.value = null
             }
@@ -527,8 +543,87 @@ class PlayerViewModel(
         decoderPrefs?.let { prefs ->
             viewModelScope.launch {
                 prefs.tryHWDecoding.changes().collect { tryHW ->
-                    if (tryHW && _currentDecoder.value == Decoder.SOFTWARE) {
+                    if (tryHW) {
                         setDecoder(Decoder.HW_PLUS)
+                    } else {
+                        setDecoder(Decoder.SOFTWARE)
+                    }
+                }
+            }
+            viewModelScope.launch {
+                prefs.profile.changes().collect { profile ->
+                    val mpvVal = when (profile.lowercase()) {
+                        "fast" -> "fast"
+                        "default" -> "default"
+                        "high quality" -> "high-quality"
+                        "gpu hq" -> "gpu-hq"
+                        "low latency" -> "low-latency"
+                        "sw fast" -> "sw-fast"
+                        else -> "fast"
+                    }
+                    mpvController.setPropertyString("profile", mpvVal)
+                }
+            }
+            viewModelScope.launch {
+                prefs.gpuNext.changes().collect { enabled ->
+                    mpvController.setPropertyString("vo", if (enabled) "gpu-next" else "gpu")
+                }
+            }
+            viewModelScope.launch {
+                prefs.useVulkan.changes().collect { enabled ->
+                    mpvController.setPropertyString("gpu-api", if (enabled) "vulkan" else "opengl")
+                }
+            }
+            viewModelScope.launch {
+                prefs.debanding.changes().collect { mode ->
+                    when (mode) {
+                        "GPU" -> {
+                            mpvController.setPropertyString("deband", "yes")
+                            mpvController.getAttachedView()?.command(arrayOf("vf", "remove", "@deband"))
+                        }
+                        "CPU" -> {
+                            mpvController.setPropertyString("deband", "no")
+                            mpvController.getAttachedView()?.command(arrayOf("vf", "add", "@deband:gradfun=radius=12"))
+                        }
+                        else -> {
+                            mpvController.setPropertyString("deband", "no")
+                            mpvController.getAttachedView()?.command(arrayOf("vf", "remove", "@deband"))
+                        }
+                    }
+                }
+            }
+            viewModelScope.launch {
+                prefs.useYUV420P.changes().collect { enabled ->
+                    if (enabled) {
+                        mpvController.getAttachedView()?.command(arrayOf("vf", "add", "@yuv420p:format=yuv420p"))
+                    } else {
+                        mpvController.getAttachedView()?.command(arrayOf("vf", "remove", "@yuv420p"))
+                    }
+                }
+            }
+            viewModelScope.launch {
+                prefs.anime4k.changes().collect { enabled ->
+                    if (enabled) {
+                        mpvController.setPropertyString("scale", "eowa")
+                        mpvController.setPropertyString("cscale", "eowa")
+                        mpvController.getAttachedView()?.command(arrayOf("vf", "add", "@anime4k:unsharp=5:5:1.0:5:5:0.0"))
+                    } else {
+                        mpvController.setPropertyString("scale", "bilinear")
+                        mpvController.setPropertyString("cscale", "bilinear")
+                        mpvController.getAttachedView()?.command(arrayOf("vf", "remove", "@anime4k"))
+                    }
+                }
+            }
+            viewModelScope.launch {
+                prefs.hdrToSdr.changes().collect { enabled ->
+                    if (enabled) {
+                        mpvController.setPropertyString("tone-mapping", "bt.2446a")
+                        mpvController.setPropertyString("target-peak", "auto")
+                        mpvController.setPropertyString("hdr-compute-peak", "yes")
+                        mpvController.setPropertyString("tone-mapping-mode", "hybrid")
+                    } else {
+                        mpvController.setPropertyString("tone-mapping", "auto")
+                        mpvController.setPropertyString("hdr-compute-peak", "auto")
                     }
                 }
             }
@@ -556,6 +651,49 @@ class PlayerViewModel(
             val bStyle = prefs.borderStyle.get()
             val overrideAss = prefs.overrideAssSubs.get()
             val fontStr = prefs.font.get()
+            val preferredLangs = prefs.preferredLanguages.get()
+            val disableByDefault = prefs.disableByDefault.get()
+            val autoLoad = prefs.autoLoadSubtitles.get()
+            val scaleByWin = prefs.scaleByWindow.get()
+            val fontsDir = prefs.fontsFolder.get()
+            val encodings = prefs.preferredEncodings.get()
+
+            if (preferredLangs.isNotBlank()) {
+                MPVLib.setPropertyString("slang", preferredLangs)
+                MPVLib.setOptionString("slang", preferredLangs)
+            }
+
+            if (disableByDefault) {
+                MPVLib.setPropertyString("sub-visibility", "no")
+                MPVLib.setOptionString("sub-visibility", "no")
+                MPVLib.setPropertyString("sid", "no")
+            } else {
+                MPVLib.setPropertyString("sub-visibility", "yes")
+                MPVLib.setOptionString("sub-visibility", "yes")
+            }
+
+            MPVLib.setPropertyString("sub-auto", if (autoLoad) "fuzzy" else "no")
+            MPVLib.setOptionString("sub-auto", if (autoLoad) "fuzzy" else "no")
+
+            MPVLib.setPropertyString("sub-scale-by-window", if (scaleByWin) "yes" else "no")
+            MPVLib.setOptionString("sub-scale-by-window", if (scaleByWin) "yes" else "no")
+
+            if (fontsDir.isNotBlank()) {
+                MPVLib.setPropertyString("sub-fonts-dir", fontsDir)
+                MPVLib.setOptionString("sub-fonts-dir", fontsDir)
+            }
+
+            if (encodings.isNotBlank()) {
+                val codepage = when {
+                    encodings.contains("1256", ignoreCase = true) -> "cp1256"
+                    encodings.contains("8859-6", ignoreCase = true) -> "iso-8859-6"
+                    encodings.contains("1252", ignoreCase = true) -> "cp1252"
+                    encodings.contains("UTF-8", ignoreCase = true) -> "utf-8"
+                    else -> "auto"
+                }
+                MPVLib.setPropertyString("sub-codepage", codepage)
+                MPVLib.setOptionString("sub-codepage", codepage)
+            }
 
             val textCLong = prefs.textColor.get()
             val borderCLong = prefs.borderColor.get()
@@ -729,6 +867,65 @@ class PlayerViewModel(
                     }
                 }
             }
+            viewModelScope.launch {
+                prefs.preferredLanguages.changes().collect { langs ->
+                    if (langs.isNotBlank()) {
+                        MPVLib.setPropertyString("slang", langs)
+                        MPVLib.setOptionString("slang", langs)
+                    }
+                }
+            }
+            viewModelScope.launch {
+                prefs.disableByDefault.changes().collect { disable ->
+                    if (disable) {
+                        MPVLib.setPropertyString("sub-visibility", "no")
+                        MPVLib.setOptionString("sub-visibility", "no")
+                        MPVLib.setPropertyString("sid", "no")
+                    } else {
+                        MPVLib.setPropertyString("sub-visibility", "yes")
+                        MPVLib.setOptionString("sub-visibility", "yes")
+                    }
+                }
+            }
+            viewModelScope.launch {
+                prefs.autoLoadSubtitles.changes().collect { autoLoad ->
+                    MPVLib.setPropertyString("sub-auto", if (autoLoad) "fuzzy" else "no")
+                    MPVLib.setOptionString("sub-auto", if (autoLoad) "fuzzy" else "no")
+                }
+            }
+            viewModelScope.launch {
+                prefs.overrideAssSubs.changes().collect { overrideAss ->
+                    MPVLib.setPropertyString("sub-ass-override", if (overrideAss) "force" else "scale")
+                    MPVLib.setOptionString("sub-ass-override", if (overrideAss) "force" else "scale")
+                }
+            }
+            viewModelScope.launch {
+                prefs.scaleByWindow.changes().collect { scaleByWin ->
+                    MPVLib.setPropertyString("sub-scale-by-window", if (scaleByWin) "yes" else "no")
+                    MPVLib.setOptionString("sub-scale-by-window", if (scaleByWin) "yes" else "no")
+                }
+            }
+            viewModelScope.launch {
+                prefs.fontsFolder.changes().collect { fontsDir ->
+                    if (fontsDir.isNotBlank()) {
+                        MPVLib.setPropertyString("sub-fonts-dir", fontsDir)
+                        MPVLib.setOptionString("sub-fonts-dir", fontsDir)
+                    }
+                }
+            }
+            viewModelScope.launch {
+                prefs.preferredEncodings.changes().collect { encodings ->
+                    val codepage = when {
+                        encodings.contains("1256", ignoreCase = true) -> "cp1256"
+                        encodings.contains("8859-6", ignoreCase = true) -> "iso-8859-6"
+                        encodings.contains("1252", ignoreCase = true) -> "cp1252"
+                        encodings.contains("UTF-8", ignoreCase = true) -> "utf-8"
+                        else -> "auto"
+                    }
+                    MPVLib.setPropertyString("sub-codepage", codepage)
+                    MPVLib.setOptionString("sub-codepage", codepage)
+                }
+            }
         }
         playerPrefs?.let { prefs ->
             viewModelScope.launch {
@@ -884,6 +1081,10 @@ class PlayerViewModel(
 
     fun toggleBackgroundPlay() {
         _isBackgroundPlay.value = !_isBackgroundPlay.value
+    }
+
+    fun setBackgroundPlay(enabled: Boolean) {
+        _isBackgroundPlay.value = enabled
     }
 
     fun setAspectRatio(ratio: String) {
@@ -1224,15 +1425,24 @@ class PlayerViewModel(
         lastSeekTimeMs = System.currentTimeMillis()
 
         viewModelScope.launch(Dispatchers.IO) {
+            val precise = playerPrefs?.usePreciseSeeking?.get() ?: true
+            val seekMode = if (precise) "absolute+exact" else "absolute+keyframes"
             try {
-                mpvController.getAttachedView()?.seekTo(clampedPos.toDouble(), "absolute+exact")
+                mpvController.getAttachedView()?.seekTo(clampedPos.toDouble(), seekMode)
             } catch (e: Exception) {
                 try {
                     mpvController.seekTo((clampedPos * 1000f).toLong())
                 } catch (e2: Exception) {
-                    MPVLib.command("seek", clampedPos.toString(), "absolute+exact")
+                    MPVLib.command("seek", clampedPos.toString(), seekMode)
                 }
             }
+        }
+    }
+
+    fun customSkip() {
+        viewModelScope.launch {
+            val duration = playerPrefs?.customSkipDuration?.get() ?: 10
+            seekBy(duration)
         }
     }
 
@@ -1269,6 +1479,19 @@ class PlayerViewModel(
 
     // --- BRIGHTNESS CONTROLS ---
     fun initBrightness(window: Window?, context: Context) {
+        val remember = playerPrefs?.rememberBrightness?.get() ?: false
+        val savedBrightness = if (remember) playerPrefs?.defaultBrightness?.get() ?: -1f else -1f
+
+        if (savedBrightness > 0f) {
+            _currentBrightness.value = savedBrightness.coerceIn(0.01f, 1f)
+            window?.let {
+                val lp = it.attributes
+                lp.screenBrightness = savedBrightness
+                it.attributes = lp
+            }
+            return
+        }
+
         val currentVal = window?.attributes?.screenBrightness
         if (currentVal != null && currentVal >= 0f) {
             _currentBrightness.value = currentVal.coerceIn(0.01f, 1f)
@@ -1294,6 +1517,13 @@ class PlayerViewModel(
             val lp = it.attributes
             lp.screenBrightness = newBrightness
             it.attributes = lp
+        }
+
+        val remember = playerPrefs?.rememberBrightness?.get() ?: false
+        if (remember) {
+            viewModelScope.launch {
+                playerPrefs?.defaultBrightness?.set(newBrightness)
+            }
         }
 
         try {
@@ -1437,6 +1667,8 @@ class PlayerViewModel(
         _remainingTime.value = 0
     }
 
+    private var eofHandled = false
+
     private fun startAdaptivePolling() {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
@@ -1445,6 +1677,29 @@ class PlayerViewModel(
                 val state = mpvController.playerState.value
                 val posSec = state.positionMs / 1000f
                 val durSec = state.durationMs / 1000f
+
+                val isEof = try { MPVLib.getPropertyBoolean("eof-reached") ?: false } catch (e: Exception) { false }
+                if (isEof || (durSec > 2f && posSec >= durSec - 0.5f)) {
+                    if (!eofHandled) {
+                        eofHandled = true
+                        saveCurrentProgressNow()
+
+                        val autoPlayNext = playerPrefs?.autoPlayNext?.get() ?: true
+                        val closeAfterPlayback = playerPrefs?.closeAfterPlayback?.get() ?: true
+
+                        val items = _playlistItems.value
+                        val currentIndex = _currentPlaylistIndex.value
+                        val hasNext = items.isNotEmpty() && currentIndex + 1 < items.size
+
+                        if (autoPlayNext && hasNext) {
+                            playNextVideo()
+                        } else if (closeAfterPlayback) {
+                            _finishActivityEvent.tryEmit(Unit)
+                        }
+                    }
+                } else if (posSec < durSec - 2f) {
+                    eofHandled = false
+                }
 
                 val timeSinceSeek = System.currentTimeMillis() - lastSeekTimeMs
                 if (_dragSeekState.value == null && !_isSliderDragging.value && timeSinceSeek > 1200L) {

@@ -27,6 +27,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.finalplayer.app.player.core.MpvTeardownCoordinator
+import com.finalplayer.app.player.service.MediaPlaybackService
 import com.finalplayer.app.ui.player.PlayerScreen
 import com.finalplayer.app.ui.theme.FinalPlayerTheme
 import kotlinx.coroutines.flow.combine
@@ -76,6 +77,17 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    private val screenUnlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_USER_PRESENT || intent?.action == Intent.ACTION_SCREEN_ON) {
+                val resumeOnUnlock = viewModel.playerPrefs?.resumeOnUnlock?.get() ?: false
+                if (resumeOnUnlock) {
+                    viewModel.play()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -109,6 +121,25 @@ class PlayerActivity : ComponentActivity() {
             }
         }
 
+        // Apply system status & navigation bar preferences dynamically based on controls visibility
+        lifecycleScope.launch {
+            combine(
+                viewModel.controlsShown,
+                viewModel.playerPrefs?.showSystemStatusBar?.asFlow() ?: flowOf(false),
+                viewModel.playerPrefs?.showSystemNavigationBar?.asFlow() ?: flowOf(false)
+            ) { visible: Boolean, showStatus: Boolean, showNav: Boolean ->
+                Triple(visible, showStatus, showNav)
+            }.collect { (visible, showStatus, showNav) ->
+                val insets = WindowInsetsControllerCompat(window, window.decorView)
+                if (visible) {
+                    if (showStatus) insets.show(WindowInsetsCompat.Type.statusBars()) else insets.hide(WindowInsetsCompat.Type.statusBars())
+                    if (showNav) insets.show(WindowInsetsCompat.Type.navigationBars()) else insets.hide(WindowInsetsCompat.Type.navigationBars())
+                } else {
+                    insets.hide(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+        }
+
         // Keep PiP actions and aspect ratio updated
         lifecycleScope.launch {
             combine(
@@ -119,6 +150,24 @@ class PlayerActivity : ComponentActivity() {
             }.collect {
                 updatePipParams()
             }
+        }
+
+        // Listen for activity finish event (close after playback)
+        lifecycleScope.launch {
+            viewModel.finishActivityEvent.collect {
+                finish()
+            }
+        }
+
+        // Screen unlock receiver for resumeOnUnlock preference
+        val screenFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_USER_PRESENT)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        try {
+            registerReceiver(screenUnlockReceiver, screenFilter)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register screenUnlockReceiver", e)
         }
 
         // Parse video/audio details from intent
@@ -337,6 +386,22 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    private var wasInPipMode = false
+    private var closedFromPipMode = false
+
+    private fun enableBackgroundAudioService() {
+        viewModel.setBackgroundPlay(true)
+        MpvTeardownCoordinator.markDetachedService()
+        if (videoPath.isNotEmpty()) {
+            MediaPlaybackService.startService(applicationContext, videoTitle, videoPath)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        closedFromPipMode = false
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val autoPip = viewModel.playerPrefs?.autoPiPOnNavigation?.get() ?: true
@@ -348,9 +413,15 @@ class PlayerActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isInPictureInPictureMode) {
+            wasInPipMode = true
+            closedFromPipMode = false
             viewModel.setControlsShown(false)
         } else {
             viewModel.setControlsShown(true)
+            if (wasInPipMode) {
+                closedFromPipMode = true
+                enableBackgroundAudioService()
+            }
         }
     }
 
@@ -359,7 +430,7 @@ class PlayerActivity : ComponentActivity() {
         viewModel.saveCurrentProgressNow()
         val isBgPlay = viewModel.isBackgroundPlay.value
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
-        if (!isBgPlay && !isPipMode) {
+        if (!isBgPlay && !isPipMode && !closedFromPipMode) {
             viewModel.pause()
         }
     }
@@ -367,9 +438,12 @@ class PlayerActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         viewModel.saveCurrentProgressNow()
+        if (closedFromPipMode) {
+            enableBackgroundAudioService()
+        }
         val isBgPlay = viewModel.isBackgroundPlay.value
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
-        if (!isBgPlay && !isPipMode) {
+        if (!isBgPlay && !isPipMode && !closedFromPipMode) {
             viewModel.pause()
         }
     }
@@ -405,6 +479,11 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            unregisterReceiver(screenUnlockReceiver)
+        } catch (e: Exception) {
+            // Ignored
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 unregisterReceiver(pipBroadcastReceiver)
@@ -412,12 +491,21 @@ class PlayerActivity : ComponentActivity() {
                 Log.e(TAG, "Receiver not registered", e)
             }
         }
+        if (closedFromPipMode) {
+            enableBackgroundAudioService()
+        }
         val isBgPlay = viewModel.isBackgroundPlay.value
         if (!isBgPlay) {
             viewModel.pause()
+            MediaPlaybackService.stopService(applicationContext)
+            val mpvView = viewModel.mpvController.getAttachedView()
+            MpvTeardownCoordinator.destroyActivityCoreAsync("PlayerActivity onDestroy", mpvView)
+        } else {
+            MpvTeardownCoordinator.markDetachedService()
+            if (videoPath.isNotEmpty()) {
+                MediaPlaybackService.startService(applicationContext, videoTitle, videoPath)
+            }
         }
-        val mpvView = viewModel.mpvController.getAttachedView()
-        MpvTeardownCoordinator.destroyActivityCoreAsync("PlayerActivity onDestroy", mpvView)
         super.onDestroy()
     }
 

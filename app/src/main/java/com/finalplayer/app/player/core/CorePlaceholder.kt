@@ -35,6 +35,10 @@ object MPVLib {
         return activeView?.getPropertyDouble(name)
     }
 
+    fun getPropertyBoolean(name: String): Boolean? {
+        return activeView?.getPropertyBoolean(name)
+    }
+
     fun getPropertyString(name: String): String? {
         return activeView?.getPropertyString(name)
     }

@@ -180,6 +180,17 @@ fun DecoderSettingsTab() {
                         onCheckedChange = { newValue ->
                             scope.launch {
                                 prefs.anime4k.set(newValue)
+                                try {
+                                    if (newValue) {
+                                        MPVLib.setPropertyString("scale", "eowa")
+                                        MPVLib.setPropertyString("cscale", "eowa")
+                                        MPVLib.command("vf", "add", "@anime4k:unsharp=5:5:1.0:5:5:0.0")
+                                    } else {
+                                        MPVLib.setPropertyString("scale", "bilinear")
+                                        MPVLib.setPropertyString("cscale", "bilinear")
+                                        MPVLib.command("vf", "remove", "@anime4k")
+                                    }
+                                } catch (_: Throwable) {}
                             }
                         }
                     )
@@ -194,6 +205,17 @@ fun DecoderSettingsTab() {
                         onCheckedChange = { newValue ->
                             scope.launch {
                                 prefs.hdrToSdr.set(newValue)
+                                try {
+                                    if (newValue) {
+                                        MPVLib.setPropertyString("tone-mapping", "bt.2446a")
+                                        MPVLib.setPropertyString("target-peak", "auto")
+                                        MPVLib.setPropertyString("hdr-compute-peak", "yes")
+                                        MPVLib.setPropertyString("tone-mapping-mode", "hybrid")
+                                    } else {
+                                        MPVLib.setPropertyString("tone-mapping", "auto")
+                                        MPVLib.setPropertyString("hdr-compute-peak", "auto")
+                                    }
+                                } catch (_: Throwable) {}
                             }
                         }
                     )

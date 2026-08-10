@@ -67,7 +67,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.material3.RadioButton
 import com.finalplayer.app.data.preferences.SubtitlesPreferences
+import java.io.File
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -102,6 +104,13 @@ fun SubtitlesSettingsTab() {
     var showWyzieDialog by remember { mutableStateOf(false) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
     var isAdvancedExpanded by remember { mutableStateOf(false) }
+
+    var showDefaultFolderDialog by remember { mutableStateOf(false) }
+    var showFontsFolderDialog by remember { mutableStateOf(false) }
+    var showSaveLocationDialog by remember { mutableStateOf(false) }
+    var showSearchLangsDialog by remember { mutableStateOf(false) }
+    var showFormatsDialog by remember { mutableStateOf(false) }
+    var showEncodingsDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -199,9 +208,7 @@ fun SubtitlesSettingsTab() {
                 SubClickableRow(
                     title = "مجلد التحديد الافتراضي",
                     subtitle = if (defaultFolder.isBlank()) "غير مُعيَّن (سيستخدم الافتراضي للفيديو)" else defaultFolder,
-                    onClick = {
-                        Toast.makeText(context, "سيتم استخدام المجلد الافتراضي للفيديو", Toast.LENGTH_SHORT).show()
-                    }
+                    onClick = { showDefaultFolderDialog = true }
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
@@ -210,9 +217,7 @@ fun SubtitlesSettingsTab() {
                 SubClickableRow(
                     title = "مجلد الخطوط",
                     subtitle = if (fontsFolder.isBlank()) "غير مُعيَّن (يستخدم خطوط النظام)" else fontsFolder,
-                    onClick = {
-                        Toast.makeText(context, "يتم استخدام خطوط النظام", Toast.LENGTH_SHORT).show()
-                    }
+                    onClick = { showFontsFolderDialog = true }
                 )
             }
         }
@@ -240,9 +245,7 @@ fun SubtitlesSettingsTab() {
                 SubClickableRow(
                     title = "موقع حفظ الترجمات",
                     subtitle = if (saveLocation.isBlank()) "غير مُعيَّن (سيستخدم الافتراضي للفيديو)" else saveLocation,
-                    onClick = {
-                        Toast.makeText(context, "سيتم حفظ الترجمات في مجلد الفيديو الحالي", Toast.LENGTH_SHORT).show()
-                    }
+                    onClick = { showSaveLocationDialog = true }
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
@@ -261,12 +264,7 @@ fun SubtitlesSettingsTab() {
                 SubClickableRow(
                     title = "لغات الترجمة",
                     subtitle = searchLanguages,
-                    onClick = {
-                        scope.launch {
-                            val newLang = if (searchLanguages == "English") "Arabic, English" else "English"
-                            prefs.searchLanguages.set(newLang)
-                        }
-                    }
+                    onClick = { showSearchLangsDialog = true }
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
@@ -318,7 +316,7 @@ fun SubtitlesSettingsTab() {
                         SubClickableRow(
                             title = "Preferred Formats",
                             subtitle = preferredFormats,
-                            onClick = { }
+                            onClick = { showFormatsDialog = true }
                         )
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
@@ -327,7 +325,7 @@ fun SubtitlesSettingsTab() {
                         SubClickableRow(
                             title = "Preferred Encodings",
                             subtitle = preferredEncodings,
-                            onClick = { }
+                            onClick = { showEncodingsDialog = true }
                         )
                     }
                 }
@@ -442,6 +440,84 @@ fun SubtitlesSettingsTab() {
         )
     }
 
+    if (showDefaultFolderDialog) {
+        PathInputDialog(
+            title = "مجلد التحديد الافتراضي",
+            description = "أدخل مسار مجلد التحديد الافتراضي للترجمات (مثال: /storage/emulated/0/Download/Subtitles)",
+            currentValue = defaultFolder,
+            onDismiss = { showDefaultFolderDialog = false },
+            onConfirm = { newPath ->
+                scope.launch { prefs.defaultFolder.set(newPath) }
+                showDefaultFolderDialog = false
+            }
+        )
+    }
+
+    if (showFontsFolderDialog) {
+        PathInputDialog(
+            title = "مجلد الخطوط",
+            description = "أدخل مسار مجلد الخطوط المخصصة (أو اتركه فارغاً لاستخدام خطوط النظام)",
+            currentValue = fontsFolder,
+            onDismiss = { showFontsFolderDialog = false },
+            onConfirm = { newPath ->
+                scope.launch { prefs.fontsFolder.set(newPath) }
+                showFontsFolderDialog = false
+            }
+        )
+    }
+
+    if (showSaveLocationDialog) {
+        PathInputDialog(
+            title = "موقع حفظ الترجمات",
+            description = "أدخل مسار المجلد لحفظ الترجمات المُنَزَّلة (أو اتركه فارغاً لاستخدام مجلد الفيديو)",
+            currentValue = saveLocation,
+            onDismiss = { showSaveLocationDialog = false },
+            onConfirm = { newPath ->
+                scope.launch { prefs.saveLocation.set(newPath) }
+                showSaveLocationDialog = false
+            }
+        )
+    }
+
+    if (showSearchLangsDialog) {
+        MultiSelectOptionDialog(
+            title = "لغات الترجمة للبحث",
+            allOptions = listOf("Arabic", "English", "French", "Spanish", "German", "Japanese", "Chinese", "Turkish", "Russian", "Italian"),
+            currentSelected = searchLanguages,
+            onDismiss = { showSearchLangsDialog = false },
+            onConfirm = { selected ->
+                scope.launch { prefs.searchLanguages.set(selected) }
+                showSearchLangsDialog = false
+            }
+        )
+    }
+
+    if (showFormatsDialog) {
+        MultiSelectOptionDialog(
+            title = "Preferred Formats",
+            allOptions = listOf("ASS", "SSA", "SRT", "VTT", "SUB", "MicroDVD"),
+            currentSelected = preferredFormats,
+            onDismiss = { showFormatsDialog = false },
+            onConfirm = { selected ->
+                scope.launch { prefs.preferredFormats.set(selected) }
+                showFormatsDialog = false
+            }
+        )
+    }
+
+    if (showEncodingsDialog) {
+        SingleSelectOptionDialog(
+            title = "Preferred Encodings",
+            options = listOf("Unicode (UTF-8)", "Arabic (Windows-1256)", "Arabic (ISO-8859-6)", "Western (CP1252)", "Auto-detect"),
+            currentSelected = preferredEncodings,
+            onDismiss = { showEncodingsDialog = false },
+            onConfirm = { selected ->
+                scope.launch { prefs.preferredEncodings.set(selected) }
+                showEncodingsDialog = false
+            }
+        )
+    }
+
     if (showClearConfirmDialog) {
         Dialog(onDismissRequest = { showClearConfirmDialog = false }) {
             Surface(
@@ -478,7 +554,24 @@ fun SubtitlesSettingsTab() {
                         Spacer(modifier = Modifier.width(8.dp))
                         TextButton(onClick = {
                             showClearConfirmDialog = false
-                            Toast.makeText(context, "تم مسح تنزيلات الترجمة بنجاح", Toast.LENGTH_SHORT).show()
+                            var deletedCount = 0
+                            val extensions = setOf("srt", "ass", "vtt", "sub", "zip")
+                            val targets = mutableListOf<File>()
+                            if (saveLocation.isNotBlank()) {
+                                val f = File(saveLocation)
+                                if (f.exists() && f.isDirectory) targets.add(f)
+                            }
+                            context.cacheDir?.let { targets.add(it) }
+                            context.externalCacheDir?.let { targets.add(it) }
+
+                            targets.forEach { dir ->
+                                dir.listFiles()?.forEach { file ->
+                                    if (file.isFile && extensions.contains(file.extension.lowercase())) {
+                                        if (file.delete()) deletedCount++
+                                    }
+                                }
+                            }
+                            Toast.makeText(context, "تم مسح تنزيلات الترجمة بنجاح ($deletedCount ملف)", Toast.LENGTH_SHORT).show()
                         }) {
                             Text("مسح", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                         }
@@ -1008,6 +1101,235 @@ private fun WyzieApiKeyDialog(
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PathInputDialog(
+    title: String,
+    description: String,
+    currentValue: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var textValue by remember { mutableStateOf(currentValue) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = description,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = { textValue = it },
+                    singleLine = true,
+                    placeholder = { Text("مثال: /storage/emulated/0/Download") },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    if (textValue.isNotBlank()) {
+                        TextButton(onClick = { textValue = "" }) {
+                            Text("مسح", color = MaterialTheme.colorScheme.error)
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+
+                    TextButton(onClick = onDismiss) {
+                        Text("إلغاء", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    TextButton(onClick = { onConfirm(textValue.trim()) }) {
+                        Text("حسناً", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MultiSelectOptionDialog(
+    title: String,
+    allOptions: List<String>,
+    currentSelected: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    val selectedList = remember {
+        mutableStateListOf<String>().apply {
+            val list = currentSelected.split(",").map { it.trim() }
+            addAll(list.filter { it in allOptions })
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                allOptions.forEach { option ->
+                    val isChecked = selectedList.contains(option)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (isChecked) selectedList.remove(option) else selectedList.add(option)
+                            }
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = option,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Checkbox(
+                            checked = isChecked,
+                            onCheckedChange = { checked ->
+                                if (checked) selectedList.add(option) else selectedList.remove(option)
+                            },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("إلغاء", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    TextButton(onClick = { onConfirm(selectedList.joinToString(", ")) }) {
+                        Text("حسناً", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SingleSelectOptionDialog(
+    title: String,
+    options: List<String>,
+    currentSelected: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var selectedOption by remember { mutableStateOf(if (currentSelected in options) currentSelected else options.firstOrNull() ?: "") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Text(
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                options.forEach { option ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedOption = option }
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = option,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        RadioButton(
+                            selected = (option == selectedOption),
+                            onClick = { selectedOption = option }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("إلغاء", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    TextButton(onClick = { onConfirm(selectedOption) }) {
+                        Text("حسناً", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     }
                 }
             }

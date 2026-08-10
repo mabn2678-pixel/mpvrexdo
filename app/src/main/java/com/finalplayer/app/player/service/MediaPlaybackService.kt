@@ -38,6 +38,7 @@ class MediaPlaybackService : Service() {
 
         const val ACTION_PLAY = "com.finalplayer.app.action.PLAY"
         const val ACTION_PAUSE = "com.finalplayer.app.action.PAUSE"
+        const val ACTION_STOP = "com.finalplayer.app.action.STOP"
         const val ACTION_PREVIOUS = "com.finalplayer.app.action.PREVIOUS"
         const val ACTION_NEXT = "com.finalplayer.app.action.NEXT"
 
@@ -100,15 +101,32 @@ class MediaPlaybackService : Service() {
         intent?.let {
             val action = it.action
             when (action) {
-                ACTION_PLAY -> mpvController.resume()
-                ACTION_PAUSE -> mpvController.pause()
+                ACTION_PLAY -> {
+                    mpvController.resume()
+                    updatePlaybackState(PlaybackStateCompat.STATE_PLAYING)
+                }
+                ACTION_PAUSE -> {
+                    mpvController.pause()
+                    updatePlaybackState(PlaybackStateCompat.STATE_PAUSED)
+                }
+                ACTION_STOP -> {
+                    mpvController.pause()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 ACTION_PREVIOUS -> mpvController.seekBy(-10)
                 ACTION_NEXT -> mpvController.seekBy(10)
                 else -> {
                     val title = it.getStringExtra("EXTRA_TITLE") ?: currentTitle
                     val uri = it.getStringExtra("EXTRA_URI")
                     if (uri != null) {
-                        setMediaInfo(title, "Local Video", null, uri)
+                        setMediaInfo(title, "Background Audio", null, uri)
                     }
                 }
             }

@@ -217,7 +217,8 @@ fun PlayerControls(
     onCycleAspectRatio: () -> Unit = {},
     onTakeScreenshot: () -> Unit = {},
     modifier: Modifier = Modifier,
-    layoutPrefs: PlayerLayoutPreferences = koinInject()
+    layoutPrefs: PlayerLayoutPreferences = koinInject(),
+    playerPrefs: com.finalplayer.app.data.preferences.PlayerPreferences = koinInject()
 ) {
     var isDraggingSlider by remember { mutableStateOf(false) }
     var dragPositionSeconds by remember { mutableFloatStateOf(0f) }
@@ -228,6 +229,7 @@ fun PlayerControls(
 
     val hideTimeoutMs by layoutPrefs.controlsHideTimeoutMs.asFlow().collectAsState(initial = 3000)
     val gradientOpacity by layoutPrefs.controlsGradientOpacity.asFlow().collectAsState(initial = 0.45f)
+    val enablePrevNext by playerPrefs.enablePrevNextButtons.asFlow().collectAsState(initial = true)
 
     val topRightRaw by layoutPrefs.topRightControls.asFlow().collectAsState(initial = PlayerLayoutPreferences.DEFAULT_TOP_RIGHT)
     val bottomRightRaw by layoutPrefs.bottomRightControls.asFlow().collectAsState(initial = PlayerLayoutPreferences.DEFAULT_BOTTOM_RIGHT)
@@ -435,23 +437,25 @@ fun PlayerControls(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         // 1. Previous Video
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.45f),
-                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                IconButton(
-                                    onClick = onPreviousClick,
-                                    modifier = Modifier.fillMaxSize().testTag("player_prev_video_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.SkipPrevious,
-                                        contentDescription = "الفيديو السابق",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                        if (enablePrevNext) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.45f),
+                                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    IconButton(
+                                        onClick = onPreviousClick,
+                                        modifier = Modifier.fillMaxSize().testTag("player_prev_video_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SkipPrevious,
+                                            contentDescription = "الفيديو السابق",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -507,23 +511,25 @@ fun PlayerControls(
                         }
 
                         // 5. Next Video
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.45f),
-                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                IconButton(
-                                    onClick = onNextClick,
-                                    modifier = Modifier.fillMaxSize().testTag("player_next_video_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.SkipNext,
-                                        contentDescription = "الفيديو التالي",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                        if (enablePrevNext) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.45f),
+                                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    IconButton(
+                                        onClick = onNextClick,
+                                        modifier = Modifier.fillMaxSize().testTag("player_next_video_button")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SkipNext,
+                                            contentDescription = "الفيديو التالي",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

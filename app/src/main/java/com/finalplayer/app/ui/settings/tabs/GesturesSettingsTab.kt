@@ -45,7 +45,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +70,7 @@ fun GesturesSettingsTab(
     gesturePrefs: GesturePreferences = koinInject(),
     playerPrefs: PlayerPreferences = koinInject()
 ) {
+    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     // Preferences states
@@ -127,7 +130,12 @@ fun GesturesSettingsTab(
                 title = "إيماءات السطوع",
                 subtitle = "السحب العمودي على جانب الشاشة لضبط السطوع",
                 checked = brightnessEnabled,
-                onCheckedChange = { gesturePrefs.brightnessGestureEnabled.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        gesturePrefs.brightnessGestureEnabled.set(it)
+                        playerPrefs.enableBrightnessGesture.set(it)
+                    }
+                }
             )
         }
 
@@ -136,7 +144,12 @@ fun GesturesSettingsTab(
                 title = "إيماءات الصوت",
                 subtitle = "السحب العمودي على الجانب المقابل لضبط مستوى الصوت",
                 checked = volumeEnabled,
-                onCheckedChange = { gesturePrefs.volumeGestureEnabled.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        gesturePrefs.volumeGestureEnabled.set(it)
+                        playerPrefs.enableVolumeGesture.set(it)
+                    }
+                }
             )
         }
 
@@ -145,7 +158,11 @@ fun GesturesSettingsTab(
                 title = "تبديل موضع الصوت والسطوع",
                 subtitle = "الصوت جهة اليسار والسطوع جهة اليمين بدلاً من العكس",
                 checked = swapVolBright,
-                onCheckedChange = { playerPrefs.swapVolumeAndBrightness.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        playerPrefs.swapVolumeAndBrightness.set(it)
+                    }
+                }
             )
         }
 
@@ -154,7 +171,12 @@ fun GesturesSettingsTab(
                 title = "التمرير الأفقي للتقديم والتأخير",
                 subtitle = "السحب الأفقي في أي مكان بالشاشة للتقديم في الفيديو",
                 checked = seekEnabled,
-                onCheckedChange = { gesturePrefs.seekGestureEnabled.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        gesturePrefs.seekGestureEnabled.set(it)
+                        playerPrefs.enableHorizontalSeek.set(it)
+                    }
+                }
             )
         }
 
@@ -168,7 +190,12 @@ fun GesturesSettingsTab(
                 value = sensitivity,
                 range = 0.5f..2.0f,
                 steps = 6,
-                onValueChangeFinished = { gesturePrefs.gestureSensitivity.set(it) }
+                onValueChangeFinished = {
+                    scope.launch {
+                        gesturePrefs.gestureSensitivity.set(it)
+                        playerPrefs.seekSensitivity.set((it * 50).roundToInt())
+                    }
+                }
             )
         }
 
@@ -179,7 +206,11 @@ fun GesturesSettingsTab(
                 value = swipeSpeed,
                 range = 0.5f..2.5f,
                 steps = 8,
-                onValueChangeFinished = { gesturePrefs.swipeSeekSpeed.set(it) }
+                onValueChangeFinished = {
+                    scope.launch {
+                        gesturePrefs.swipeSeekSpeed.set(it)
+                    }
+                }
             )
         }
 
@@ -189,7 +220,11 @@ fun GesturesSettingsTab(
         item {
             DoubleTapDurationSelector(
                 currentDuration = doubleTapDuration,
-                onDurationSelected = { playerPrefs.doubleTapToSeekDuration.set(it) }
+                onDurationSelected = {
+                    scope.launch {
+                        playerPrefs.doubleTapToSeekDuration.set(it)
+                    }
+                }
             )
         }
 
@@ -198,7 +233,12 @@ fun GesturesSettingsTab(
                 title = "إظهار موجة النقر المزدوج (Ovals)",
                 subtitle = "عرض تأثير تموج بصري عند النقر المزدوج على الجوانب",
                 checked = doubleTapOvals,
-                onCheckedChange = { playerPrefs.showDoubleTapOvals.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        playerPrefs.showDoubleTapOvals.set(it)
+                        playerPrefs.showDoubleTapRipple.set(it)
+                    }
+                }
             )
         }
 
@@ -207,7 +247,11 @@ fun GesturesSettingsTab(
                 title = "إظهار وقت التقديم",
                 subtitle = "عرض الثواني المتقدمة أو المتأخرة أثناء السحب بالإيماءات",
                 checked = showSeekTime,
-                onCheckedChange = { playerPrefs.showSeekTimeWhileSeeking.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        playerPrefs.showSeekTimeWhileSeeking.set(it)
+                    }
+                }
             )
         }
 
@@ -216,7 +260,11 @@ fun GesturesSettingsTab(
                 title = "منع التقديم غير المقصود",
                 subtitle = "اشتراط مسافة سحب دنيا قبل بدء تقديم الفيديو لمنع اللمس الخطأ",
                 checked = preventAccidental,
-                onCheckedChange = { gesturePrefs.preventAccidentalSeek.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        gesturePrefs.preventAccidentalSeek.set(it)
+                    }
+                }
             )
         }
 
@@ -228,7 +276,12 @@ fun GesturesSettingsTab(
                 title = "قرص للتكبير (Pinch to Zoom)",
                 subtitle = "استخدام إصبعين لتكبير وتصغير حواف الفيديو",
                 checked = pinchZoom,
-                onCheckedChange = { gesturePrefs.pinchToZoom.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        gesturePrefs.pinchToZoom.set(it)
+                        playerPrefs.enablePinchToZoom.set(it)
+                    }
+                }
             )
         }
 
@@ -237,7 +290,12 @@ fun GesturesSettingsTab(
                 title = "التحريك مع التكبير (Pan & Zoom)",
                 subtitle = "السماح بتحريك إطار الفيديو بحرية بعد تكبيره",
                 checked = panZoom,
-                onCheckedChange = { gesturePrefs.panAndZoom.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        gesturePrefs.panAndZoom.set(it)
+                        playerPrefs.enablePanAndZoom.set(it)
+                    }
+                }
             )
         }
 
@@ -246,7 +304,12 @@ fun GesturesSettingsTab(
                 title = "التمرير للتقديم في الترجمة",
                 subtitle = "مرّر يميناً أو يساراً عبر شريط الترجمة للانتقال للسطر التالي",
                 checked = subScroll,
-                onCheckedChange = { gesturePrefs.subtitleScrollSeek.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        gesturePrefs.subtitleScrollSeek.set(it)
+                        playerPrefs.enableSubtitleSeekGesture.set(it)
+                    }
+                }
             )
         }
 
@@ -255,7 +318,12 @@ fun GesturesSettingsTab(
                 title = "سحب الترجمة لموضع جديد",
                 subtitle = "المس نص الترجمة واسحبه لأعلى أو لأسفل لضبط موقعه البصري",
                 checked = subDrag,
-                onCheckedChange = { gesturePrefs.subtitleDrag.set(it) }
+                onCheckedChange = {
+                    scope.launch {
+                        gesturePrefs.subtitleDrag.set(it)
+                        playerPrefs.enableSubtitleDrag.set(it)
+                    }
+                }
             )
         }
 

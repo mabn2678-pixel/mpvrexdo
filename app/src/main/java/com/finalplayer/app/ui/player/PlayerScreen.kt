@@ -9,6 +9,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -81,6 +86,7 @@ fun PlayerScreen(
     val currentAspectRatio by viewModel.currentAspectRatio.collectAsStateWithLifecycle()
     val currentVideoZoom by viewModel.currentVideoZoom.collectAsStateWithLifecycle()
     val videoAspect by viewModel.videoAspect.collectAsStateWithLifecycle()
+    val isBuffering by viewModel.isBuffering.collectAsStateWithLifecycle()
 
     val mpvView = remember { MPVView(context) }
 
@@ -90,9 +96,22 @@ fun PlayerScreen(
         viewModel.initVolume(context)
     }
 
-    // Keep screen on while player is active
-    DisposableEffect(Unit) {
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    val playerPrefs = viewModel.playerPrefs
+    val keepScreenOnPauseState = playerPrefs?.keepScreenOnPause?.asFlow()?.collectAsState(initial = false)
+    val keepScreenOnPause = keepScreenOnPauseState?.value ?: false
+    val showLoadingCircleState = playerPrefs?.showLoadingCircle?.asFlow()?.collectAsState(initial = true)
+    val showLoadingCircle = showLoadingCircleState?.value ?: true
+
+    // Keep screen on while player is active and playing (or if keepScreenOnPause is enabled)
+    DisposableEffect(isPaused, keepScreenOnPause) {
+        val window = activity?.window
+        if (window != null) {
+            if (isPaused != true || keepScreenOnPause) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
         onDispose {
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
@@ -233,7 +252,7 @@ fun PlayerScreen(
             onFrameStep = { forward -> viewModel.stepFrame(forward) },
             onFlipVideo = { vertical -> if (vertical) viewModel.toggleFlipV() else viewModel.toggleFlipH() },
             onToggleAbRepeat = { viewModel.toggleAbRepeat() },
-            onCustomSkip = { viewModel.seekBy(10) },
+            onCustomSkip = { viewModel.customSkip() },
             onToggleCinema = { viewModel.toggleCinemaMode() },
             onToggleBackgroundPlay = { viewModel.toggleBackgroundPlay() },
             onCycleAspectRatio = { viewModel.cycleNextAspectRatio(context) },
@@ -248,6 +267,13 @@ fun PlayerScreen(
                 }
             }
         )
+
+        if (isBuffering && showLoadingCircle) {
+            CircularProgressIndicator(
+                color = Color.White,
+                modifier = Modifier.size(48.dp)
+            )
+        }
 
         val resumePos = resumePositionSec
         if (resumePos != null && resumePos > 0) {

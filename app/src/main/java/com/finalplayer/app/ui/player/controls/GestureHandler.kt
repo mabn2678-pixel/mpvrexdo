@@ -66,17 +66,26 @@ fun GestureHandler(
     content: @Composable () -> Unit = {}
 ) {
     val brightnessEnabled by gesturePrefs.brightnessGestureEnabled.asFlow().collectAsState(initial = true)
+    val playerBrightnessEnabled by playerPrefs.enableBrightnessGesture.asFlow().collectAsState(initial = true)
     val volumeEnabled by gesturePrefs.volumeGestureEnabled.asFlow().collectAsState(initial = true)
+    val playerVolumeEnabled by playerPrefs.enableVolumeGesture.asFlow().collectAsState(initial = true)
     val seekEnabled by gesturePrefs.seekGestureEnabled.asFlow().collectAsState(initial = true)
+    val playerHorizontalSeekEnabled by playerPrefs.enableHorizontalSeek.asFlow().collectAsState(initial = true)
     val pinchEnabled by gesturePrefs.pinchToZoom.asFlow().collectAsState(initial = true)
     val playerPinchEnabled by playerPrefs.enablePinchToZoom.asFlow().collectAsState(initial = true)
     val enableSubtitleDrag by playerPrefs.enableSubtitleDrag.asFlow().collectAsState(initial = false)
+    val enableSubtitleSeekGesture by playerPrefs.enableSubtitleSeekGesture.asFlow().collectAsState(initial = true)
+    val seekSensitivity by playerPrefs.seekSensitivity.asFlow().collectAsState(initial = 50)
+    val allowPanelGestures by playerPrefs.allowPanelGestures.asFlow().collectAsState(initial = false)
     val sensitivity by gesturePrefs.gestureSensitivity.asFlow().collectAsState(initial = 1.0f)
     val swipeSpeed by gesturePrefs.swipeSeekSpeed.asFlow().collectAsState(initial = 1.0f)
     val preventAccidental by gesturePrefs.preventAccidentalSeek.asFlow().collectAsState(initial = false)
     val swapVolBright by playerPrefs.swapVolumeAndBrightness.asFlow().collectAsState(initial = false)
 
-    val isPinchAllowed = pinchEnabled && playerPinchEnabled && !isLocked && !isAnySheetOpen
+    val effectiveBrightnessEnabled = brightnessEnabled && playerBrightnessEnabled
+    val effectiveVolumeEnabled = volumeEnabled && playerVolumeEnabled
+    val effectiveSeekEnabled = seekEnabled && playerHorizontalSeekEnabled
+    val isPinchAllowed = pinchEnabled && playerPinchEnabled && !isLocked && (!isAnySheetOpen || allowPanelGestures)
     val scope = rememberCoroutineScope()
 
     var lastTapInfo by remember { mutableStateOf<TapInfo?>(null) }
@@ -90,14 +99,23 @@ fun GestureHandler(
                 isLocked,
                 isAnySheetOpen,
                 brightnessEnabled,
+                playerBrightnessEnabled,
+                effectiveBrightnessEnabled,
                 volumeEnabled,
+                playerVolumeEnabled,
+                effectiveVolumeEnabled,
                 seekEnabled,
+                playerHorizontalSeekEnabled,
+                effectiveSeekEnabled,
                 isPinchAllowed,
                 swapVolBright,
                 enableSubtitleDrag,
+                enableSubtitleSeekGesture,
                 sensitivity,
                 swipeSpeed,
+                seekSensitivity,
                 preventAccidental,
+                allowPanelGestures,
                 controlsVisible
             ) {
                 awaitEachGesture {
@@ -195,13 +213,13 @@ fun GestureHandler(
                                 if (totalDist > touchSlop) {
                                     longPressJob?.cancel()
 
-                                    if (isLocked || isAnySheetOpen || isNearTopEdge || isNearBottomEdge) {
+                                    if (isLocked || (isAnySheetOpen && !allowPanelGestures)) {
                                         activeGesture = ActiveGesture.COMPLETED
                                     } else {
                                         val isHorizontal = abs(totalDx) > abs(totalDy)
 
                                         if (isHorizontal) {
-                                            if (seekEnabled && !isNearHorizontalEdge) {
+                                            if (effectiveSeekEnabled && !isNearHorizontalEdge) {
                                                 activeGesture = ActiveGesture.HORIZONTAL_SEEK
                                                 horizontalSeekStarted = true
                                                 onHorizontalDragStart()
@@ -244,22 +262,23 @@ fun GestureHandler(
                                 }
                                 ActiveGesture.HORIZONTAL_SEEK -> {
                                     change.consume()
-                                    val minThreshold = if (controlsVisible || preventAccidental) 60f else 30f
+                                    val minThreshold = if (preventAccidental) 120f else if (controlsVisible) 60f else 30f
                                     if (abs(totalDx) > minThreshold) {
-                                        val scaledDx = dx * swipeSpeed
+                                        val sensMultiplier = (seekSensitivity / 50f)
+                                        val scaledDx = dx * swipeSpeed * sensMultiplier
                                         onHorizontalDrag(scaledDx, screenWidth)
                                     }
                                 }
                                 ActiveGesture.BRIGHTNESS -> {
                                     change.consume()
-                                    if (brightnessEnabled) {
+                                    if (effectiveBrightnessEnabled) {
                                         val deltaRatio = (-dy / screenHeight) * sensitivity
                                         onVerticalBrightnessDrag(deltaRatio)
                                     }
                                 }
                                 ActiveGesture.VOLUME -> {
                                     change.consume()
-                                    if (volumeEnabled) {
+                                    if (effectiveVolumeEnabled) {
                                         val deltaRatio = (-dy / screenHeight) * sensitivity
                                         onVerticalVolumeDrag(deltaRatio)
                                     }

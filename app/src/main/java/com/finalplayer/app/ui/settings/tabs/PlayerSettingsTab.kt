@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.finalplayer.app.data.preferences.GesturePreferences
 import com.finalplayer.app.data.preferences.PlayerPreferences
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -59,7 +60,8 @@ import java.util.Locale
 
 @Composable
 fun PlayerSettingsTab(
-    prefs: PlayerPreferences = koinInject()
+    prefs: PlayerPreferences = koinInject(),
+    gesturePrefs: GesturePreferences = koinInject()
 ) {
     val scope = rememberCoroutineScope()
 
@@ -247,46 +249,46 @@ fun PlayerSettingsTab(
                 SettingSwitchRow(
                     title = "إيماءات السطوع",
                     checked = brightnessGesture,
-                    onCheckedChange = { scope.launch { prefs.enableBrightnessGesture.set(it) } }
+                    onCheckedChange = { scope.launch { prefs.enableBrightnessGesture.set(it); gesturePrefs.brightnessGestureEnabled.set(it) } }
                 )
                 ItemDivider()
                 SettingSwitchRow(
                     title = "إيماءات الصوت",
                     checked = volumeGesture,
-                    onCheckedChange = { scope.launch { prefs.enableVolumeGesture.set(it) } }
+                    onCheckedChange = { scope.launch { prefs.enableVolumeGesture.set(it); gesturePrefs.volumeGestureEnabled.set(it) } }
                 )
                 ItemDivider()
                 SettingSwitchRow(
                     title = "قرص للتكبير",
                     checked = pinchToZoom,
-                    onCheckedChange = { scope.launch { prefs.enablePinchToZoom.set(it) } }
+                    onCheckedChange = { scope.launch { prefs.enablePinchToZoom.set(it); gesturePrefs.pinchToZoom.set(it) } }
                 )
                 ItemDivider()
                 SettingSwitchRow(
                     title = "التحريك والتكبير",
                     subtitle = "السماح بتحريك الفيديو (السحب) إلى جانب التكبير",
                     checked = panAndZoom,
-                    onCheckedChange = { scope.launch { prefs.enablePanAndZoom.set(it) } }
+                    onCheckedChange = { scope.launch { prefs.enablePanAndZoom.set(it); gesturePrefs.panAndZoom.set(it) } }
                 )
                 ItemDivider()
                 SettingSwitchRow(
                     title = "التمرير الأفقي للتقديم",
                     checked = horizontalSeek,
-                    onCheckedChange = { scope.launch { prefs.enableHorizontalSeek.set(it) } }
+                    onCheckedChange = { scope.launch { prefs.enableHorizontalSeek.set(it); gesturePrefs.seekGestureEnabled.set(it) } }
                 )
                 ItemDivider()
                 SettingSwitchRow(
                     title = "التمرير للتقديم في الترجمة",
                     subtitle = "مرّر يساراً أو يميناً في أعلى أو أسفل الشاشة للتقديم في الترجمة",
                     checked = subtitleSeekGesture,
-                    onCheckedChange = { scope.launch { prefs.enableSubtitleSeekGesture.set(it) } }
+                    onCheckedChange = { scope.launch { prefs.enableSubtitleSeekGesture.set(it); gesturePrefs.subtitleScrollSeek.set(it) } }
                 )
                 ItemDivider()
                 SettingSwitchRow(
                     title = "سحب الترجمة لإعادة تحديد موضعها",
                     subtitle = "المس الترجمة واسحبها لأعلى أو لأسفل لتحريكها. تبقى إيماءات السطوع والصوت فعالة في بقية المناطق",
                     checked = subtitleDrag,
-                    onCheckedChange = { scope.launch { prefs.enableSubtitleDrag.set(it) } }
+                    onCheckedChange = { scope.launch { prefs.enableSubtitleDrag.set(it); gesturePrefs.subtitleDrag.set(it) } }
                 )
                 ItemDivider()
 
