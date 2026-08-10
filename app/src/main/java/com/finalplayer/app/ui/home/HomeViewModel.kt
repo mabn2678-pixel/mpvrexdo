@@ -30,6 +30,7 @@ data class FolderSortConfig(
 )
 
 class HomeViewModel(
+    private val context: android.content.Context,
     private val getVideoLibraryUseCase: GetVideoLibraryUseCase,
     private val scanForVideosUseCase: ScanForVideosUseCase,
     private val getVideosByFolderUseCase: GetVideosByFolderUseCase,
@@ -53,10 +54,42 @@ class HomeViewModel(
     }
 
     private var hasAutoScanned = false
+    private var contentObserver: android.database.ContentObserver? = null
 
     init {
         observeFoldersAndSort()
+        registerMediaStoreObserver()
         refreshVideos()
+    }
+
+    private fun registerMediaStoreObserver() {
+        try {
+            val observer = object : android.database.ContentObserver(android.os.Handler(android.os.Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    super.onChange(selfChange)
+                    refreshVideos()
+                }
+            }
+            context.contentResolver.registerContentObserver(
+                android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                true,
+                observer
+            )
+            contentObserver = observer
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        contentObserver?.let {
+            try {
+                context.contentResolver.unregisterContentObserver(it)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     val playbackProgresses: Flow<List<PlaybackProgress>> = playbackRepository.getAllProgress()

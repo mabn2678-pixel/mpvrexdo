@@ -942,8 +942,8 @@ fun PlayerControls(
             SleepTimerBottomSheet(
                 currentRemainingSeconds = remainingSleepTimerSeconds,
                 onDismiss = onCloseSheet,
-                onStartTimer = { seconds ->
-                    onStartSleepTimer(seconds)
+                onStartTimer = { minutes ->
+                    onStartSleepTimer(minutes * 60)
                     onCloseSheet()
                 },
                 onCancelTimer = {
@@ -1060,17 +1060,26 @@ fun SleepTimerBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Quick preset chips
+            // Quick preset chips (horizontal scrollable row)
             val presets = listOf(15, 30, 45, 60, 90, 120)
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 presets.forEach { min ->
                     FilterChip(
                         selected = selectedMinutes == min,
                         onClick = { selectedMinutes = min },
-                        label = { Text("${min}m") },
+                        label = {
+                            Text(
+                                text = "${min}د",
+                                maxLines = 1,
+                                softWrap = false,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
                         )

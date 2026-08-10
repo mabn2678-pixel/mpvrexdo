@@ -85,133 +85,84 @@ class MediaStoreVideoScanner(private val context: Context) {
             e.printStackTrace()
         }
 
-        videoList.addAll(getMockVideos())
+        // Direct directory scan for newly downloaded videos that MediaStore hasn't indexed yet
+        scanPhysicalDirectories(videoList)
+
         videoList
     }
 
-    private fun getMockVideos(): List<VideoEntity> {
-        val currentTime = System.currentTimeMillis() / 1000L
-        return listOf(
-            VideoEntity(
-                id = "mock_1",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                title = "Big Buck Bunny 4K.mp4",
-                duration = 596000L,
-                sizeBytes = 158000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=600&auto=format&fit=crop",
-                dateAdded = currentTime,
-                resolution = "3840x2160",
-                folderPath = "/storage/emulated/0/Movies/Sample Videos",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_2",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantDream.mp4",
-                title = "Elephant's Dream.mp4",
-                duration = 653000L,
-                sizeBytes = 182000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1485846234645-a62644f84728?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 3600,
-                resolution = "1920x1080",
-                folderPath = "/storage/emulated/0/Movies/Sample Videos",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_3",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-                title = "For Bigger Blazes.mp4",
-                duration = 15000L,
-                sizeBytes = 15000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 7200,
-                resolution = "1280x720",
-                folderPath = "/storage/emulated/0/Movies/Sample Videos",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_4",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-                title = "For Bigger Escapes.mp4",
-                duration = 15000L,
-                sizeBytes = 14000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 10800,
-                resolution = "1280x720",
-                folderPath = "/storage/emulated/0/Movies/Sample Videos",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_5",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-                title = "For Bigger Fun.mp4",
-                duration = 60000L,
-                sizeBytes = 28000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 14400,
-                resolution = "1280x720",
-                folderPath = "/storage/emulated/0/Movies/Sample Videos",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_6",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                title = "Tears of Steel 1080p.mp4",
-                duration = 734000L,
-                sizeBytes = 220000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 18000,
-                resolution = "1920x1080",
-                folderPath = "/storage/emulated/0/DCIM/Camera",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_7",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
-                title = "WhatsApp Video 2026.mp4",
-                duration = 15000L,
-                sizeBytes = 12000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 21600,
-                resolution = "1280x720",
-                folderPath = "/storage/emulated/0/WhatsApp/WhatsApp Video",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_tiktok_1",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-                title = "TikTok_Dance_Trend_Vertical.mp4",
-                duration = 28000L,
-                sizeBytes = 15000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 1000,
-                resolution = "720x1280",
-                folderPath = "/storage/emulated/0/Download/TikTok",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_shorts_1",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-                title = "YouTube_Shorts_Highlights_Vertical.mp4",
-                duration = 45000L,
-                sizeBytes = 18000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 2000,
-                resolution = "1080x1920",
-                folderPath = "/storage/emulated/0/Movies/Shorts",
-                mimeType = "video/mp4"
-            ),
-            VideoEntity(
-                id = "mock_reels_1",
-                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
-                title = "Instagram_Reels_Clip_Vertical.mp4",
-                duration = 20000L,
-                sizeBytes = 12000000L,
-                thumbnailPath = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop",
-                dateAdded = currentTime - 3000,
-                resolution = "1080x1920",
-                folderPath = "/storage/emulated/0/DCIM/Instagram",
-                mimeType = "video/mp4"
-            )
+    private fun scanPhysicalDirectories(videoList: MutableList<VideoEntity>) {
+        val existingPaths = videoList.map { 
+            if (it.uri.startsWith("file://")) it.uri.substring(7) else it.uri 
+        }.toMutableSet()
+        
+        // Add fullPath from MediaStore entries
+        videoList.forEach {
+            if (it.folderPath.isNotBlank()) {
+                existingPaths.add("${it.folderPath}/${it.title}")
+            }
+        }
+
+        val videoExtensions = setOf("mp4", "mkv", "webm", "avi", "mov", "3gp", "flv", "m4v", "ts")
+
+        val directoriesToScan = listOf(
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DCIM),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES),
+            File("/storage/emulated/0/Download"),
+            File("/storage/emulated/0/Movies"),
+            File("/storage/emulated/0/DCIM"),
+            File("/storage/emulated/0/Telegram"),
+            File("/storage/emulated/0/WhatsApp/Media/WhatsApp Video"),
+            File("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video")
         )
+
+        val unindexedFiles = mutableListOf<File>()
+
+        for (dir in directoriesToScan) {
+            if (dir.exists() && dir.isDirectory) {
+                dir.walkTopDown()
+                    .maxDepth(3)
+                    .filter { file ->
+                        file.isFile && 
+                        file.extension.lowercase() in videoExtensions && 
+                        file.length() > 0 &&
+                        !file.name.startsWith(".")
+                    }
+                    .forEach { file ->
+                        val path = file.absolutePath
+                        if (!existingPaths.contains(path)) {
+                            existingPaths.add(path)
+                            unindexedFiles.add(file)
+
+                            val parentPath = file.parent ?: "/storage/emulated/0"
+                            val entity = VideoEntity(
+                                id = "file_${path.hashCode()}",
+                                uri = file.absolutePath,
+                                title = file.name,
+                                duration = 0L,
+                                sizeBytes = file.length(),
+                                thumbnailPath = null,
+                                dateAdded = file.lastModified() / 1000L,
+                                resolution = null,
+                                folderPath = parentPath,
+                                mimeType = "video/${file.extension.lowercase()}"
+                            )
+                            videoList.add(entity)
+                        }
+                    }
+            }
+        }
+
+        // Trigger MediaScanner for newly discovered files so Android system indexes them
+        if (unindexedFiles.isNotEmpty()) {
+            val paths = unindexedFiles.map { it.absolutePath }.toTypedArray()
+            try {
+                android.media.MediaScannerConnection.scanFile(context, paths, null, null)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 }

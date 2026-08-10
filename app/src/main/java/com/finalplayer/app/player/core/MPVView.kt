@@ -75,27 +75,24 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("config", "yes")
             lib.setOptionString("config-dir", configDir.absolutePath)
 
-            // Hardware decoding setup
-            lib.setOptionString("hwdec", "mediacodec,mediacodec-copy,no")
+            // Hardware decoding setup (mediacodec direct zero-copy for maximum hardware efficiency)
+            lib.setOptionString("hwdec", "mediacodec")
             lib.setOptionString("hwdec-codecs", "all")
 
             // Video output setup
             lib.setOptionString("vo", "gpu")
             lib.setOptionString("gpu-context", "android")
 
-            // Aspect Ratio settings
-            lib.setOptionString("keepaspect", "yes")
-            lib.setOptionString("video-aspect-override", "no")
-            lib.setPropertyString("keepaspect", "yes")
-            lib.setPropertyString("video-aspect-override", "no")
-
-            // Playback and UI settings
-            lib.setOptionString("keep-open", "yes")
-            lib.setOptionString("input-default-bindings", "yes")
-            lib.setOptionString("hr-seek", "yes")
+            // Optimization for performance & thermal efficiency
+            lib.setOptionString("vd-lavc-dr", "yes")
+            lib.setOptionString("hr-seek", "no")
             lib.setOptionString("hr-seek-framedrop", "yes")
             lib.setOptionString("video-sync", "audio")
             lib.setOptionString("framedrop", "vo")
+
+            // Buffer & caching options for long video playback
+            lib.setOptionString("demuxer-max-bytes", "32MiB")
+            lib.setOptionString("demuxer-max-back-bytes", "16MiB")
 
             // Screenshot directory setup
             val screenshotDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)

@@ -121,14 +121,36 @@ class PlayerActivity : ComponentActivity() {
             }
         }
 
-        // Parse video details from intent
+        // Parse video/audio details from intent
         videoPath = intent.getStringExtra(EXTRA_VIDEO_PATH)
             ?: intent.data?.toString()
             ?: ""
         videoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: videoPath
-        videoTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE)
-            ?: intent.data?.lastPathSegment
-            ?: "Video Playback"
+        
+        val customTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE)
+        if (!customTitle.isNullOrEmpty()) {
+            videoTitle = customTitle
+        } else if (intent.data != null) {
+            val uri = intent.data!!
+            if (uri.scheme == "content") {
+                var displayName: String? = null
+                try {
+                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val colIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (colIdx >= 0) displayName = cursor.getString(colIdx)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w("PlayerActivity", "Could not query media display name", e)
+                }
+                videoTitle = displayName ?: uri.lastPathSegment ?: "Media Playback"
+            } else {
+                videoTitle = uri.lastPathSegment ?: "Media Playback"
+            }
+        } else {
+            videoTitle = "Media Playback"
+        }
 
         val isShortsMode = intent.getBooleanExtra(EXTRA_IS_SHORTS_MODE, false)
         val shortsIndex = intent.getIntExtra(EXTRA_SHORTS_INDEX, 0)

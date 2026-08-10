@@ -138,39 +138,81 @@ fun FinalPlayerSeekbar(
             }
         }
 
-        // منطقة اللمس الكاملة (تضم اللمس المباشر والسحب السلس فوراً)
+        // منطقة اللمس الذكية (تمنع القفز المفاجئ أثناء سحب إيماءات النظام مثل الخروج للرئيسية)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(duration, isRtl) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        down.consume()
-                        isDragging = true
+                        val downX = down.position.x
+                        val downY = down.position.y
+                        var isConfirmedDrag = false
+                        var isCancelled = false
+                        var totalDx = 0f
+                        var totalDy = 0f
+                        var lastX = downX
+                        var lastY = downY
 
-                        fun updateValueFromX(x: Float) {
+                        fun getValueFromX(x: Float): Float {
                             if (duration > 0f && size.width > 0) {
                                 val rawFraction = (x / size.width.toFloat()).coerceIn(0f, 1f)
                                 val fraction = if (isRtl) (1f - rawFraction) else rawFraction
-                                dragValue = fraction * duration
-                                onValueChange(dragValue)
+                                return fraction * duration
                             }
+                            return position
                         }
-
-                        updateValueFromX(down.position.x)
 
                         val pointerId = down.id
                         while (true) {
                             val event = awaitPointerEvent()
-                            val dragEvent = event.changes.firstOrNull { it.id == pointerId }
-                            if (dragEvent == null || !dragEvent.pressed) {
+                            val change = event.changes.firstOrNull { it.id == pointerId }
+                            if (change == null || !change.pressed) {
                                 break
                             }
-                            dragEvent.consume()
-                            updateValueFromX(dragEvent.position.x)
+                            val currentX = change.position.x
+                            val currentY = change.position.y
+                            val dx = currentX - lastX
+                            val dy = currentY - lastY
+                            totalDx += dx
+                            totalDy += dy
+                            lastX = currentX
+                            lastY = currentY
+
+                            val touchSlop = 16.dp.toPx()
+
+                            if (!isConfirmedDrag && !isCancelled) {
+                                if (kotlin.math.abs(totalDy) > touchSlop && kotlin.math.abs(totalDy) > kotlin.math.abs(totalDx)) {
+                                    // إلغاء التفاعل عند السحب الرأسي (مثل سحب إيماءة الخروج للرئيسية)
+                                    isCancelled = true
+                                } else if (kotlin.math.abs(totalDx) > touchSlop) {
+                                    // تأكيد السحب الأفقي على الشريط
+                                    isConfirmedDrag = true
+                                    isDragging = true
+                                    change.consume()
+                                    dragValue = getValueFromX(currentX)
+                                    onValueChange(dragValue)
+                                }
+                            } else if (isConfirmedDrag) {
+                                change.consume()
+                                dragValue = getValueFromX(currentX)
+                                onValueChange(dragValue)
+                            }
                         }
-                        isDragging = false
-                        onValueChangeFinished(dragValue)
+
+                        if (isConfirmedDrag) {
+                            isDragging = false
+                            onValueChangeFinished(dragValue)
+                        } else if (!isCancelled) {
+                            // نقرة مباشرة سريعة بدون سحب رأسي
+                            val totalDist = kotlin.math.hypot(totalDx, totalDy)
+                            if (totalDist <= 16.dp.toPx()) {
+                                val tapValue = getValueFromX(downX)
+                                dragValue = tapValue
+                                onValueChange(tapValue)
+                                onValueChangeFinished(tapValue)
+                            }
+                        }
                     }
                 }
         )

@@ -70,6 +70,7 @@ fun GestureHandler(
     val seekEnabled by gesturePrefs.seekGestureEnabled.asFlow().collectAsState(initial = true)
     val pinchEnabled by gesturePrefs.pinchToZoom.asFlow().collectAsState(initial = true)
     val playerPinchEnabled by playerPrefs.enablePinchToZoom.asFlow().collectAsState(initial = true)
+    val enableSubtitleDrag by playerPrefs.enableSubtitleDrag.asFlow().collectAsState(initial = false)
     val sensitivity by gesturePrefs.gestureSensitivity.asFlow().collectAsState(initial = 1.0f)
     val swipeSpeed by gesturePrefs.swipeSeekSpeed.asFlow().collectAsState(initial = 1.0f)
     val preventAccidental by gesturePrefs.preventAccidentalSeek.asFlow().collectAsState(initial = false)
@@ -93,6 +94,7 @@ fun GestureHandler(
                 seekEnabled,
                 isPinchAllowed,
                 swapVolBright,
+                enableSubtitleDrag,
                 sensitivity,
                 swipeSpeed,
                 preventAccidental,
@@ -106,8 +108,13 @@ fun GestureHandler(
                     val screenWidth = size.width.toFloat().coerceAtLeast(100f)
                     val screenHeight = size.height.toFloat().coerceAtLeast(100f)
 
-                    val edgeMarginPx = 32.dp.toPx()
-                    val isNearEdge = downX < edgeMarginPx || downX > screenWidth - edgeMarginPx
+                    val edgeMarginPx = 36.dp.toPx()
+                    val topEdgeMarginPx = 56.dp.toPx()
+                    val bottomEdgeMarginPx = 56.dp.toPx()
+
+                    val isNearHorizontalEdge = downX < edgeMarginPx || downX > screenWidth - edgeMarginPx
+                    val isNearTopEdge = downY < topEdgeMarginPx
+                    val isNearBottomEdge = downY > screenHeight - bottomEdgeMarginPx
 
                     var activeGesture = ActiveGesture.NONE
                     var longPressTriggered = false
@@ -188,13 +195,13 @@ fun GestureHandler(
                                 if (totalDist > touchSlop) {
                                     longPressJob?.cancel()
 
-                                    if (isLocked || isAnySheetOpen) {
+                                    if (isLocked || isAnySheetOpen || isNearTopEdge || isNearBottomEdge) {
                                         activeGesture = ActiveGesture.COMPLETED
                                     } else {
                                         val isHorizontal = abs(totalDx) > abs(totalDy)
 
                                         if (isHorizontal) {
-                                            if (seekEnabled && !isNearEdge) {
+                                            if (seekEnabled && !isNearHorizontalEdge) {
                                                 activeGesture = ActiveGesture.HORIZONTAL_SEEK
                                                 horizontalSeekStarted = true
                                                 onHorizontalDragStart()
@@ -205,23 +212,19 @@ fun GestureHandler(
                                             if (isShortsMode) {
                                                 activeGesture = ActiveGesture.SHORTS_FLIP
                                             } else {
-                                                val isLeftZone = downX < screenWidth * 0.33f
-                                                val isRightZone = downX > screenWidth * 0.67f
+                                                val isLeftZone = downX < screenWidth * 0.40f
+                                                val isRightZone = downX > screenWidth * 0.60f
 
                                                 if (isLeftZone) {
                                                     activeGesture = if (swapVolBright) ActiveGesture.VOLUME else ActiveGesture.BRIGHTNESS
                                                 } else if (isRightZone) {
                                                     activeGesture = if (swapVolBright) ActiveGesture.BRIGHTNESS else ActiveGesture.VOLUME
                                                 } else {
-                                                    // Center zone
-                                                    if (downY > screenHeight * 0.30f) {
-                                                        activeGesture = ActiveGesture.SUBTITLE_POSITION
+                                                    // Center zone: normal vertical swipes adjust Volume or Brightness depending on screen side
+                                                    activeGesture = if (downX < screenWidth * 0.5f) {
+                                                        if (swapVolBright) ActiveGesture.VOLUME else ActiveGesture.BRIGHTNESS
                                                     } else {
-                                                        activeGesture = if (downX < screenWidth * 0.5f) {
-                                                            if (swapVolBright) ActiveGesture.VOLUME else ActiveGesture.BRIGHTNESS
-                                                        } else {
-                                                            if (swapVolBright) ActiveGesture.BRIGHTNESS else ActiveGesture.VOLUME
-                                                        }
+                                                        if (swapVolBright) ActiveGesture.BRIGHTNESS else ActiveGesture.VOLUME
                                                     }
                                                 }
                                             }
@@ -233,7 +236,11 @@ fun GestureHandler(
                             when (activeGesture) {
                                 ActiveGesture.LONG_PRESS -> {
                                     change.consume()
-                                    onLongPressDrag(dx)
+                                    if (enableSubtitleDrag && abs(dy) > abs(dx) * 1.2f) {
+                                        onSubtitlePositionDrag(dy)
+                                    } else {
+                                        onLongPressDrag(dx)
+                                    }
                                 }
                                 ActiveGesture.HORIZONTAL_SEEK -> {
                                     change.consume()

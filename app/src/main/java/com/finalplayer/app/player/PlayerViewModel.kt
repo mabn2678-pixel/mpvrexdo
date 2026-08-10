@@ -321,7 +321,7 @@ class PlayerViewModel(
         autoSaveProgressJob?.cancel()
         autoSaveProgressJob = viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
-                delay(5000)
+                delay(20000)
                 if (_paused.value == false) {
                     saveCurrentProgressNow()
                 }
@@ -1440,6 +1440,7 @@ class PlayerViewModel(
     private fun startAdaptivePolling() {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
+            var loopCount = 0
             while (isActive) {
                 val state = mpvController.playerState.value
                 val posSec = state.positionMs / 1000f
@@ -1447,32 +1448,44 @@ class PlayerViewModel(
 
                 val timeSinceSeek = System.currentTimeMillis() - lastSeekTimeMs
                 if (_dragSeekState.value == null && !_isSliderDragging.value && timeSinceSeek > 1200L) {
-                    _precisePosition.value = posSec
+                    if (kotlin.math.abs(_precisePosition.value - posSec) >= 0.1f) {
+                        _precisePosition.value = posSec
+                    }
                     if (state.positionMs > 0L) {
                         lastKnownPositionMs = state.positionMs
                     }
                 }
 
-                _preciseDuration.value = durSec
-                _paused.value = !state.isPlaying
+                if (_preciseDuration.value != durSec) {
+                    _preciseDuration.value = durSec
+                }
+                val isPausedState = !state.isPlaying
+                if (_paused.value != isPausedState) {
+                    _paused.value = isPausedState
+                }
 
-                // Poll subtitle text, tracks, decoder, speed, chapters
+                // Subtitle text (lightweight text query)
                 _currentSubText.value = mpvController.getSubtitleText()
-                updateTracks()
-                _currentDecoder.value = Decoder.getDecoderFromValue(mpvController.getCurrentDecoderValue())
-                if (!_isLongPressSpeedActive.value) {
-                    _playbackSpeed.value = mpvController.getPlaybackSpeed()
-                }
-                _chapters.value = mpvController.getChapters()
-                _currentChapterIndex.value = mpvController.getCurrentChapterIndex()
 
-                val aspect = mpvController.getAttachedView()?.videoAspect
-                if (aspect != null && aspect > 0.05 && _videoAspect.value != aspect) {
-                    _videoAspect.value = aspect
-                }
+                // Heavy metadata & track updates only fetched periodically (every ~2.5 to 5 seconds) to eliminate CPU thrashing
+                if (loopCount % 10 == 0 || _sheetShown.value != null) {
+                    updateTracks()
+                    _currentDecoder.value = Decoder.getDecoderFromValue(mpvController.getCurrentDecoderValue())
+                    if (!_isLongPressSpeedActive.value) {
+                        _playbackSpeed.value = mpvController.getPlaybackSpeed()
+                    }
+                    _chapters.value = mpvController.getChapters()
+                    _currentChapterIndex.value = mpvController.getCurrentChapterIndex()
 
-                // Adaptive delay: 50ms while controls are shown or seeking, 500ms otherwise
-                val pollInterval = if (_controlsShown.value || seekCoalescingJob?.isActive == true) 50L else 500L
+                    val aspect = mpvController.getAttachedView()?.videoAspect
+                    if (aspect != null && aspect > 0.05 && _videoAspect.value != aspect) {
+                        _videoAspect.value = aspect
+                    }
+                }
+                loopCount++
+
+                // Efficient polling delay: 250ms when controls or seeking are active, 500ms during normal video playback
+                val pollInterval = if (_controlsShown.value || seekCoalescingJob?.isActive == true) 250L else 500L
                 delay(pollInterval)
             }
         }

@@ -86,9 +86,13 @@ class VideoRepositoryImpl(
     }
 
     override suspend fun scanDeviceForVideos() {
+        videoDao.deleteMockVideos()
         val scannedVideos = mediaStoreScanner.scanDeviceVideos()
         if (scannedVideos.isNotEmpty()) {
             videoDao.insertVideos(scannedVideos)
+            videoDao.deleteMissingVideos(scannedVideos.map { it.id })
+        } else {
+            videoDao.clearAllVideos()
         }
     }
 

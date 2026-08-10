@@ -24,6 +24,15 @@ interface VideoDao {
     @Query("DELETE FROM videos WHERE id = :videoId")
     suspend fun deleteVideo(videoId: String)
 
+    @Query("DELETE FROM videos WHERE id LIKE 'mock_%'")
+    suspend fun deleteMockVideos()
+
+    @Query("DELETE FROM videos WHERE id NOT IN (:validIds) AND id NOT LIKE 'mock_%'")
+    suspend fun deleteMissingVideos(validIds: List<String>)
+
+    @Query("DELETE FROM videos")
+    suspend fun clearAllVideos()
+
     @Query("DELETE FROM videos WHERE folderPath = :folderPath")
     suspend fun deleteAllVideosInFolder(folderPath: String)
 
