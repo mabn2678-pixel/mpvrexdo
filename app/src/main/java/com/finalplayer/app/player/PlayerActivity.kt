@@ -87,11 +87,12 @@ class PlayerActivity : ComponentActivity() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val filter = IntentFilter(ACTION_PIP_CONTROL)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(pipBroadcastReceiver, filter, RECEIVER_NOT_EXPORTED)
-            } else {
-                registerReceiver(pipBroadcastReceiver, filter)
-            }
+            ContextCompat.registerReceiver(
+                this,
+                pipBroadcastReceiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
         }
 
         // Apply screen orientation preference dynamically
@@ -259,9 +260,19 @@ class PlayerActivity : ComponentActivity() {
             return
         }
 
-        if (isShorts) {
-            // Shorts (TikTok, Shorts, Reels) default to vertical portrait unless explicitly wider
-            requestedOrientation = if (aspect != null && aspect > 1.1) {
+        val pathTitleLower = "$videoPath $videoTitle".lowercase(java.util.Locale.ROOT)
+        val isSocialVideo = isShorts ||
+                pathTitleLower.contains("tiktok") ||
+                pathTitleLower.contains("shorts") ||
+                pathTitleLower.contains("ytshort") ||
+                pathTitleLower.contains("reel") ||
+                pathTitleLower.contains("instagram") ||
+                pathTitleLower.contains("kwai") ||
+                pathTitleLower.contains("likee")
+
+        if (isSocialVideo) {
+            // TikTok, YouTube Shorts, Reels stay strictly in vertical portrait unless aspect is explicitly wide (> 1.25)
+            requestedOrientation = if (aspect != null && aspect > 1.25) {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             } else {
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
@@ -278,7 +289,8 @@ class PlayerActivity : ComponentActivity() {
                         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     }
                 } else {
-                    ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                    // Default to portrait while loading aspect ratio to prevent orientation flashing
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                 }
             }
             "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -297,7 +309,7 @@ class PlayerActivity : ComponentActivity() {
                         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                     }
                 } else {
-                    ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                 }
             }
         }

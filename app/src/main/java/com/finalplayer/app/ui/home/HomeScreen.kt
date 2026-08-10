@@ -77,7 +77,8 @@ fun HomeScreen(
     onPlayButtonClick: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
     onSearchClick: () -> Unit = {},
-    onSecureFolderClick: () -> Unit = {}
+    onSecureFolderClick: () -> Unit = {},
+    onMusicClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -126,7 +127,8 @@ fun HomeScreen(
                 selectedTab = uiState.selectedTab,
                 onTabSelected = { tab ->
                     viewModel.selectTab(tab)
-                }
+                },
+                onMusicClick = onMusicClick
             )
         }
     ) { innerPadding ->

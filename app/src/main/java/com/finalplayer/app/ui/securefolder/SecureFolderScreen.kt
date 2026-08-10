@@ -1,5 +1,6 @@
 package com.finalplayer.app.ui.securefolder
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,7 +68,7 @@ fun SecureFolderScreen(
     var showPinDialog by remember { mutableStateOf(false) }
     var showSortSheet by remember { mutableStateOf(false) }
     val sortSheetState = rememberModalBottomSheetState()
-    val activity = LocalContext.current as? FragmentActivity
+    val activity = LocalActivity.current as? FragmentActivity
 
     if (!isPinSet) {
         SecureFolderSetupScreen(

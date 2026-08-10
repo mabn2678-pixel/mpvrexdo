@@ -175,6 +175,42 @@ class MediaStoreVideoScanner(private val context: Context) {
                 resolution = "1280x720",
                 folderPath = "/storage/emulated/0/WhatsApp/WhatsApp Video",
                 mimeType = "video/mp4"
+            ),
+            VideoEntity(
+                id = "mock_tiktok_1",
+                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                title = "TikTok_Dance_Trend_Vertical.mp4",
+                duration = 28000L,
+                sizeBytes = 15000000L,
+                thumbnailPath = "https://images.unsplash.com/photo-1518173946687-a4c8a383392e?w=600&auto=format&fit=crop",
+                dateAdded = currentTime - 1000,
+                resolution = "720x1280",
+                folderPath = "/storage/emulated/0/Download/TikTok",
+                mimeType = "video/mp4"
+            ),
+            VideoEntity(
+                id = "mock_shorts_1",
+                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+                title = "YouTube_Shorts_Highlights_Vertical.mp4",
+                duration = 45000L,
+                sizeBytes = 18000000L,
+                thumbnailPath = "https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?w=600&auto=format&fit=crop",
+                dateAdded = currentTime - 2000,
+                resolution = "1080x1920",
+                folderPath = "/storage/emulated/0/Movies/Shorts",
+                mimeType = "video/mp4"
+            ),
+            VideoEntity(
+                id = "mock_reels_1",
+                uri = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4",
+                title = "Instagram_Reels_Clip_Vertical.mp4",
+                duration = 20000L,
+                sizeBytes = 12000000L,
+                thumbnailPath = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop",
+                dateAdded = currentTime - 3000,
+                resolution = "1080x1920",
+                folderPath = "/storage/emulated/0/DCIM/Instagram",
+                mimeType = "video/mp4"
             )
         )
     }

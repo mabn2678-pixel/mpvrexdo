@@ -19,10 +19,13 @@ import com.finalplayer.app.data.preferences.AppearancePreferences
 import com.finalplayer.app.ui.home.HomeTab
 import org.koin.compose.koinInject
 
+import androidx.compose.material.icons.filled.MusicNote
+
 @Composable
 fun HomeBottomBar(
     selectedTab: HomeTab,
     onTabSelected: (HomeTab) -> Unit,
+    onMusicClick: () -> Unit = {},
     appearancePrefs: AppearancePreferences = koinInject()
 ) {
     val showHomeTab by appearancePrefs.showHomeTab.asFlow().collectAsState(initial = true)
@@ -32,6 +35,32 @@ fun HomeBottomBar(
     NavigationBar(
         containerColor = MaterialTheme.colorScheme.surface
     ) {
+        // 0. الموسيقى (Music)
+        NavigationBarItem(
+            selected = false,
+            onClick = { onMusicClick() },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = "الموسيقى"
+                )
+            },
+            label = {
+                Text(
+                    text = "الموسيقى",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.primary,
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        )
+
         // 1. الأخيرة (Recents)
         if (showRecentsTab) {
             NavigationBarItem(

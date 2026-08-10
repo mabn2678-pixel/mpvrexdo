@@ -55,6 +55,15 @@ val appModule = module {
     factory { SavePlaybackProgressUseCase(get()) }
     factory { GetRecentlyPlayedUseCase(get()) }
 
+    // Music Player
+    single { com.finalplayer.app.music.data.local.MediaStoreScanner(androidContext()) }
+    single { com.finalplayer.app.music.data.local.LrcParser() }
+    single<com.finalplayer.app.music.data.repository.MusicRepository> {
+        com.finalplayer.app.music.data.repository.MusicRepositoryImpl(androidContext(), get(), get())
+    }
+    single { com.finalplayer.app.music.player.MusicController(androidContext()) }
+    viewModel { com.finalplayer.app.music.ui.MusicViewModel(get(), get()) }
+
     // ViewModels
     viewModel { OnboardingViewModel(get()) }
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get()) }

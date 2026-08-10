@@ -32,12 +32,30 @@ import com.finalplayer.app.ui.settings.SettingsScreen
 import com.finalplayer.app.ui.theme.FinalPlayerTheme
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+import org.koin.android.ext.android.inject
+import androidx.lifecycle.lifecycleScope
+import com.finalplayer.app.music.player.MusicController
+import com.finalplayer.app.music.ui.musicNavGraph
 import com.finalplayer.app.domain.repository.PlaybackRepository
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
+
+    private val musicController: MusicController by inject()
+
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch {
+            musicController.connect()
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        musicController.disconnect()
+    }
 
     private fun encodeNavPath(path: String): String {
         if (path.isEmpty()) return "empty"
@@ -186,9 +204,18 @@ class MainActivity : FragmentActivity() {
                                 },
                                 onSecureFolderClick = {
                                     navController.navigate("secure_folder")
+                                },
+                                onMusicClick = {
+                                    navController.navigate("music_library")
                                 }
                             )
                         }
+
+                        // Music navigation graph
+                        musicNavGraph(
+                            navController = navController,
+                            onBack = { navController.popBackStack() }
+                        )
 
                         composable("secure_folder") {
                             SecureFolderScreen(

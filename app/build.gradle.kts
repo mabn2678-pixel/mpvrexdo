@@ -109,6 +109,14 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   ksp(libs.androidx.room.compiler)
 
+  // Media3 for music
+  implementation("androidx.media3:media3-exoplayer:1.4.1")
+  implementation("androidx.media3:media3-session:1.4.1")
+  implementation("androidx.media3:media3-common:1.4.1")
+
+  // Palette for album art color extraction
+  implementation("androidx.palette:palette-ktx:1.0.0")
+
   // Coil Image Loading & Video
   implementation(libs.coil.compose)
   implementation(libs.coil.video)

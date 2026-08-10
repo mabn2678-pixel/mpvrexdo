@@ -79,32 +79,30 @@ fun ShortsScreen(
     var selectedCategory by remember { mutableStateOf("all") } // "all", "tiktok", "instagram", "shorts"
 
     val filteredShorts = remember(allShorts, selectedCategory) {
+        val shortsOnly = allShorts.filter { it.isShortPlatformVideo }
         when (selectedCategory) {
-            "tiktok" -> allShorts.filter { video ->
-                val path = "${video.folderPath}/${video.uri}"
-                video.isShortPlatformVideo && (
-                    path.contains("tiktok", ignoreCase = true) ||
-                    video.title.contains("tiktok", ignoreCase = true)
-                )
+            "tiktok" -> {
+                val matches = shortsOnly.filter { video ->
+                    val path = "${video.folderPath}/${video.uri} ${video.title}".lowercase(Locale.ROOT)
+                    path.contains("tiktok")
+                }
+                matches.ifEmpty { shortsOnly }
             }
-            "instagram" -> allShorts.filter { video ->
-                val path = "${video.folderPath}/${video.uri}"
-                video.isShortPlatformVideo && (
-                    path.contains("instagram", ignoreCase = true) ||
-                    path.contains("reels", ignoreCase = true) ||
-                    video.title.contains("instagram", ignoreCase = true) ||
-                    video.title.contains("reel", ignoreCase = true)
-                )
+            "instagram" -> {
+                val matches = shortsOnly.filter { video ->
+                    val path = "${video.folderPath}/${video.uri} ${video.title}".lowercase(Locale.ROOT)
+                    path.contains("instagram") || path.contains("reel")
+                }
+                matches.ifEmpty { shortsOnly }
             }
-            "shorts" -> allShorts.filter { video ->
-                val path = "${video.folderPath}/${video.uri}"
-                video.isShortPlatformVideo && (
-                    path.contains("shorts", ignoreCase = true) ||
-                    video.title.contains("shorts", ignoreCase = true) ||
-                    video.title.contains("ytshort", ignoreCase = true)
-                )
+            "shorts" -> {
+                val matches = shortsOnly.filter { video ->
+                    val path = "${video.folderPath}/${video.uri} ${video.title}".lowercase(Locale.ROOT)
+                    path.contains("shorts") || path.contains("ytshort")
+                }
+                matches.ifEmpty { shortsOnly }
             }
-            else -> allShorts.filter { it.isShortPlatformVideo }
+            else -> shortsOnly
         }
     }
 
