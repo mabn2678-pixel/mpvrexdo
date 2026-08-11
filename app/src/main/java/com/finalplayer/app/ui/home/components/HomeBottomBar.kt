@@ -1,8 +1,10 @@
 package com.finalplayer.app.ui.home.components
 
+import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -13,13 +15,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.finalplayer.app.data.preferences.AppearancePreferences
 import com.finalplayer.app.ui.home.HomeTab
 import org.koin.compose.koinInject
-
-import androidx.compose.material.icons.filled.MusicNote
 
 @Composable
 fun HomeBottomBar(
@@ -33,6 +35,7 @@ fun HomeBottomBar(
     val showRecentsTab by appearancePrefs.showRecentsTab.asFlow().collectAsState(initial = true)
 
     NavigationBar(
+        modifier = Modifier.height(56.dp),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
         // 0. الموسيقى (Music)

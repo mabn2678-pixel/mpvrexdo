@@ -66,6 +66,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -89,6 +90,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.finalplayer.app.music.data.local.PreviewSongs
@@ -242,46 +244,53 @@ fun MusicLibraryScreen(
                     onClick = onOpenPlayer
                 )
 
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 8.dp
                 ) {
-                    val navItems = listOf(
-                        Triple(0, "الأغاني", Icons.Default.MusicNote),
-                        Triple(1, "الألبومات", Icons.Default.Album),
-                        Triple(2, "الفنانون", Icons.Default.Person)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val navItems = listOf(
+                            Triple(0, "الأغاني", Icons.Default.MusicNote),
+                            Triple(1, "الألبومات", Icons.Default.Album),
+                            Triple(2, "الفنانون", Icons.Default.Person)
+                        )
 
-                    navItems.forEach { (index, label, icon) ->
-                        val selected = pagerState.currentPage == index
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(index)
-                                }
-                            },
-                            icon = {
+                        navItems.forEach { (index, label, icon) ->
+                            val selected = pagerState.currentPage == index
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(index)
+                                        }
+                                    }
+                                    .padding(horizontal = 20.dp, vertical = 4.dp)
+                            ) {
                                 Icon(
                                     imageVector = icon,
                                     contentDescription = label,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(20.dp),
+                                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            },
-                            label = {
+                                Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = label,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        )
+                            }
+                        }
                     }
                 }
             }

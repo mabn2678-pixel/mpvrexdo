@@ -421,7 +421,7 @@ class PlayerActivity : ComponentActivity() {
             viewModel.setControlsShown(true)
             if (wasInPipMode) {
                 wasInPipMode = false
-                if (lifecycle.currentState != Lifecycle.State.RESUMED || isFinishing) {
+                if (isFinishing) {
                     closedFromPipMode = true
                     viewModel.pause()
                     viewModel.setBackgroundPlay(false)

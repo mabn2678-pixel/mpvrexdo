@@ -41,9 +41,27 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
+import androidx.compose.runtime.LaunchedEffect
+import com.finalplayer.app.music.player.MusicPlayerService
+import kotlinx.coroutines.flow.MutableStateFlow
+
 class MainActivity : FragmentActivity() {
 
     private val musicController: MusicController by inject()
+    private val pendingDestination = MutableStateFlow<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        checkIntentForNavigation(intent)
+    }
+
+    private fun checkIntentForNavigation(intent: Intent?) {
+        if (intent?.action == MusicPlayerService.ACTION_OPEN_MUSIC_PLAYER ||
+            intent?.getStringExtra("EXTRA_OPEN_DESTINATION") == "music_player") {
+            pendingDestination.value = "music_player"
+        }
+    }
 
     override fun onStart() {
         super.onStart()
@@ -119,6 +137,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        checkIntentForNavigation(intent)
         enableEdgeToEdge()
         setContent {
             FinalPlayerTheme {
@@ -139,6 +158,20 @@ class MainActivity : FragmentActivity() {
 
                     val hasCompletedOnboarding = hasCompletedOnboardingState == true
                     val navController = rememberNavController()
+
+                    val pendingDest by pendingDestination.collectAsState()
+
+                    LaunchedEffect(pendingDest) {
+                        if (pendingDest == "music_player") {
+                            pendingDestination.value = null
+                            navController.navigate("music_library") {
+                                launchSingleTop = true
+                            }
+                            navController.navigate("music_player") {
+                                launchSingleTop = true
+                            }
+                        }
+                    }
 
                     val startDestination = if (hasCompletedOnboarding) "home" else "onboarding"
 

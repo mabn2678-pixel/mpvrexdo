@@ -1,9 +1,16 @@
 package com.finalplayer.app.music.ui
 
 import android.graphics.drawable.BitmapDrawable
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -29,18 +36,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -61,12 +62,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -96,8 +96,6 @@ fun MusicPlayerScreen(
     val currentLineIndex by viewModel.currentLineIndex.collectAsState()
 
     val context = LocalContext.current
-    val primaryThemeColor = MaterialTheme.colorScheme.primary
-    val onPrimaryThemeColor = MaterialTheme.colorScheme.onPrimary
 
     // Controls auto-hide state after 7 seconds of inactivity
     var isControlsVisible by remember { mutableStateOf(true) }
@@ -119,26 +117,47 @@ fun MusicPlayerScreen(
     }
 
     // Two-color palette state extracted from album art
-    var primaryBgColor by remember { mutableStateOf(Color(0xFF2C1B3D)) }
-    var secondaryBgColor by remember { mutableStateOf(Color(0xFF0F0B18)) }
+    var primaryBgColor by remember { mutableStateOf(Color(0xFF3B2820)) }
+    var secondaryBgColor by remember { mutableStateOf(Color(0xFF1A1218)) }
 
     val animatedColor1 by animateColorAsState(
         targetValue = primaryBgColor,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = tween(durationMillis = 800),
         label = "BgColor1"
     )
     val animatedColor2 by animateColorAsState(
         targetValue = secondaryBgColor,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = tween(durationMillis = 800),
         label = "BgColor2"
+    )
+
+    // Aurora Motion Animation: Infinite transition moving radial/linear gradients across screen
+    val infiniteTransition = rememberInfiniteTransition(label = "AuroraTransition")
+    val auroraOffset1 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 7000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "AuroraOffset1"
+    )
+    val auroraOffset2 by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 9000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "AuroraOffset2"
     )
 
     // Extract 2 palette colors from current song's album art
     LaunchedEffect(state.currentSong?.albumArtUri) {
         val uri = state.currentSong?.albumArtUri
         if (uri == null) {
-            primaryBgColor = Color(0xFF2C1B3D)
-            secondaryBgColor = Color(0xFF0F0B18)
+            primaryBgColor = Color(0xFF3B2820)
+            secondaryBgColor = Color(0xFF1A1218)
             return@LaunchedEffect
         }
         withContext(Dispatchers.IO) {
@@ -153,10 +172,10 @@ fun MusicPlayerScreen(
                     val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
                     if (bitmap != null) {
                         val palette = Palette.from(bitmap).generate()
-                        val dom = palette.getDominantColor(0xFF2C1B3D.toInt())
+                        val dom = palette.getDominantColor(0xFF3B2820.toInt())
                         val vib = palette.getVibrantColor(
                             palette.getDarkVibrantColor(
-                                palette.getMutedColor(0xFF0F0B18.toInt())
+                                palette.getMutedColor(0xFF1A1218.toInt())
                             )
                         )
                         withContext(Dispatchers.Main) {
@@ -177,38 +196,99 @@ fun MusicPlayerScreen(
         label = "PlayButtonScale"
     )
 
-    // Main Full-Screen Layout with Two-Color Album Gradient Background
+    // Main Container with Animated Aurora Background + Blurred Artist/Album Art Overlay
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        animatedColor1,
-                        animatedColor2
-                    )
-                )
-            )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
-                // Tapping anywhere on screen toggles / restores controls
                 isControlsVisible = !isControlsVisible
                 if (isControlsVisible) {
                     interactionTrigger = System.currentTimeMillis()
                 }
             }
     ) {
+        // 1. Layer A: Album Art / Artist Image blurred in background
+        if (state.currentSong?.albumArtUri != null) {
+            AsyncImage(
+                model = state.currentSong?.albumArtUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            Modifier.blur(65.dp)
+                        } else {
+                            Modifier
+                        }
+                    )
+            )
+        }
+
+        // 2. Layer B: Animated Two-Color Aurora Mesh Gradient Overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            animatedColor1.copy(alpha = 0.85f),
+                            animatedColor2.copy(alpha = 0.95f),
+                            Color(0xFF0C090D)
+                        ),
+                        center = Offset(
+                            x = 300f + (auroraOffset1 * 500f),
+                            y = 400f + (auroraOffset2 * 800f)
+                        ),
+                        radius = 1200f
+                    )
+                )
+        )
+
+        // Additional Aurora Shimmer Layer
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            animatedColor2.copy(alpha = 0.4f),
+                            animatedColor1.copy(alpha = 0.5f),
+                            Color.Transparent
+                        ),
+                        start = Offset(x = auroraOffset2 * 600f, y = auroraOffset1 * 400f),
+                        end = Offset(x = 800f + auroraOffset1 * 400f, y = 1400f)
+                    )
+                )
+        )
+
+        // 3. Layer C: Subtle Dark Atmospheric Vignette Overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.5f),
+                            Color.Black.copy(alpha = 0.2f),
+                            Color.Black.copy(alpha = 0.65f)
+                        )
+                    )
+                )
+        )
+
+        // Foreground Content
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Top Bar (Hides after 7s)
+            // 1. Header Bar (Matching screenshots: MoreVert options left, Title & Artist center, Down arrow right)
             AnimatedVisibility(
                 visible = isControlsVisible,
                 enter = fadeIn() + expandVertically(),
@@ -217,17 +297,17 @@ fun MusicPlayerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     IconButton(onClick = {
                         userInteracted()
-                        onBack()
+                        onQueueClick()
                     }) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "رجوع",
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "خيارات",
                             tint = Color.White
                         )
                     }
@@ -256,25 +336,27 @@ fun MusicPlayerScreen(
 
                     IconButton(onClick = {
                         userInteracted()
-                        onQueueClick()
+                        onBack()
                     }) {
                         Icon(
-                            imageVector = Icons.Default.QueueMusic,
-                            contentDescription = "قائمة الانتظار",
-                            tint = Color.White
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "إغلاق",
+                            tint = Color.White,
+                            modifier = Modifier.size(30.dp)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // 2. Full Screen Unboxed Lyrics (Right-Aligned for Arabic Layout)
+            // 2. Full Screen Lyrics Crawling Edge-to-Edge ("تزحف الكلمات ناحية جدار الهاتف")
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(horizontal = 8.dp),
+                    // Minimal padding on container so text reaches phone screen edges
+                    .padding(horizontal = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 val lrc = currentLrc
@@ -312,23 +394,25 @@ fun MusicPlayerScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
                         horizontalAlignment = Alignment.Start
                     ) {
                         itemsIndexed(lrc.lines) { index, line ->
                             val isCurrent = index == currentLineIndex
                             val opacity = when {
                                 isCurrent -> 1.0f
-                                Math.abs(index - currentLineIndex) == 1 -> 0.7f
-                                else -> 0.4f
+                                Math.abs(index - currentLineIndex) == 1 -> 0.65f
+                                Math.abs(index - currentLineIndex) == 2 -> 0.35f
+                                else -> 0.2f
                             }
 
                             Text(
                                 text = line.text,
                                 style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = if (isCurrent) 22.sp else 17.sp,
-                                    fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Medium,
-                                    color = if (isCurrent) primaryThemeColor else Color.White.copy(alpha = opacity)
+                                    fontSize = if (isCurrent) 25.sp else 19.sp,
+                                    fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Bold,
+                                    color = if (isCurrent) Color.White else Color.White.copy(alpha = opacity),
+                                    lineHeight = if (isCurrent) 36.sp else 28.sp
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -336,7 +420,8 @@ fun MusicPlayerScreen(
                                         userInteracted()
                                         viewModel.seekToLine(line)
                                     }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    // 4.dp padding right next to screen wall so words crawl right up to the edge
+                                    .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
                                 textAlign = TextAlign.Right
                             )
                         }
@@ -344,42 +429,31 @@ fun MusicPlayerScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // 3. Compact Seekbar (Hides after 7s - Uses App Primary Theme Color)
+            // 3. Bottom Player Controls Area (Progress Bar & Playback Controls matching screenshot)
             AnimatedVisibility(
                 visible = isControlsVisible,
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
-                val positionText = remember(state.positionMs) {
-                    formatDuration(state.positionMs)
-                }
-                val durationText = remember(state.durationMs) {
-                    formatDuration(state.durationMs)
-                }
-
-                val progress = if (state.durationMs > 0) {
-                    (state.positionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f)
-                } else 0f
-
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
-                    // Current Position Time (Left)
-                    Text(
-                        text = positionText,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    val positionText = remember(state.positionMs) {
+                        formatDuration(state.positionMs)
+                    }
+                    val durationText = remember(state.durationMs) {
+                        formatDuration(state.durationMs)
+                    }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    val progress = if (state.durationMs > 0) {
+                        (state.positionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
 
-                    // Thin Line Slider with Circular Thumb matching App Theme Color
+                    // Seekbar Slider
                     Slider(
                         value = progress,
                         onValueChange = { percent ->
@@ -388,17 +462,17 @@ fun MusicPlayerScreen(
                             viewModel.seekTo(targetMs)
                         },
                         colors = SliderDefaults.colors(
-                            thumbColor = primaryThemeColor,
-                            activeTrackColor = primaryThemeColor,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                            thumbColor = Color.White,
+                            activeTrackColor = Color.White,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.25f)
                         ),
                         track = { sliderState ->
                             SliderDefaults.Track(
                                 sliderState = sliderState,
                                 modifier = Modifier.height(3.dp),
                                 colors = SliderDefaults.colors(
-                                    activeTrackColor = primaryThemeColor,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                                    activeTrackColor = Color.White,
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.25f)
                                 ),
                                 thumbTrackGapSize = 0.dp,
                                 trackInsideCornerSize = 1.5.dp
@@ -407,124 +481,100 @@ fun MusicPlayerScreen(
                         thumb = {
                             Box(
                                 modifier = Modifier
-                                    .size(12.dp)
-                                    .background(primaryThemeColor, CircleShape)
+                                    .size(10.dp)
+                                    .background(Color.White, CircleShape)
                             )
                         },
                         modifier = Modifier
-                            .weight(1f)
-                            .height(20.dp)
+                            .fillMaxWidth()
+                            .height(18.dp)
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Total Duration Time (Right)
-                    Text(
-                        text = durationText,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 4. Playback Controls Row (Hides after 7s - Uses App Primary Theme Color)
-            AnimatedVisibility(
-                visible = isControlsVisible,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Repeat Mode Toggle
-                    IconButton(onClick = {
-                        userInteracted()
-                        viewModel.toggleRepeat()
-                    }) {
-                        val (icon, tint) = when (state.repeatMode) {
-                            1 -> Icons.Default.RepeatOne to primaryThemeColor
-                            2 -> Icons.Default.Repeat to primaryThemeColor
-                            else -> Icons.Default.Repeat to Color.White.copy(alpha = 0.5f)
-                        }
-                        Icon(imageVector = icon, contentDescription = "تكرار", tint = tint)
-                    }
-
-                    // Previous Button
-                    IconButton(
-                        onClick = {
-                            userInteracted()
-                            viewModel.skipToPrevious()
-                        },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "السابق",
-                            tint = Color.White,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
-
-                    // Play / Pause Button with App Primary Theme Color
-                    FilledIconButton(
-                        onClick = {
-                            userInteracted()
-                            viewModel.togglePlayPause()
-                        },
+                    // Time Indicators Below Seekbar
+                    Row(
                         modifier = Modifier
-                            .size(62.dp)
-                            .scale(playButtonScale),
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = primaryThemeColor
-                        )
+                            .fillMaxWidth()
+                            .padding(horizontal = 2.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (state.isPlaying) "إيقاف مؤقت" else "تشغيل",
-                            modifier = Modifier.size(36.dp),
-                            tint = onPrimaryThemeColor
+                        Text(
+                            text = positionText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            text = durationText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.7f)
                         )
                     }
 
-                    // Next Button
-                    IconButton(
-                        onClick = {
-                            userInteracted()
-                            viewModel.skipToNext()
-                        },
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "التالي",
-                            tint = Color.White,
-                            modifier = Modifier.size(34.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // Shuffle Toggle
-                    IconButton(onClick = {
-                        userInteracted()
-                        viewModel.toggleShuffle()
-                    }) {
-                        val tint = if (state.shuffleEnabled) {
-                            primaryThemeColor
-                        } else {
-                            Color.White.copy(alpha = 0.5f)
+                    // Play / Pause / Skip Control Buttons (Matching screenshot)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Previous Button
+                        IconButton(
+                            onClick = {
+                                userInteracted()
+                                viewModel.skipToPrevious()
+                            },
+                            modifier = Modifier.size(52.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipPrevious,
+                                contentDescription = "السابق",
+                                tint = Color.White,
+                                modifier = Modifier.size(36.dp)
+                            )
                         }
-                        Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = "خلط",
-                            tint = tint
-                        )
+
+                        // Play / Pause Large White Circle Button
+                        FilledIconButton(
+                            onClick = {
+                                userInteracted()
+                                viewModel.togglePlayPause()
+                            },
+                            modifier = Modifier
+                                .size(68.dp)
+                                .scale(playButtonScale),
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.White
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (state.isPlaying) "إيقاف مؤقت" else "تشغيل",
+                                modifier = Modifier.size(40.dp),
+                                tint = Color.Black
+                            )
+                        }
+
+                        // Next Button
+                        IconButton(
+                            onClick = {
+                                userInteracted()
+                                viewModel.skipToNext()
+                            },
+                            modifier = Modifier.size(52.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipNext,
+                                contentDescription = "التالي",
+                                tint = Color.White,
+                                modifier = Modifier.size(36.dp)
+                            )
+                        }
                     }
                 }
             }

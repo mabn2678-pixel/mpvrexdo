@@ -18,6 +18,10 @@ class MusicPlayerService : MediaSessionService() {
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
 
+    companion object {
+        const val ACTION_OPEN_MUSIC_PLAYER = "com.finalplayer.app.music.ACTION_OPEN_MUSIC_PLAYER"
+    }
+
     override fun onCreate() {
         super.onCreate()
         val audioAttributes = AudioAttributes.Builder()
@@ -34,6 +38,8 @@ class MusicPlayerService : MediaSessionService() {
         player = exoPlayer
 
         val sessionActivityIntent = Intent(this, MainActivity::class.java).apply {
+            action = ACTION_OPEN_MUSIC_PLAYER
+            putExtra("EXTRA_OPEN_DESTINATION", "music_player")
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val sessionActivityPendingIntent = PendingIntent.getActivity(
