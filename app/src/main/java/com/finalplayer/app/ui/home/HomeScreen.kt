@@ -57,6 +57,10 @@ import com.finalplayer.app.ui.home.components.HomeBottomBar
 import com.finalplayer.app.ui.home.components.HomeTopBar
 import com.finalplayer.app.ui.home.components.SortBottomSheet
 import com.finalplayer.app.ui.recents.RecentsScreen
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.mutableLongStateOf
 import com.finalplayer.app.ui.shorts.ShortsScreen
 import com.finalplayer.app.ui.securefolder.SecureFolderViewModel
 import androidx.compose.material3.SnackbarHost
@@ -94,6 +98,22 @@ fun HomeScreen(
 
     val lazyListState = rememberLazyListState()
     val lazyGridState = rememberLazyGridState()
+
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+
+    BackHandler {
+        if (uiState.selectedTab != HomeTab.HOME) {
+            viewModel.selectTab(HomeTab.HOME)
+        } else {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastBackPressTime < 2000L) {
+                (context as? Activity)?.finish()
+            } else {
+                lastBackPressTime = currentTime
+                Toast.makeText(context, "اضغط مرة أخرى للخروج", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refreshVideos()

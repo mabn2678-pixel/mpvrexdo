@@ -328,14 +328,14 @@ class PlayerViewModel(
         setAspectRatio("default")
     }
 
+    private var hasAppliedAutoResume = false
+
     private fun startAutoSaveProgress() {
         autoSaveProgressJob?.cancel()
         autoSaveProgressJob = viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
-                delay(20000)
-                if (_paused.value == false) {
-                    saveCurrentProgressNow()
-                }
+                delay(3000)
+                saveCurrentProgressNow()
             }
         }
     }
@@ -352,16 +352,20 @@ class PlayerViewModel(
             livePosSec != null && livePosSec > 0 -> livePosSec.toLong() * 1000L
             mpvController.playerState.value.positionMs > 0L -> mpvController.playerState.value.positionMs
             _precisePosition.value > 0f -> (_precisePosition.value * 1000f).toLong()
-            lastKnownPositionMs > 0L -> lastKnownPositionMs
             else -> 0L
         }
+
+        if (posMs > lastKnownPositionMs) {
+            lastKnownPositionMs = posMs
+        }
+        val effectivePosMs = if (posMs > 0L) posMs else lastKnownPositionMs
         val durMs = (_preciseDuration.value * 1000f).toLong().coerceAtLeast(0L)
 
-        if (durMs > 0 && posMs >= 0) {
-            val isCompleted = (posMs.toFloat() / durMs.toFloat()) > 0.95f
+        if (durMs > 0 && effectivePosMs > 0) {
+            val isCompleted = (effectivePosMs.toFloat() / durMs.toFloat()) > 0.95f
             val progress = PlaybackProgress(
                 videoId = videoId,
-                positionMs = if (isCompleted) 0L else posMs,
+                positionMs = if (isCompleted) 0L else effectivePosMs,
                 durationMs = durMs,
                 lastPlayedTimestamp = System.currentTimeMillis(),
                 isCompleted = isCompleted
@@ -443,6 +447,7 @@ class PlayerViewModel(
     fun setCurrentVideoDetails(id: String, title: String) {
         _currentVideoId.value = id
         _videoTitle.value = title
+        hasAppliedAutoResume = false
         checkSavedProgress(id)
         if (id.isNotEmpty()) {
             prefetchVideoAspect(id)
@@ -459,14 +464,18 @@ class PlayerViewModel(
                 }
                 val progress = playbackRepository.getProgress(videoId).first()
                 if (progress != null && !progress.isCompleted && progress.positionMs > 2000L) {
-                    val savedTimeInSeconds = (progress.positionMs / 1000L).toInt()
+                    val savedTimeInSeconds = progress.positionMs / 1000.0
                     lastKnownPositionMs = progress.positionMs
+                    hasAppliedAutoResume = false
                     withContext(Dispatchers.Main) {
-                        mpvController.setPropertyInt("start", savedTimeInSeconds)
-                        MPVLib.setPropertyInt("start", savedTimeInSeconds)
+                        _resumePositionSec.value = savedTimeInSeconds
+                        mpvController.setPropertyInt("start", savedTimeInSeconds.toInt())
+                        MPVLib.setPropertyInt("start", savedTimeInSeconds.toInt())
+                        MPVLib.setOptionString("start", savedTimeInSeconds.toInt().toString())
                     }
+                } else {
+                    _resumePositionSec.value = null
                 }
-                _resumePositionSec.value = null
             } catch (e: Exception) {
                 _resumePositionSec.value = null
             }
@@ -1722,6 +1731,17 @@ class PlayerViewModel(
                     }
                     if (state.positionMs > 0L) {
                         lastKnownPositionMs = state.positionMs
+                    }
+                }
+
+                // Auto resume to saved progress when playback starts
+                if (!hasAppliedAutoResume && _resumePositionSec.value != null && durSec > 0f) {
+                    val targetResume = _resumePositionSec.value!!
+                    if (targetResume > 2.0 && posSec < targetResume - 1.0) {
+                        hasAppliedAutoResume = true
+                        seekTo(targetResume.toFloat())
+                    } else if (posSec >= targetResume - 1.0) {
+                        hasAppliedAutoResume = true
                     }
                 }
 
