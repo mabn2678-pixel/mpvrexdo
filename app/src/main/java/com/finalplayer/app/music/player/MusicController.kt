@@ -87,11 +87,47 @@ class MusicController(private val context: Context) {
         })
     }
 
+    private suspend fun getController(): MediaController? {
+        if (mediaController != null) return mediaController
+        connect()
+        return mediaController
+    }
+
+    private fun withController(block: (MediaController) -> Unit) {
+        scope.launch {
+            val controller = getController() ?: return@launch
+            block(controller)
+        }
+    }
+
     private fun updateStateFromController() {
         val controller = mediaController ?: return
         val currentIndex = controller.currentMediaItemIndex
         val queue = _state.value.queue
-        val currentSong = if (currentIndex in queue.indices) queue[currentIndex] else _state.value.currentSong
+        val currentMediaItem = controller.currentMediaItem
+
+        val currentSong = if (currentIndex in queue.indices) {
+            queue[currentIndex]
+        } else if (currentMediaItem != null) {
+            val metadata = currentMediaItem.mediaMetadata
+            Song(
+                id = currentMediaItem.mediaId.toLongOrNull() ?: 0L,
+                title = metadata.title?.toString() ?: "بدون عنوان",
+                artist = metadata.artist?.toString() ?: "فنان مجهول",
+                album = metadata.albumTitle?.toString() ?: "ألبوم مجهول",
+                albumId = 0L,
+                duration = controller.duration.coerceAtLeast(0L),
+                path = currentMediaItem.localConfiguration?.uri?.path ?: "",
+                uri = currentMediaItem.localConfiguration?.uri ?: android.net.Uri.EMPTY,
+                albumArtUri = metadata.artworkUri,
+                trackNumber = 0,
+                year = 0,
+                dateAdded = System.currentTimeMillis(),
+                size = 0L
+            )
+        } else {
+            _state.value.currentSong
+        }
 
         _state.value = _state.value.copy(
             currentSong = currentSong,
@@ -105,11 +141,91 @@ class MusicController(private val context: Context) {
     }
 
     fun play(songs: List<Song>, startIndex: Int = 0) {
-        val controller = mediaController ?: return
         if (songs.isEmpty()) return
+        withController { controller ->
+            val mediaItems = songs.map { song ->
+                MediaItem.Builder()
+                    .setUri(song.uri)
+                    .setMediaId(song.id.toString())
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(song.title)
+                            .setArtist(song.artist)
+                            .setAlbumTitle(song.album)
+                            .setArtworkUri(song.albumArtUri)
+                            .build()
+                    )
+                    .build()
+            }
 
-        val mediaItems = songs.map { song ->
-            MediaItem.Builder()
+            val validIndex = startIndex.coerceIn(0, songs.lastIndex)
+            _state.value = _state.value.copy(
+                queue = songs,
+                currentSong = songs[validIndex],
+                currentQueueIndex = validIndex
+            )
+
+            controller.setMediaItems(mediaItems, validIndex, 0L)
+            controller.prepare()
+            controller.play()
+        }
+    }
+
+    fun playSong(song: Song, queue: List<Song> = listOf(song)) {
+        val index = queue.indexOf(song).coerceAtLeast(0)
+        play(queue, index)
+    }
+
+    fun resume() {
+        withController { it.play() }
+    }
+
+    fun pause() {
+        withController { it.pause() }
+    }
+
+    fun togglePlayPause() {
+        withController { controller ->
+            if (controller.isPlaying) {
+                controller.pause()
+            } else {
+                controller.play()
+            }
+        }
+    }
+
+    fun seekTo(positionMs: Long) {
+        _state.value = _state.value.copy(positionMs = positionMs)
+        withController { it.seekTo(positionMs) }
+    }
+
+    fun skipToNext() {
+        withController { it.seekToNextMediaItem() }
+    }
+
+    fun skipToPrevious() {
+        withController { it.seekToPreviousMediaItem() }
+    }
+
+    fun setRepeatMode(mode: Int) {
+        _state.value = _state.value.copy(repeatMode = mode)
+        withController { it.repeatMode = mode }
+    }
+
+    fun toggleShuffle() {
+        withController { controller ->
+            val newShuffle = !controller.shuffleModeEnabled
+            controller.shuffleModeEnabled = newShuffle
+            _state.value = _state.value.copy(shuffleEnabled = newShuffle)
+        }
+    }
+
+    fun addToQueue(song: Song) {
+        withController { controller ->
+            val currentQueue = _state.value.queue.toMutableList()
+            currentQueue.add(song)
+
+            val mediaItem = MediaItem.Builder()
                 .setUri(song.uri)
                 .setMediaId(song.id.toString())
                 .setMediaMetadata(
@@ -121,100 +237,26 @@ class MusicController(private val context: Context) {
                         .build()
                 )
                 .build()
+
+            controller.addMediaItem(mediaItem)
+            _state.value = _state.value.copy(queue = currentQueue)
         }
-
-        val validIndex = startIndex.coerceIn(0, songs.lastIndex)
-        _state.value = _state.value.copy(
-            queue = songs,
-            currentSong = songs[validIndex],
-            currentQueueIndex = validIndex
-        )
-
-        controller.setMediaItems(mediaItems, validIndex, 0L)
-        controller.prepare()
-        controller.play()
-    }
-
-    fun playSong(song: Song, queue: List<Song> = listOf(song)) {
-        val index = queue.indexOf(song).coerceAtLeast(0)
-        play(queue, index)
-    }
-
-    fun resume() {
-        mediaController?.play()
-    }
-
-    fun pause() {
-        mediaController?.pause()
-    }
-
-    fun togglePlayPause() {
-        val controller = mediaController ?: return
-        if (controller.isPlaying) {
-            controller.pause()
-        } else {
-            controller.play()
-        }
-    }
-
-    fun seekTo(positionMs: Long) {
-        mediaController?.seekTo(positionMs)
-        _state.value = _state.value.copy(positionMs = positionMs)
-    }
-
-    fun skipToNext() {
-        mediaController?.seekToNextMediaItem()
-    }
-
-    fun skipToPrevious() {
-        mediaController?.seekToPreviousMediaItem()
-    }
-
-    fun setRepeatMode(mode: Int) {
-        mediaController?.repeatMode = mode
-        _state.value = _state.value.copy(repeatMode = mode)
-    }
-
-    fun toggleShuffle() {
-        val controller = mediaController ?: return
-        val newShuffle = !controller.shuffleModeEnabled
-        controller.shuffleModeEnabled = newShuffle
-        _state.value = _state.value.copy(shuffleEnabled = newShuffle)
-    }
-
-    fun addToQueue(song: Song) {
-        val controller = mediaController ?: return
-        val currentQueue = _state.value.queue.toMutableList()
-        currentQueue.add(song)
-
-        val mediaItem = MediaItem.Builder()
-            .setUri(song.uri)
-            .setMediaId(song.id.toString())
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(song.title)
-                    .setArtist(song.artist)
-                    .setAlbumTitle(song.album)
-                    .setArtworkUri(song.albumArtUri)
-                    .build()
-            )
-            .build()
-
-        controller.addMediaItem(mediaItem)
-        _state.value = _state.value.copy(queue = currentQueue)
     }
 
     fun skipToQueueItem(index: Int) {
-        val controller = mediaController ?: return
-        if (index in 0 until controller.mediaItemCount) {
-            controller.seekTo(index, 0L)
+        withController { controller ->
+            if (index in 0 until controller.mediaItemCount) {
+                controller.seekTo(index, 0L)
+            }
         }
     }
 
     fun stop() {
-        mediaController?.stop()
-        mediaController?.clearMediaItems()
         _state.value = MusicPlayerState()
+        withController { controller ->
+            controller.stop()
+            controller.clearMediaItems()
+        }
     }
 
     fun getCurrentPosition(): Long {

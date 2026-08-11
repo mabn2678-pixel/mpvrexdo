@@ -1,6 +1,8 @@
 package com.finalplayer.app.music.ui
 
 import android.graphics.drawable.BitmapDrawable
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -152,40 +154,58 @@ fun MusicPlayerScreen(
         label = "AuroraOffset2"
     )
 
-    // Extract 2 palette colors from current song's album art
-    LaunchedEffect(state.currentSong?.albumArtUri) {
-        val uri = state.currentSong?.albumArtUri
-        if (uri == null) {
+    var artworkModel by remember { mutableStateOf<Any?>(null) }
+
+    // Resolve artwork model and extract 2 palette colors from current song's album art
+    LaunchedEffect(state.currentSong) {
+        val song = state.currentSong
+        if (song == null) {
+            artworkModel = null
             primaryBgColor = Color(0xFF3B2820)
             secondaryBgColor = Color(0xFF1A1218)
             return@LaunchedEffect
         }
+
         withContext(Dispatchers.IO) {
-            try {
-                val imageLoader = ImageLoader(context)
-                val request = ImageRequest.Builder(context)
-                    .data(uri)
-                    .allowHardware(false)
-                    .build()
-                val result = imageLoader.execute(request)
-                if (result is SuccessResult) {
-                    val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
-                    if (bitmap != null) {
-                        val palette = Palette.from(bitmap).generate()
-                        val dom = palette.getDominantColor(0xFF3B2820.toInt())
-                        val vib = palette.getVibrantColor(
-                            palette.getDarkVibrantColor(
-                                palette.getMutedColor(0xFF1A1218.toInt())
+            val model: Any? = if (song.albumArtUri != null) {
+                song.albumArtUri
+            } else {
+                getEmbeddedArtwork(context, song.path)
+                    ?: song.uri
+                    ?: song.path
+            }
+
+            withContext(Dispatchers.Main) {
+                artworkModel = model
+            }
+
+            if (model != null) {
+                try {
+                    val imageLoader = ImageLoader(context)
+                    val request = ImageRequest.Builder(context)
+                        .data(model)
+                        .allowHardware(false)
+                        .build()
+                    val result = imageLoader.execute(request)
+                    if (result is SuccessResult) {
+                        val bitmap = (result.drawable as? BitmapDrawable)?.bitmap
+                        if (bitmap != null) {
+                            val palette = Palette.from(bitmap).generate()
+                            val dom = palette.getDominantColor(0xFF3B2820.toInt())
+                            val vib = palette.getVibrantColor(
+                                palette.getDarkVibrantColor(
+                                    palette.getMutedColor(0xFF1A1218.toInt())
+                                )
                             )
-                        )
-                        withContext(Dispatchers.Main) {
-                            primaryBgColor = Color(dom)
-                            secondaryBgColor = Color(vib)
+                            withContext(Dispatchers.Main) {
+                                primaryBgColor = Color(dom)
+                                secondaryBgColor = Color(vib)
+                            }
                         }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
         }
     }
@@ -211,33 +231,47 @@ fun MusicPlayerScreen(
             }
     ) {
         // 1. Layer A: Album Art / Artist Image blurred in background
-        if (state.currentSong?.albumArtUri != null) {
+        if (artworkModel != null) {
             AsyncImage(
-                model = state.currentSong?.albumArtUri,
+                model = artworkModel,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
                     .then(
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            Modifier.blur(65.dp)
+                            Modifier.blur(28.dp)
                         } else {
                             Modifier
                         }
                     )
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                animatedColor1,
+                                animatedColor2,
+                                Color(0xFF120E15)
+                            )
+                        )
+                    )
+            )
         }
 
-        // 2. Layer B: Animated Two-Color Aurora Mesh Gradient Overlay
+        // 2. Layer B: Translucent Animated Two-Color Aurora Mesh Gradient Overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            animatedColor1.copy(alpha = 0.85f),
-                            animatedColor2.copy(alpha = 0.95f),
-                            Color(0xFF0C090D)
+                            animatedColor1.copy(alpha = 0.35f),
+                            animatedColor2.copy(alpha = 0.30f),
+                            Color.Black.copy(alpha = 0.50f)
                         ),
                         center = Offset(
                             x = 300f + (auroraOffset1 * 500f),
@@ -248,15 +282,15 @@ fun MusicPlayerScreen(
                 )
         )
 
-        // Additional Aurora Shimmer Layer
+        // Additional Subtle Aurora Shimmer Layer
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            animatedColor2.copy(alpha = 0.4f),
-                            animatedColor1.copy(alpha = 0.5f),
+                            animatedColor2.copy(alpha = 0.20f),
+                            animatedColor1.copy(alpha = 0.25f),
                             Color.Transparent
                         ),
                         start = Offset(x = auroraOffset2 * 600f, y = auroraOffset1 * 400f),
@@ -265,16 +299,16 @@ fun MusicPlayerScreen(
                 )
         )
 
-        // 3. Layer C: Subtle Dark Atmospheric Vignette Overlay
+        // 3. Layer C: Dark Atmospheric Vignette Overlay for Crisp White Lyrics Legibility
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.5f),
-                            Color.Black.copy(alpha = 0.2f),
-                            Color.Black.copy(alpha = 0.65f)
+                            Color.Black.copy(alpha = 0.60f),
+                            Color.Black.copy(alpha = 0.25f),
+                            Color.Black.copy(alpha = 0.70f)
                         )
                     )
                 )
@@ -587,4 +621,21 @@ private fun formatDuration(durationMs: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
+}
+
+private fun getEmbeddedArtwork(context: android.content.Context, pathOrUri: String?): ByteArray? {
+    if (pathOrUri.isNullOrBlank()) return null
+    return try {
+        val retriever = MediaMetadataRetriever()
+        if (pathOrUri.startsWith("content://")) {
+            retriever.setDataSource(context, Uri.parse(pathOrUri))
+        } else {
+            retriever.setDataSource(pathOrUri)
+        }
+        val art = retriever.embeddedPicture
+        retriever.release()
+        art
+    } catch (e: Exception) {
+        null
+    }
 }

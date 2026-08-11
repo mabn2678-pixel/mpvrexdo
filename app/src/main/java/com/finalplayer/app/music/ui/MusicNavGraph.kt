@@ -11,12 +11,18 @@ fun NavGraphBuilder.musicNavGraph(
     navController: NavHostController,
     onBack: () -> Unit
 ) {
+    val navigateToPlayer = {
+        navController.navigate("music_player") {
+            launchSingleTop = true
+        }
+    }
+
     navigation(startDestination = "music_library", route = "music") {
         composable("music_library") {
             MusicLibraryScreen(
                 onAlbumClick = { albumId -> navController.navigate("music_album/$albumId") },
                 onArtistClick = { name -> navController.navigate("music_artist/$name") },
-                onOpenPlayer = { navController.navigate("music_player") },
+                onOpenPlayer = navigateToPlayer,
                 onBack = onBack
             )
         }
@@ -35,7 +41,7 @@ fun NavGraphBuilder.musicNavGraph(
             MusicAlbumDetailScreen(
                 albumId = albumId,
                 onBack = { navController.popBackStack() },
-                onOpenPlayer = { navController.navigate("music_player") }
+                onOpenPlayer = navigateToPlayer
             )
         }
 
@@ -48,7 +54,7 @@ fun NavGraphBuilder.musicNavGraph(
                 artistName = name,
                 onBack = { navController.popBackStack() },
                 onAlbumClick = { id -> navController.navigate("music_album/$id") },
-                onOpenPlayer = { navController.navigate("music_player") }
+                onOpenPlayer = navigateToPlayer
             )
         }
     }
