@@ -149,7 +149,7 @@ fun PlayerControls(
     longPressSpeedValue: Float = 2.5f,
     zoomOverlayText: String? = null,
     subPosOverlayText: String? = null,
-    onSubtitlePositionDrag: (Float) -> Unit = {},
+    onSubtitlePositionDrag: (deltaPx: Float, screenHeightPx: Float) -> Unit = { _, _ -> },
     onPinchZoom: (Float) -> Unit = {},
     onLongPressStart: () -> Unit = {},
     onLongPressDrag: (Float) -> Unit = {},

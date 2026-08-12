@@ -212,10 +212,12 @@ fun SubtitleSettingsPanel(
                         subPos = subPos,
                         onSubPosChange = { pos ->
                             subPos = pos
+                            MPVLib.setPropertyString("blend-subtitles", "no")
+                            MPVLib.setOptionString("blend-subtitles", "no")
                             MPVLib.setPropertyString("sub-use-margins", "yes")
                             MPVLib.setOptionString("sub-use-margins", "yes")
-                            MPVLib.setPropertyInt("sub-margin-y", 0)
-                            MPVLib.setOptionString("sub-margin-y", "0")
+                            MPVLib.setPropertyInt("sub-margin-y", 5)
+                            MPVLib.setOptionString("sub-margin-y", "5")
                             MPVLib.setPropertyInt("sub-pos", pos)
                             MPVLib.setOptionString("sub-pos", pos.toString())
                             coroutineScope.launch { subPrefs.subPos.set(pos) }
@@ -728,10 +730,12 @@ private fun applyTypographyToMPV(
     MPVLib.setOptionString("sub-shadow-offset", shadowOffset.toString())
 
     // sub-use-margins & sub-margin-y: للسماح بنزول الترجمة لأسفل الشاشة والأشرطة السوداء
+    MPVLib.setPropertyString("blend-subtitles", "no")
+    MPVLib.setOptionString("blend-subtitles", "no")
     MPVLib.setPropertyString("sub-use-margins", "yes")
     MPVLib.setOptionString("sub-use-margins", "yes")
-    MPVLib.setPropertyInt("sub-margin-y", 0)
-    MPVLib.setOptionString("sub-margin-y", "0")
+    MPVLib.setPropertyInt("sub-margin-y", 5)
+    MPVLib.setOptionString("sub-margin-y", "5")
     MPVLib.setPropertyString("sub-scale-by-window", "no")
     MPVLib.setOptionString("sub-scale-by-window", "no")
     MPVLib.setPropertyString("sub-scale-with-window", "no")

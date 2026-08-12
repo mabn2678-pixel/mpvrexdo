@@ -181,7 +181,7 @@ fun PlayerScreen(
             longPressSpeedValue = longPressSpeedValue,
             zoomOverlayText = zoomOverlayText,
             subPosOverlayText = subPosOverlayText,
-            onSubtitlePositionDrag = { delta -> viewModel.updateSubPositionByDelta(delta) },
+            onSubtitlePositionDrag = { delta, screenH -> viewModel.handleSubtitleVerticalDrag(delta, screenH) },
             onPinchZoom = { delta -> viewModel.onPinchZoom(delta) },
             onLongPressStart = { viewModel.onLongPressSpeedStart() },
             onLongPressDrag = { delta -> viewModel.onLongPressSpeedDrag(delta) },

@@ -40,7 +40,7 @@ class SubtitlesPreferences(private val dataStore: DataStore<Preferences>) {
     val bold                 = pref(BOLD, false)
     val italic               = pref(ITALIC, false)
     val subScale             = pref(SUB_SCALE, 1.0f)
-    val subPos               = pref(SUB_POS, 95)
+    val subPos               = pref(SUB_POS, 100)
     val borderSize           = pref(BORDER_SIZE, 3.0f)
     val overrideAssSubs      = pref(OVERRIDE_ASS, false)
     val defaultSubDelay      = pref(DEFAULT_DELAY, 0)

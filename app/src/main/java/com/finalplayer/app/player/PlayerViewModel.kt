@@ -731,12 +731,15 @@ class PlayerViewModel(
 
             MPVLib.setPropertyFloat("sub-scale", scale)
 
+            MPVLib.setPropertyString("blend-subtitles", "no")
+            MPVLib.setOptionString("blend-subtitles", "no")
             MPVLib.setPropertyString("sub-use-margins", "yes")
             MPVLib.setOptionString("sub-use-margins", "yes")
-            MPVLib.setPropertyInt("sub-margin-y", 0)
-            MPVLib.setOptionString("sub-margin-y", "0")
+            MPVLib.setPropertyInt("sub-margin-y", 5)
+            MPVLib.setOptionString("sub-margin-y", "5")
             MPVLib.setPropertyInt("sub-pos", pos)
             MPVLib.setOptionString("sub-pos", pos.toString())
+            currentSubPosFloat = pos.toFloat()
 
             MPVLib.setPropertyInt("sub-outline-size", border.toInt())
             MPVLib.setPropertyFloat("sub-border-size", border)
@@ -775,30 +778,40 @@ class PlayerViewModel(
         }
     }
 
-    fun updateSubPositionByDelta(deltaYPx: Float) {
-        val prefs = subtitlesPrefs ?: return
-        viewModelScope.launch {
-            val currentPos = prefs.subPos.get()
-            val sensitivity = 0.08f
-            val newPos = (currentPos + (deltaYPx * sensitivity).toInt()).coerceIn(0, 120)
+    private var currentSubPosFloat: Float = 100f
 
-            MPVLib.setPropertyString("sub-use-margins", "yes")
-            MPVLib.setOptionString("sub-use-margins", "yes")
-            MPVLib.setPropertyInt("sub-margin-y", 0)
-            MPVLib.setOptionString("sub-margin-y", "0")
-            MPVLib.setPropertyInt("sub-pos", newPos)
-            MPVLib.setOptionString("sub-pos", newPos.toString())
+    fun handleSubtitleVerticalDrag(pixelDeltaY: Float, screenHeight: Float) {
+        val h = if (screenHeight > 0f) screenHeight else 1000f
+        val percentDelta = (pixelDeltaY / h) * 100f
+        currentSubPosFloat = (currentSubPosFloat + percentDelta).coerceIn(0f, 100f)
+        val newPos = currentSubPosFloat.toInt()
 
-            _subPosOverlayText.value = "موضع الترجمة: $newPos%"
+        MPVLib.setPropertyString("blend-subtitles", "no")
+        MPVLib.setOptionString("blend-subtitles", "no")
+        MPVLib.setPropertyString("sub-use-margins", "yes")
+        MPVLib.setOptionString("sub-use-margins", "yes")
+        MPVLib.setPropertyInt("sub-margin-y", 5)
+        MPVLib.setOptionString("sub-margin-y", "5")
+        MPVLib.setPropertyInt("sub-pos", newPos)
+        MPVLib.setOptionString("sub-pos", newPos.toString())
 
-            subPosHideJob?.cancel()
-            subPosHideJob = viewModelScope.launch {
-                delay(1500)
-                _subPosOverlayText.value = null
-            }
+        _subPosOverlayText.value = "موضع الترجمة: $newPos%"
 
-            prefs.subPos.set(newPos)
+        subPosHideJob?.cancel()
+        subPosHideJob = viewModelScope.launch {
+            delay(1500)
+            _subPosOverlayText.value = null
         }
+
+        subtitlesPrefs?.let { prefs ->
+            viewModelScope.launch {
+                prefs.subPos.set(newPos)
+            }
+        }
+    }
+
+    fun updateSubPositionByDelta(deltaYPx: Float, screenHeightPx: Float = 1000f) {
+        handleSubtitleVerticalDrag(deltaYPx, screenHeightPx)
     }
 
     private fun observePreferencesAndApply() {
@@ -806,10 +819,13 @@ class PlayerViewModel(
         subtitlesPrefs?.let { prefs ->
             viewModelScope.launch {
                 prefs.subPos.changes().collect { pos ->
+                    currentSubPosFloat = pos.toFloat()
+                    MPVLib.setPropertyString("blend-subtitles", "no")
+                    MPVLib.setOptionString("blend-subtitles", "no")
                     MPVLib.setPropertyString("sub-use-margins", "yes")
                     MPVLib.setOptionString("sub-use-margins", "yes")
-                    MPVLib.setPropertyInt("sub-margin-y", 0)
-                    MPVLib.setOptionString("sub-margin-y", "0")
+                    MPVLib.setPropertyInt("sub-margin-y", 5)
+                    MPVLib.setOptionString("sub-margin-y", "5")
                     MPVLib.setPropertyInt("sub-pos", pos)
                     MPVLib.setOptionString("sub-pos", pos.toString())
                 }
