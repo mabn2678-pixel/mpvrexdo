@@ -138,6 +138,7 @@ fun GestureHandler(
                     val isNearHorizontalEdge = downX < edgeMarginPx || downX > screenWidth - edgeMarginPx
                     val isNearTopEdge = downY < topEdgeMarginPx
                     val isNearBottomEdge = downY > screenHeight - bottomEdgeMarginPx
+                    val isSubtitleRegion = downY > screenHeight * 0.55f
 
                     var activeGesture = ActiveGesture.NONE
                     var longPressTriggered = false
@@ -154,9 +155,13 @@ fun GestureHandler(
                         scope.launch {
                             delay(350)
                             if (activeGesture == ActiveGesture.NONE) {
-                                activeGesture = ActiveGesture.LONG_PRESS
-                                longPressTriggered = true
-                                onLongPressStart()
+                                if (effectiveSubtitleDrag && isSubtitleRegion) {
+                                    activeGesture = ActiveGesture.SUBTITLE_POSITION
+                                } else {
+                                    activeGesture = ActiveGesture.LONG_PRESS
+                                    longPressTriggered = true
+                                    onLongPressStart()
+                                }
                             }
                         }
                     } else null
@@ -236,8 +241,10 @@ fun GestureHandler(
                                                 activeGesture = ActiveGesture.COMPLETED
                                             }
                                         } else {
-                                            if (isShortsMode) {
+                                             if (isShortsMode) {
                                                 activeGesture = ActiveGesture.SHORTS_FLIP
+                                            } else if (effectiveSubtitleDrag && isSubtitleRegion) {
+                                                activeGesture = ActiveGesture.SUBTITLE_POSITION
                                             } else {
                                                 val isLeftZone = downX < screenWidth * 0.40f
                                                 val isRightZone = downX > screenWidth * 0.60f

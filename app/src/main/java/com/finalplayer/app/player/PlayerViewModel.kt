@@ -789,7 +789,7 @@ class PlayerViewModel(
             MPVLib.setPropertyInt("sub-pos", newPos)
             MPVLib.setOptionString("sub-pos", newPos.toString())
 
-            _subPosOverlayText.value = "Sub position: $newPos"
+            _subPosOverlayText.value = "موضع الترجمة: $newPos%"
 
             subPosHideJob?.cancel()
             subPosHideJob = viewModelScope.launch {
