@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.finalplayer.app.player.PlayerActivity
@@ -150,10 +154,31 @@ fun PlayerScreen(
         }
     }
 
+    val haptic = LocalHapticFeedback.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black)
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = {
+                        try {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        } catch (_: Throwable) {}
+                    },
+                    onDragEnd = { },
+                    onDragCancel = { },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        val screenHeight = size.height.toFloat().coerceAtLeast(100f)
+                        viewModel.handleSubtitleVerticalDrag(
+                            pixelDeltaY = dragAmount.y,
+                            screenHeight = screenHeight
+                        )
+                    }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         AndroidView(
