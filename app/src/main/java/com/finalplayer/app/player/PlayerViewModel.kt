@@ -685,7 +685,7 @@ class PlayerViewModel(
             MPVLib.setPropertyString("sub-auto", if (autoLoad) "fuzzy" else "no")
             MPVLib.setOptionString("sub-auto", if (autoLoad) "fuzzy" else "no")
 
-            val scaleVal = if (scaleByWin) "yes" else "no"
+            val scaleVal = "yes"
             MPVLib.setPropertyString("sub-scale-by-window", scaleVal)
             MPVLib.setOptionString("sub-scale-by-window", scaleVal)
             MPVLib.setPropertyString("sub-scale-with-window", scaleVal)
@@ -723,13 +723,9 @@ class PlayerViewModel(
             MPVLib.setPropertyInt("sub-font-size", fontSize)
             MPVLib.setOptionString("sub-font-size", fontSize.toString())
 
-            MPVLib.setPropertyBoolean("sub-bold", isBold)
-            MPVLib.setOptionString("sub-bold", if (isBold) "yes" else "no")
-
-            MPVLib.setPropertyBoolean("sub-italic", isItalic)
-            MPVLib.setOptionString("sub-italic", if (isItalic) "yes" else "no")
-
-            MPVLib.setPropertyFloat("sub-scale", scale)
+            val computedScale = fontSize / 55.0f
+            MPVLib.setPropertyFloat("sub-scale", computedScale)
+            MPVLib.setOptionString("sub-scale", computedScale.toString())
 
             MPVLib.setPropertyString("blend-subtitles", "no")
             MPVLib.setOptionString("blend-subtitles", "no")
@@ -774,7 +770,8 @@ class PlayerViewModel(
             MPVLib.setPropertyString("sub-border-color", borderHex)
             MPVLib.setOptionString("sub-border-color", borderHex)
 
-            MPVLib.setOptionString("sub-ass-override", if (overrideAss) "force" else "scale")
+            MPVLib.setOptionString("sub-ass-override", "force")
+            MPVLib.setPropertyString("sub-ass-override", "force")
         }
     }
 
@@ -857,6 +854,11 @@ class PlayerViewModel(
                 prefs.fontSize.changes().collect { size ->
                     MPVLib.setPropertyInt("sub-font-size", size)
                     MPVLib.setOptionString("sub-font-size", size.toString())
+                    val computedScale = size / 55.0f
+                    MPVLib.setPropertyFloat("sub-scale", computedScale)
+                    MPVLib.setOptionString("sub-scale", computedScale.toString())
+                    MPVLib.setPropertyString("sub-ass-override", "force")
+                    MPVLib.setOptionString("sub-ass-override", "force")
                 }
             }
             viewModelScope.launch {

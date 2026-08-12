@@ -189,9 +189,18 @@ fun SubtitleSettingsPanel(
                         fontSize = fontSize,
                         onFontSizeChange = { size ->
                             fontSize = size
+                            val fontScale = size / 55.0f
                             MPVLib.setPropertyInt("sub-font-size", size)
                             MPVLib.setOptionString("sub-font-size", size.toString())
-                            coroutineScope.launch { subPrefs.fontSize.set(size) }
+                            MPVLib.setPropertyFloat("sub-scale", fontScale)
+                            MPVLib.setOptionString("sub-scale", fontScale.toString())
+                            MPVLib.setPropertyString("sub-ass-override", "force")
+                            MPVLib.setOptionString("sub-ass-override", "force")
+                            coroutineScope.launch {
+                                subPrefs.fontSize.set(size)
+                                subPrefs.subScale.set(fontScale)
+                                subPrefs.overrideAssSubs.set(true)
+                            }
                         },
                         borderSize = borderSize,
                         onBorderSizeChange = { border ->
@@ -715,9 +724,12 @@ private fun applyTypographyToMPV(
     MPVLib.setPropertyInt("sub-italic", if (italic) 1 else 0)
     MPVLib.setOptionString("sub-italic", if (italic) "yes" else "no")
 
-    // sub-font-size: حجم الخط (1..100)
+    // sub-font-size & sub-scale: حجم الخط المطبق ونسبة التكبير
     MPVLib.setPropertyInt("sub-font-size", fontSize)
     MPVLib.setOptionString("sub-font-size", fontSize.toString())
+    val fontScale = fontSize / 55.0f
+    MPVLib.setPropertyFloat("sub-scale", fontScale)
+    MPVLib.setOptionString("sub-scale", fontScale.toString())
 
     // sub-outline-size: حجم الحدود (0..20)
     MPVLib.setPropertyInt("sub-outline-size", borderSize)
@@ -736,10 +748,10 @@ private fun applyTypographyToMPV(
     MPVLib.setOptionString("sub-use-margins", "yes")
     MPVLib.setPropertyInt("sub-margin-y", 5)
     MPVLib.setOptionString("sub-margin-y", "5")
-    MPVLib.setPropertyString("sub-scale-by-window", "no")
-    MPVLib.setOptionString("sub-scale-by-window", "no")
-    MPVLib.setPropertyString("sub-scale-with-window", "no")
-    MPVLib.setOptionString("sub-scale-with-window", "no")
+    MPVLib.setPropertyString("sub-scale-by-window", "yes")
+    MPVLib.setOptionString("sub-scale-by-window", "yes")
+    MPVLib.setPropertyString("sub-scale-with-window", "yes")
+    MPVLib.setOptionString("sub-scale-with-window", "yes")
 
     // sub-pos: موضع الترجمة (0..120)
     MPVLib.setPropertyInt("sub-pos", subPos)
@@ -759,8 +771,9 @@ private fun applyTypographyToMPV(
         MPVLib.setOptionString("sub-back-color", "#00000000")
     }
 
-    // sub-ass-override: force/scale vs no
-    MPVLib.setOptionString("sub-ass-override", if (overrideAss) "force" else "scale")
+    // sub-ass-override: force لتطبيق تخصيص الخط لكافة أنواع الترجمات
+    MPVLib.setOptionString("sub-ass-override", "force")
+    MPVLib.setPropertyString("sub-ass-override", "force")
 }
 
 /**
