@@ -685,8 +685,11 @@ class PlayerViewModel(
             MPVLib.setPropertyString("sub-auto", if (autoLoad) "fuzzy" else "no")
             MPVLib.setOptionString("sub-auto", if (autoLoad) "fuzzy" else "no")
 
-            MPVLib.setPropertyString("sub-scale-by-window", if (scaleByWin) "yes" else "no")
-            MPVLib.setOptionString("sub-scale-by-window", if (scaleByWin) "yes" else "no")
+            val scaleVal = if (scaleByWin) "yes" else "no"
+            MPVLib.setPropertyString("sub-scale-by-window", scaleVal)
+            MPVLib.setOptionString("sub-scale-by-window", scaleVal)
+            MPVLib.setPropertyString("sub-scale-with-window", scaleVal)
+            MPVLib.setOptionString("sub-scale-with-window", scaleVal)
 
             if (fontsDir.isNotBlank()) {
                 MPVLib.setPropertyString("sub-fonts-dir", fontsDir)
@@ -911,8 +914,11 @@ class PlayerViewModel(
             }
             viewModelScope.launch {
                 prefs.scaleByWindow.changes().collect { scaleByWin ->
-                    MPVLib.setPropertyString("sub-scale-by-window", if (scaleByWin) "yes" else "no")
-                    MPVLib.setOptionString("sub-scale-by-window", if (scaleByWin) "yes" else "no")
+                    val scaleVal = if (scaleByWin) "yes" else "no"
+                    MPVLib.setPropertyString("sub-scale-by-window", scaleVal)
+                    MPVLib.setOptionString("sub-scale-by-window", scaleVal)
+                    MPVLib.setPropertyString("sub-scale-with-window", scaleVal)
+                    MPVLib.setOptionString("sub-scale-with-window", scaleVal)
                 }
             }
             viewModelScope.launch {
@@ -1100,16 +1106,18 @@ class PlayerViewModel(
     fun setAspectRatio(ratio: String) {
         _currentAspectRatio.value = ratio
         val overrideVal = when (ratio) {
-            "default", "fit", "fill", "crop", "stretch" -> "no"
+            "default", "fit", "fill", "crop", "stretch" -> "-1"
             else -> ratio
         }
         val keepAspectVal = if (ratio == "stretch") "no" else "yes"
         val panscanVal = if (ratio in listOf("fill", "crop")) 1.0f else 0.0f
+        val unscaledVal = if (ratio == "100%") "yes" else "no"
 
         try {
             MPVLib.setPropertyString("keepaspect", keepAspectVal)
             MPVLib.setPropertyString("video-aspect-override", overrideVal)
             MPVLib.setPropertyFloat("panscan", panscanVal)
+            MPVLib.setPropertyString("video-unscaled", unscaledVal)
         } catch (e: Exception) {
             // Ignore
         }
@@ -1117,18 +1125,20 @@ class PlayerViewModel(
         mpvController.setPropertyString("keepaspect", keepAspectVal)
         mpvController.setPropertyString("video-aspect-override", overrideVal)
         mpvController.setPropertyFloat("panscan", panscanVal)
+        mpvController.setPropertyString("video-unscaled", unscaledVal)
     }
 
     fun cycleNextAspectRatio(context: Context) {
-        val list = listOf("default", "fill", "16:9", "4:3", "18:9", "21:9", "1:1")
+        val list = listOf("default", "fill", "stretch", "16:9", "4:3", "18:9", "21:9", "1:1")
         val currentIndex = list.indexOf(_currentAspectRatio.value).let { if (it == -1) 0 else it }
         val nextIndex = (currentIndex + 1) % list.size
         val nextRatio = list[nextIndex]
         setAspectRatio(nextRatio)
 
         val label = when (nextRatio) {
-            "default" -> "ملائمة الشاشة (Fit)"
-            "fill" -> "تعبئة الشاشة (Fill)"
+            "default" -> "الملاءمة الأفضل (Fit)"
+            "fill" -> "قص / تعبئة (Crop)"
+            "stretch" -> "تمدد (Stretch)"
             "16:9" -> "16:9"
             "4:3" -> "4:3"
             "18:9" -> "18:9"

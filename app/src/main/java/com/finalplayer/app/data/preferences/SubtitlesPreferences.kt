@@ -50,7 +50,7 @@ class SubtitlesPreferences(private val dataStore: DataStore<Preferences>) {
     val borderColor          = pref(BORDER_COLOR, 0xFF000000L)
     val shadowColor          = pref(SHADOW_COLOR, 0x80000000L)
     val backgroundColor      = pref(BG_COLOR, 0x00000000L)
-    val scaleByWindow        = pref(SCALE_BY_WINDOW, true)
+    val scaleByWindow        = pref(SCALE_BY_WINDOW, false)
     val font                 = pref(FONT, "")
     val shadowOffset         = pref(SHADOW_OFFSET, 0)
     val borderStyle          = pref(BORDER_STYLE, "outline")

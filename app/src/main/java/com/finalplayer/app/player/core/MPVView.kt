@@ -222,6 +222,8 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("sub-ass-override", "scale")
             lib.setOptionString("sub-use-margins", "yes")
             lib.setOptionString("sub-margin-y", "0")
+            lib.setOptionString("sub-scale-by-window", "no")
+            lib.setOptionString("sub-scale-with-window", "no")
             lib.setOptionString("sub-font-size", "55")
             lib.setOptionString("sub-pos", "95")
             lib.setOptionString("sub-border-size", "3.0")

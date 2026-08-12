@@ -43,6 +43,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.CropSquare
+import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.CropOriginal
@@ -400,6 +406,7 @@ fun PlayerControls(
                                     remainingSleepTimerSeconds = remainingSleepTimerSeconds,
                                     repeatMode = repeatMode,
                                     isShuffle = isShuffle,
+                                    currentAspectRatio = currentAspectRatio,
                                     onOpenSheet = onOpenSheet,
                                     onSpeedChange = onSpeedChange,
                                     onToggleRotate = onToggleRotate,
@@ -644,6 +651,7 @@ fun PlayerControls(
                                                 remainingSleepTimerSeconds = remainingSleepTimerSeconds,
                                                 repeatMode = repeatMode,
                                                 isShuffle = isShuffle,
+                                                currentAspectRatio = currentAspectRatio,
                                                 onOpenSheet = onOpenSheet,
                                                 onSpeedChange = onSpeedChange,
                                                 onToggleRotate = onToggleRotate,
@@ -689,6 +697,7 @@ fun PlayerControls(
                                                 remainingSleepTimerSeconds = remainingSleepTimerSeconds,
                                                 repeatMode = repeatMode,
                                                 isShuffle = isShuffle,
+                                                currentAspectRatio = currentAspectRatio,
                                                 onOpenSheet = onOpenSheet,
                                                 onSpeedChange = onSpeedChange,
                                                 onToggleRotate = onToggleRotate,
@@ -733,6 +742,7 @@ fun PlayerControls(
                                         remainingSleepTimerSeconds = remainingSleepTimerSeconds,
                                         repeatMode = repeatMode,
                                         isShuffle = isShuffle,
+                                        currentAspectRatio = currentAspectRatio,
                                         onOpenSheet = onOpenSheet,
                                         onSpeedChange = onSpeedChange,
                                         onToggleRotate = onToggleRotate,
@@ -1149,6 +1159,7 @@ private fun RenderControlToolItem(
     remainingSleepTimerSeconds: Int,
     repeatMode: Int = 0,
     isShuffle: Boolean = false,
+    currentAspectRatio: String = "default",
     onOpenSheet: (Sheets) -> Unit,
     onSpeedChange: (Float) -> Unit = {},
     onToggleRotate: () -> Unit = {},
@@ -1291,10 +1302,20 @@ private fun RenderControlToolItem(
             }
         }
         "aspect_ratio" -> {
+            val (aspectIcon, aspectDesc) = when (currentAspectRatio) {
+                "default", "fit" -> Icons.Default.FitScreen to "الملاءمة الأفضل"
+                "fill", "crop" -> Icons.Default.Crop to "قص / تعبئة"
+                "stretch" -> Icons.Default.OpenInFull to "تمدد"
+                "16:9" -> Icons.Default.Tv to "16:9"
+                "4:3" -> Icons.Default.CropSquare to "4:3"
+                "18:9", "21:9" -> Icons.Default.CropFree to currentAspectRatio
+                "1:1" -> Icons.Default.CropSquare to "1:1"
+                else -> Icons.Default.AspectRatio to currentAspectRatio
+            }
             Surface(
                 shape = CircleShape,
-                color = Color.Black.copy(alpha = 0.45f),
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
+                color = if (currentAspectRatio != "default") MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.45f),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.25f)),
                 modifier = Modifier.size(36.dp)
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -1305,8 +1326,8 @@ private fun RenderControlToolItem(
                             .testTag("aspect_ratio_button")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AspectRatio,
-                            contentDescription = "نسبة العرض",
+                            imageVector = aspectIcon,
+                            contentDescription = aspectDesc,
                             tint = Color.White,
                             modifier = Modifier.size(20.dp)
                         )

@@ -732,6 +732,10 @@ private fun applyTypographyToMPV(
     MPVLib.setOptionString("sub-use-margins", "yes")
     MPVLib.setPropertyInt("sub-margin-y", 0)
     MPVLib.setOptionString("sub-margin-y", "0")
+    MPVLib.setPropertyString("sub-scale-by-window", "no")
+    MPVLib.setOptionString("sub-scale-by-window", "no")
+    MPVLib.setPropertyString("sub-scale-with-window", "no")
+    MPVLib.setOptionString("sub-scale-with-window", "no")
 
     // sub-pos: موضع الترجمة (0..120)
     MPVLib.setPropertyInt("sub-pos", subPos)
