@@ -401,6 +401,7 @@ class PlayerActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         closedFromPipMode = false
+        viewModel.onAppResumed(applicationContext)
     }
 
     override fun onUserLeaveHint() {

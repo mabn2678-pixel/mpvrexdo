@@ -23,7 +23,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -384,13 +386,12 @@ fun MusicPlayerScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // 2. Full Screen Lyrics Crawling Edge-to-Edge ("تزحف الكلمات ناحية جدار الهاتف")
-            Box(
+            // 2. Full Screen Lyrics Crawling Edge-to-Edge with fixed upper-third active line anchor
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    // Minimal padding on container so text reaches phone screen edges
-                    .padding(horizontal = 2.dp),
+                    .padding(horizontal = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 val lrc = currentLrc
@@ -415,12 +416,15 @@ fun MusicPlayerScreen(
                     }
                 } else {
                     val listState = rememberLazyListState()
+                    val topAnchorPadding = (maxHeight * 0.20f).coerceAtLeast(70.dp)
+                    val bottomAnchorPadding = (maxHeight * 0.72f).coerceAtLeast(350.dp)
 
-                    // Smooth auto-scroll to current line
+                    // Smooth auto-scroll to current line anchored in the upper third
                     LaunchedEffect(currentLineIndex) {
-                        if (currentLineIndex >= 0 && currentLineIndex < lrc.lines.size) {
+                        if (currentLineIndex in lrc.lines.indices) {
                             listState.animateScrollToItem(
-                                index = (currentLineIndex - 2).coerceAtLeast(0)
+                                index = currentLineIndex,
+                                scrollOffset = 0
                             )
                         }
                     }
@@ -428,25 +432,31 @@ fun MusicPlayerScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        contentPadding = PaddingValues(
+                            top = topAnchorPadding,
+                            bottom = bottomAnchorPadding,
+                            start = 8.dp,
+                            end = 8.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                         horizontalAlignment = Alignment.Start
                     ) {
                         itemsIndexed(lrc.lines) { index, line ->
                             val isCurrent = index == currentLineIndex
                             val opacity = when {
                                 isCurrent -> 1.0f
-                                Math.abs(index - currentLineIndex) == 1 -> 0.65f
+                                Math.abs(index - currentLineIndex) == 1 -> 0.60f
                                 Math.abs(index - currentLineIndex) == 2 -> 0.35f
-                                else -> 0.2f
+                                else -> 0.18f
                             }
 
                             Text(
                                 text = line.text,
                                 style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = if (isCurrent) 25.sp else 19.sp,
+                                    fontSize = if (isCurrent) 26.sp else 20.sp,
                                     fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Bold,
                                     color = if (isCurrent) Color.White else Color.White.copy(alpha = opacity),
-                                    lineHeight = if (isCurrent) 36.sp else 28.sp
+                                    lineHeight = if (isCurrent) 38.sp else 30.sp
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -454,8 +464,7 @@ fun MusicPlayerScreen(
                                         userInteracted()
                                         viewModel.seekToLine(line)
                                     }
-                                    // 4.dp padding right next to screen wall so words crawl right up to the edge
-                                    .padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+                                    .padding(vertical = 6.dp),
                                 textAlign = TextAlign.Right
                             )
                         }

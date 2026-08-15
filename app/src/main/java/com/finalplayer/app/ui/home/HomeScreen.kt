@@ -67,10 +67,19 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import com.finalplayer.app.ui.components.DeleteConfirmDialog
+import com.finalplayer.app.ui.components.FileInfoDialog
+import com.finalplayer.app.ui.components.FolderPickerDialog
+import com.finalplayer.app.ui.components.FolderPickerMode
+import com.finalplayer.app.ui.components.RenameDialog
+import com.finalplayer.app.ui.components.SelectionBottomActionBar
+import com.finalplayer.app.ui.components.SelectionTopAppBar
 import com.finalplayer.app.ui.components.VideoContextMenuSheet
+import com.finalplayer.app.utils.FileInfo
 import com.finalplayer.app.utils.FileOperationsUtil
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,16 +102,36 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showSortSheet by remember { mutableStateOf(false) }
-    var contextMenuVideo by remember { mutableStateOf<VideoItem?>(null) }
+    var contextMenuVideos by remember { mutableStateOf<List<VideoItem>?>(null) }
     val sortSheetState = rememberModalBottomSheetState()
+
+    var selectedVideos by remember { mutableStateOf<Set<VideoItem>>(emptySet()) }
+    val isSelectionMode = selectedVideos.isNotEmpty() && uiState.selectedTab == HomeTab.HOME
+
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showFolderPicker by remember { mutableStateOf(false) }
+    var folderPickerMode by remember { mutableStateOf(FolderPickerMode.MOVE) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+    var fileInfoForDialog by remember { mutableStateOf<FileInfo?>(null) }
 
     val lazyListState = rememberLazyListState()
     val lazyGridState = rememberLazyGridState()
 
     var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
+    fun toggleSelection(video: VideoItem) {
+        selectedVideos = if (selectedVideos.contains(video)) {
+            selectedVideos - video
+        } else {
+            selectedVideos + video
+        }
+    }
+
     BackHandler {
-        if (uiState.selectedTab != HomeTab.HOME) {
+        if (isSelectionMode) {
+            selectedVideos = emptySet()
+        } else if (uiState.selectedTab != HomeTab.HOME) {
             viewModel.selectTab(HomeTab.HOME)
         } else {
             val currentTime = System.currentTimeMillis()
@@ -134,7 +163,36 @@ fun HomeScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            if (uiState.selectedTab == HomeTab.HOME) {
+            if (isSelectionMode) {
+                SelectionTopAppBar(
+                    totalCount = uiState.allVideos.size,
+                    selectedCount = selectedVideos.size,
+                    isAllSelected = selectedVideos.size == uiState.allVideos.size && uiState.allVideos.isNotEmpty(),
+                    onToggleSelectAll = {
+                        selectedVideos = if (selectedVideos.size == uiState.allVideos.size) {
+                            emptySet()
+                        } else {
+                            uiState.allVideos.toSet()
+                        }
+                    },
+                    onInfoClick = {
+                        val first = selectedVideos.firstOrNull()
+                        if (first != null) {
+                            coroutineScope.launch {
+                                val file = FileOperationsUtil.getVideoFile(first)
+                                fileInfoForDialog = FileOperationsUtil.getFileInfo(file, first)
+                                showInfoDialog = true
+                            }
+                        }
+                    },
+                    onMoreOptionsClick = {
+                        contextMenuVideos = selectedVideos.toList()
+                    },
+                    onCloseClick = {
+                        selectedVideos = emptySet()
+                    }
+                )
+            } else if (uiState.selectedTab == HomeTab.HOME) {
                 HomeTopBar(
                     onSettingsClick = onSettingsClick,
                     onSortClick = { showSortSheet = true },
@@ -144,13 +202,60 @@ fun HomeScreen(
             }
         },
         bottomBar = {
-            HomeBottomBar(
-                selectedTab = uiState.selectedTab,
-                onTabSelected = { tab ->
-                    viewModel.selectTab(tab)
-                },
-                onMusicClick = onMusicClick
-            )
+            if (isSelectionMode) {
+                SelectionBottomActionBar(
+                    selectedCount = selectedVideos.size,
+                    onTagClick = {
+                        val first = selectedVideos.firstOrNull()
+                        if (first != null) {
+                            coroutineScope.launch {
+                                val file = FileOperationsUtil.getVideoFile(first)
+                                fileInfoForDialog = FileOperationsUtil.getFileInfo(file, first)
+                                showInfoDialog = true
+                            }
+                        }
+                    },
+                    onShareClick = {
+                        FileOperationsUtil.shareVideos(context, selectedVideos.toList())
+                    },
+                    onRenameClick = {
+                        if (selectedVideos.size == 1) {
+                            showRenameDialog = true
+                        }
+                    },
+                    onDeleteClick = {
+                        if (selectedVideos.isNotEmpty()) {
+                            showDeleteDialog = true
+                        }
+                    },
+                    onCopyClick = {
+                        if (selectedVideos.isNotEmpty()) {
+                            folderPickerMode = FolderPickerMode.COPY
+                            showFolderPicker = true
+                        }
+                    },
+                    onMoveClick = {
+                        if (selectedVideos.isNotEmpty()) {
+                            folderPickerMode = FolderPickerMode.MOVE
+                            showFolderPicker = true
+                        }
+                    },
+                    onPlayClick = {
+                        val first = selectedVideos.firstOrNull()
+                        if (first != null) {
+                            onRecentVideoClick(first.uri, first.title)
+                        }
+                    }
+                )
+            } else {
+                HomeBottomBar(
+                    selectedTab = uiState.selectedTab,
+                    onTabSelected = { tab ->
+                        viewModel.selectTab(tab)
+                    },
+                    onMusicClick = onMusicClick
+                )
+            }
         }
     ) { innerPadding ->
         Box(
@@ -224,8 +329,28 @@ fun HomeScreen(
                                             VideoListItem(
                                                 video = video,
                                                 isOpened = uiState.playedVideoIds.contains(video.id) || uiState.playedVideoIds.contains(video.uri),
-                                                onClick = { onRecentVideoClick(video.uri, video.title) },
-                                                onLongClick = { contextMenuVideo = video }
+                                                isSelected = selectedVideos.contains(video),
+                                                isSelectionMode = isSelectionMode,
+                                                onClick = {
+                                                    if (isSelectionMode) {
+                                                        toggleSelection(video)
+                                                    } else {
+                                                        onRecentVideoClick(video.uri, video.title)
+                                                    }
+                                                },
+                                                onLongClick = {
+                                                    toggleSelection(video)
+                                                },
+                                                onOptionsClick = {
+                                                    if (isSelectionMode) {
+                                                        toggleSelection(video)
+                                                    } else {
+                                                        contextMenuVideos = listOf(video)
+                                                    }
+                                                },
+                                                onOptionsLongClick = {
+                                                    toggleSelection(video)
+                                                }
                                             )
                                         }
                                     }
@@ -244,8 +369,28 @@ fun HomeScreen(
                                             VideoListItem(
                                                 video = video,
                                                 isOpened = uiState.playedVideoIds.contains(video.id) || uiState.playedVideoIds.contains(video.uri),
-                                                onClick = { onRecentVideoClick(video.uri, video.title) },
-                                                onLongClick = { contextMenuVideo = video }
+                                                isSelected = selectedVideos.contains(video),
+                                                isSelectionMode = isSelectionMode,
+                                                onClick = {
+                                                    if (isSelectionMode) {
+                                                        toggleSelection(video)
+                                                    } else {
+                                                        onRecentVideoClick(video.uri, video.title)
+                                                    }
+                                                },
+                                                onLongClick = {
+                                                    toggleSelection(video)
+                                                },
+                                                onOptionsClick = {
+                                                    if (isSelectionMode) {
+                                                        toggleSelection(video)
+                                                    } else {
+                                                        contextMenuVideos = listOf(video)
+                                                    }
+                                                },
+                                                onOptionsLongClick = {
+                                                    toggleSelection(video)
+                                                }
                                             )
                                         }
                                     }
@@ -338,19 +483,21 @@ fun HomeScreen(
                     }
 
                     // Circular Floating Action Button
-                    FloatingActionButton(
-                        onClick = onPlayButtonClick,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 20.dp, bottom = 20.dp),
-                        shape = CircleShape,
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play"
-                        )
+                    if (!isSelectionMode) {
+                        FloatingActionButton(
+                            onClick = onPlayButtonClick,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(start = 20.dp, bottom = 20.dp),
+                            shape = CircleShape,
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Play"
+                            )
+                        }
                     }
                 }
             }
@@ -379,42 +526,116 @@ fun HomeScreen(
         )
     }
 
-    contextMenuVideo?.let { video ->
+    contextMenuVideos?.let { items ->
         VideoContextMenuSheet(
-            selectedItems = listOf(video),
-            onDismiss = { contextMenuVideo = null },
+            selectedItems = items,
+            onDismiss = { contextMenuVideos = null },
             onPlay = { selectedVideo ->
                 onRecentVideoClick(selectedVideo.uri, selectedVideo.title)
             },
-            onShare = { items ->
-                FileOperationsUtil.shareVideos(context, items)
+            onShare = { shareItems ->
+                FileOperationsUtil.shareVideos(context, shareItems)
             },
             onRename = { selectedVideo, newName ->
                 viewModel.renameVideo(selectedVideo, newName, context) { _, message ->
                     coroutineScope.launch { snackbarHostState.showSnackbar(message) }
                 }
             },
-            onMove = { items, destination ->
-                viewModel.moveVideos(items, destination, context) { _, message ->
+            onMove = { moveItems, destination ->
+                viewModel.moveVideos(moveItems, destination, context) { _, message ->
                     coroutineScope.launch { snackbarHostState.showSnackbar(message) }
                 }
+                selectedVideos = emptySet()
             },
-            onCopy = { items, destination ->
-                viewModel.copyVideos(items, destination, context) { _, message ->
+            onCopy = { copyItems, destination ->
+                viewModel.copyVideos(copyItems, destination, context) { _, message ->
                     coroutineScope.launch { snackbarHostState.showSnackbar(message) }
                 }
+                selectedVideos = emptySet()
             },
-            onHide = { items ->
-                viewModel.hideVideosToSecureFolder(items, context) { _, message ->
+            onHide = { hideItems ->
+                viewModel.hideVideosToSecureFolder(hideItems, context) { _, message ->
                     coroutineScope.launch { snackbarHostState.showSnackbar(message) }
                 }
+                selectedVideos = emptySet()
             },
-            onDelete = { items ->
+            onDelete = { deleteItems ->
+                viewModel.deleteVideos(deleteItems, context) { _, message ->
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
+                selectedVideos = emptySet()
+            },
+            onInfo = { /* Handled internally in sheet */ }
+        )
+    }
+
+    if (showRenameDialog && selectedVideos.size == 1) {
+        val singleVideo = selectedVideos.first()
+        RenameDialog(
+            currentName = singleVideo.title,
+            onConfirm = { newName ->
+                showRenameDialog = false
+                viewModel.renameVideo(singleVideo, newName, context) { _, message ->
+                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                }
+                selectedVideos = emptySet()
+            },
+            onDismiss = { showRenameDialog = false }
+        )
+    }
+
+    if (showFolderPicker && selectedVideos.isNotEmpty()) {
+        val defaultPath = remember(selectedVideos) {
+            val first = selectedVideos.first()
+            if (first.folderPath.isNotBlank()) {
+                File(first.folderPath)
+            } else {
+                FileOperationsUtil.getVideoFile(first).parentFile ?: File("/storage/emulated/0")
+            }
+        }
+
+        FolderPickerDialog(
+            initialPath = defaultPath,
+            onFolderSelected = { targetFolder ->
+                showFolderPicker = false
+                val items = selectedVideos.toList()
+                if (folderPickerMode == FolderPickerMode.MOVE) {
+                    viewModel.moveVideos(items, targetFolder, context) { _, message ->
+                        coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                    }
+                } else {
+                    viewModel.copyVideos(items, targetFolder, context) { _, message ->
+                        coroutineScope.launch { snackbarHostState.showSnackbar(message) }
+                    }
+                }
+                selectedVideos = emptySet()
+            },
+            onDismiss = { showFolderPicker = false }
+        )
+    }
+
+    if (showDeleteDialog && selectedVideos.isNotEmpty()) {
+        DeleteConfirmDialog(
+            itemCount = selectedVideos.size,
+            onConfirm = {
+                showDeleteDialog = false
+                val items = selectedVideos.toList()
                 viewModel.deleteVideos(items, context) { _, message ->
                     coroutineScope.launch { snackbarHostState.showSnackbar(message) }
                 }
+                selectedVideos = emptySet()
             },
-            onInfo = { /* Handled internally in sheet */ }
+            onDismiss = { showDeleteDialog = false }
+        )
+    }
+
+    if (showInfoDialog && fileInfoForDialog != null) {
+        FileInfoDialog(
+            fileInfo = fileInfoForDialog!!,
+            onDismiss = {
+                showInfoDialog = false
+                fileInfoForDialog = null
+            }
         )
     }
 }

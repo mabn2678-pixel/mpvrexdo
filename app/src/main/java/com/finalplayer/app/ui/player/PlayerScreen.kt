@@ -6,7 +6,6 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,16 +22,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.finalplayer.app.player.PlayerActivity
 import com.finalplayer.app.player.PlayerViewModel
 import com.finalplayer.app.player.core.MPVView
-import com.finalplayer.app.ui.player.components.ResumeSnackbar
 import com.finalplayer.app.ui.player.controls.PlayerControls
 
 @Composable
@@ -80,7 +75,6 @@ fun PlayerScreen(
     val currentPlaylistIndex by viewModel.currentPlaylistIndex.collectAsStateWithLifecycle()
     val isPlaylistMode by viewModel.isPlaylistMode.collectAsStateWithLifecycle()
     val isShortsMode by viewModel.isShortsMode.collectAsStateWithLifecycle()
-    val resumePositionSec by viewModel.resumePositionSec.collectAsStateWithLifecycle()
 
     val isLocked by viewModel.isLocked.collectAsStateWithLifecycle()
     val repeatMode by viewModel.repeatMode.collectAsStateWithLifecycle()
@@ -128,13 +122,20 @@ fun PlayerScreen(
         val playCurrentTarget = {
             val pendingPath = viewModel.mpvController.playerState.value.currentFilePath
             val currentId = viewModel.currentVideoId.value
-            if (videoPath.isNotEmpty()) {
-                viewModel.mpvController.play(videoPath)
-                viewModel.autoLoadSubtitlesFromVideoFolder(android.net.Uri.parse(videoPath))
-            } else if (!pendingPath.isNullOrEmpty()) {
-                viewModel.mpvController.play(pendingPath)
-            } else if (!currentId.isNullOrEmpty()) {
-                viewModel.mpvController.play(currentId)
+            val target = when {
+                videoPath.isNotEmpty() -> videoPath
+                !pendingPath.isNullOrEmpty() -> pendingPath
+                !currentId.isNullOrEmpty() -> currentId
+                else -> null
+            }
+            if (target != null) {
+                val isAlreadyPlaying = viewModel.mpvController.playerState.value.currentFilePath == target && !viewModel.mpvController.isIdle()
+                if (!isAlreadyPlaying) {
+                    viewModel.mpvController.play(target)
+                }
+                viewModel.autoLoadSubtitlesFromVideoFolder(android.net.Uri.parse(target))
+                viewModel.applyAllSubtitlePreferences()
+                viewModel.updateTracks()
             }
         }
 
@@ -154,31 +155,10 @@ fun PlayerScreen(
         }
     }
 
-    val haptic = LocalHapticFeedback.current
-
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .pointerInput(Unit) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = {
-                        try {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        } catch (_: Throwable) {}
-                    },
-                    onDragEnd = { },
-                    onDragCancel = { },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        val screenHeight = size.height.toFloat().coerceAtLeast(100f)
-                        viewModel.handleSubtitleVerticalDrag(
-                            pixelDeltaY = dragAmount.y,
-                            screenHeight = screenHeight
-                        )
-                    }
-                )
-            },
+            .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
         AndroidView(
@@ -297,21 +277,6 @@ fun PlayerScreen(
             CircularProgressIndicator(
                 color = Color.White,
                 modifier = Modifier.size(48.dp)
-            )
-        }
-
-        val resumePos = resumePositionSec
-        if (resumePos != null && resumePos > 0) {
-            ResumeSnackbar(
-                savedPositionSec = resumePos,
-                onResume = {
-                    viewModel.seekTo(resumePos.toFloat())
-                    viewModel.clearResumePosition()
-                },
-                onStartFromBeginning = {
-                    viewModel.seekTo(0f)
-                    viewModel.clearResumePosition()
-                }
             )
         }
     }

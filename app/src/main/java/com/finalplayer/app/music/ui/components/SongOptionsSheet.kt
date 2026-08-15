@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
@@ -44,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +57,8 @@ import com.finalplayer.app.music.data.db.MusicDatabase
 import com.finalplayer.app.music.data.db.PlaylistEntity
 import com.finalplayer.app.music.data.db.PlaylistSongCrossRef
 import com.finalplayer.app.music.data.model.Song
+import com.finalplayer.app.ui.components.DeleteConfirmDialog
+import com.finalplayer.app.utils.FileOperationsUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -67,11 +71,13 @@ fun SongOptionsSheet(
     onPlayNow: () -> Unit,
     onAddToQueue: () -> Unit,
     onNavigateToAlbum: (Long) -> Unit,
-    onNavigateToArtist: (String) -> Unit
+    onNavigateToArtist: (String) -> Unit,
+    onDelete: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var showInfoDialog by remember { mutableStateOf(false) }
     var showPlaylistSheet by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -169,12 +175,7 @@ fun SongOptionsSheet(
                 title = "مشاركة",
                 onClick = {
                     onDismiss()
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "audio/*"
-                        putExtra(Intent.EXTRA_STREAM, song.uri)
-                        putExtra(Intent.EXTRA_TEXT, "${song.title} - ${song.artist}")
-                    }
-                    context.startActivity(Intent.createChooser(intent, "مشاركة الأغنية"))
+                    FileOperationsUtil.shareSongs(context, listOf(song))
                 }
             )
 
@@ -185,7 +186,30 @@ fun SongOptionsSheet(
                     showInfoDialog = true
                 }
             )
+
+            SheetOptionItem(
+                icon = Icons.Default.Delete,
+                title = "حذف",
+                tint = MaterialTheme.colorScheme.error,
+                onClick = {
+                    showDeleteConfirmDialog = true
+                }
+            )
         }
+    }
+
+    if (showDeleteConfirmDialog) {
+        DeleteConfirmDialog(
+            itemCount = 1,
+            onConfirm = {
+                showDeleteConfirmDialog = false
+                onDismiss()
+                onDelete()
+            },
+            onDismiss = {
+                showDeleteConfirmDialog = false
+            }
+        )
     }
 
     if (showInfoDialog) {
@@ -200,7 +224,7 @@ fun SongOptionsSheet(
 
     if (showPlaylistSheet) {
         PlaylistPickerSheet(
-            songId = song.id,
+            songIds = listOf(song.id),
             onDismiss = {
                 showPlaylistSheet = false
                 onDismiss()
@@ -213,6 +237,7 @@ fun SongOptionsSheet(
 private fun SheetOptionItem(
     icon: ImageVector,
     title: String,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit
 ) {
     Row(
@@ -225,14 +250,14 @@ private fun SheetOptionItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
+            tint = tint,
             modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(16.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
+            color = tint
         )
     }
 }
@@ -305,7 +330,7 @@ private fun InfoRow(label: String, value: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistPickerSheet(
-    songId: Long,
+    songIds: List<Long>,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -323,7 +348,7 @@ fun PlaylistPickerSheet(
                 .padding(bottom = 24.dp)
         ) {
             Text(
-                text = "إضافة إلى قائمة تشغيل",
+                text = if (songIds.size > 1) "إضافة ${songIds.size} أغاني إلى قائمة تشغيل" else "إضافة إلى قائمة تشغيل",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
@@ -359,12 +384,13 @@ fun PlaylistPickerSheet(
                             .fillMaxWidth()
                             .clickable {
                                 scope.launch(Dispatchers.IO) {
-                                    dao.addSongToPlaylist(
+                                    val refs = songIds.map { sId ->
                                         PlaylistSongCrossRef(
                                             playlistId = playlist.id,
-                                            songId = songId
+                                            songId = sId
                                         )
-                                    )
+                                    }
+                                    dao.addSongsToPlaylist(refs)
                                 }
                                 onDismiss()
                             }
@@ -407,9 +433,10 @@ fun PlaylistPickerSheet(
                             val name = playlistName.trim()
                             scope.launch(Dispatchers.IO) {
                                 val newId = dao.insertPlaylist(PlaylistEntity(name = name))
-                                dao.addSongToPlaylist(
-                                    PlaylistSongCrossRef(playlistId = newId, songId = songId)
-                                )
+                                val refs = songIds.map { sId ->
+                                    PlaylistSongCrossRef(playlistId = newId, songId = sId)
+                                }
+                                dao.addSongsToPlaylist(refs)
                             }
                             showCreateDialog = false
                             onDismiss()
@@ -427,3 +454,16 @@ fun PlaylistPickerSheet(
         )
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlaylistPickerSheet(
+    songId: Long,
+    onDismiss: () -> Unit
+) {
+    PlaylistPickerSheet(
+        songIds = listOf(songId),
+        onDismiss = onDismiss
+    )
+}
+

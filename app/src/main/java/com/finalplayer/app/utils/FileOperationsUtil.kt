@@ -376,4 +376,94 @@ object FileOperationsUtil {
             File(videoItem.folderPath, videoItem.title)
         }
     }
+
+    fun getSongFile(song: com.finalplayer.app.music.data.model.Song): File {
+        return if (song.path.isNotBlank() && !song.path.startsWith("content://")) {
+            File(song.path)
+        } else {
+            File(song.uri.path ?: "")
+        }
+    }
+
+    suspend fun deleteSongs(context: Context, songs: List<com.finalplayer.app.music.data.model.Song>): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            for (song in songs) {
+                if (song.id < 0) continue // Preview song
+
+                try {
+                    if (song.uri.toString().startsWith("content://")) {
+                        context.contentResolver.delete(song.uri, null, null)
+                    } else {
+                        val uri = android.content.ContentUris.withAppendedId(
+                            android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                            song.id
+                        )
+                        context.contentResolver.delete(uri, null, null)
+                    }
+                } catch (_: Exception) {}
+
+                if (song.path.isNotBlank() && !song.path.startsWith("content://")) {
+                    val file = File(song.path)
+                    if (file.exists()) {
+                        val deleted = file.delete()
+                        if (deleted) {
+                            scanFile(context, file)
+                        }
+                    }
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun shareSongs(context: Context, songs: List<com.finalplayer.app.music.data.model.Song>) {
+        if (songs.isEmpty()) return
+        val uris = ArrayList<Uri>()
+        for (song in songs) {
+            if (song.uri.toString().startsWith("content://")) {
+                uris.add(song.uri)
+            } else if (song.path.isNotBlank()) {
+                val file = File(song.path)
+                if (file.exists()) {
+                    val uri = try {
+                        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    } catch (e: Exception) {
+                        Uri.fromFile(file)
+                    }
+                    uris.add(uri)
+                }
+            }
+        }
+
+        val shareTitle = if (songs.size == 1) songs.first().title else "${songs.size} ملفات صوتية"
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "audio/*"
+                putExtra(Intent.EXTRA_STREAM, uris.first())
+                putExtra(Intent.EXTRA_TEXT, "${songs.first().title} - ${songs.first().artist}")
+            }
+        } else if (uris.isNotEmpty()) {
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "audio/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            }
+        } else {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, shareTitle)
+                putExtra(Intent.EXTRA_TEXT, songs.joinToString("\n") { "${it.title} - ${it.artist}" })
+            }
+        }
+
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val chooser = Intent.createChooser(intent, "مشاركة: $shareTitle")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 }

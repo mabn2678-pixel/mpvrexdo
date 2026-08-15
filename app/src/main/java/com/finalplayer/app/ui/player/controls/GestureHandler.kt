@@ -53,6 +53,7 @@ fun GestureHandler(
     onHorizontalDrag: (deltaPx: Float, screenWidthPx: Float) -> Unit,
     onHorizontalDragEnd: () -> Unit,
     onSubtitlePositionDrag: (deltaPx: Float, screenHeightPx: Float) -> Unit = { _, _ -> },
+    hasActiveSubtitles: Boolean = false,
     onPinchZoom: (zoomDelta: Float) -> Unit = {},
     onLongPressStart: () -> Unit = {},
     onLongPressDrag: (deltaPx: Float) -> Unit = {},
@@ -286,7 +287,7 @@ fun GestureHandler(
                             when (activeGesture) {
                                 ActiveGesture.LONG_PRESS -> {
                                     change.consume()
-                                    if (effectiveSubtitleDrag && (abs(dy) > abs(dx) * 1.1f || abs(totalDy) > 4.dp.toPx())) {
+                                    if (effectiveSubtitleDrag && hasActiveSubtitles && (abs(dy) > abs(dx) * 1.1f || abs(totalDy) > 4.dp.toPx())) {
                                         if (longPressTriggered) {
                                             onLongPressEnd()
                                             longPressTriggered = false

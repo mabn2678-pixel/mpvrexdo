@@ -48,6 +48,8 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -97,8 +99,14 @@ import com.finalplayer.app.music.data.local.PreviewSongs
 import com.finalplayer.app.music.data.model.Album
 import com.finalplayer.app.music.data.model.Artist
 import com.finalplayer.app.music.data.model.Song
+import com.finalplayer.app.music.ui.components.FileInfoDialog
 import com.finalplayer.app.music.ui.components.MusicMiniPlayer
+import com.finalplayer.app.music.ui.components.PlaylistPickerSheet
 import com.finalplayer.app.music.ui.components.SongOptionsSheet
+import com.finalplayer.app.ui.components.DeleteConfirmDialog
+import com.finalplayer.app.ui.components.SelectionBottomActionBar
+import com.finalplayer.app.ui.components.SelectionTopAppBar
+import com.finalplayer.app.utils.FileOperationsUtil
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -153,6 +161,12 @@ fun MusicLibraryScreen(
 
     var isSearchActive by remember { mutableStateOf(false) }
     var selectedSongForSheet by remember { mutableStateOf<Song?>(null) }
+    var selectedSongs by remember { mutableStateOf<Set<Song>>(emptySet()) }
+    val isSelectionMode = selectedSongs.isNotEmpty()
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showPlaylistPickerSheet by remember { mutableStateOf(false) }
+    var infoSongForDialog by remember { mutableStateOf<Song?>(null) }
+
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
 
@@ -163,8 +177,26 @@ fun MusicLibraryScreen(
         viewModel.onTabChange(pagerState.currentPage)
     }
 
+    val toggleSongSelection: (Song) -> Unit = { song ->
+        selectedSongs = if (selectedSongs.contains(song)) {
+            selectedSongs - song
+        } else {
+            selectedSongs + song
+        }
+    }
+
+    val toggleSelectAll: () -> Unit = {
+        selectedSongs = if (selectedSongs.size == songs.size && songs.isNotEmpty()) {
+            emptySet()
+        } else {
+            songs.toSet()
+        }
+    }
+
     val handleBack: () -> Unit = {
-        if (isSearchActive || searchQuery.isNotEmpty()) {
+        if (isSelectionMode) {
+            selectedSongs = emptySet()
+        } else if (isSearchActive || searchQuery.isNotEmpty()) {
             viewModel.onSearchQueryChange("")
             isSearchActive = false
         } else if (pagerState.currentPage != 0) {
@@ -176,119 +208,176 @@ fun MusicLibraryScreen(
         }
     }
 
-    BackHandler(onBack = handleBack)
+    BackHandler(enabled = isSelectionMode || isSearchActive || pagerState.currentPage != 0, onBack = handleBack)
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    if (isSearchActive) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.onSearchQueryChange(it) },
-                            placeholder = { Text("بحث عن أغنية، ألبوم، فنان...") },
-                            singleLine = true,
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
-                                        Icon(Icons.Default.Clear, contentDescription = "مسح")
-                                    }
-                                }
-                            },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color.Transparent,
-                                unfocusedBorderColor = Color.Transparent
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Text("مكتبة الموسيقى", fontWeight = FontWeight.Bold)
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = handleBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "رجوع")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showSortSheet = true }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = "فرز وترتيب الأغاني"
-                        )
-                    }
-                    IconButton(onClick = {
-                        if (isSearchActive) {
-                            viewModel.onSearchQueryChange("")
-                            isSearchActive = false
-                        } else {
-                            isSearchActive = true
+            if (isSelectionMode) {
+                SelectionTopAppBar(
+                    totalCount = songs.size,
+                    selectedCount = selectedSongs.size,
+                    isAllSelected = selectedSongs.size == songs.size && songs.isNotEmpty(),
+                    onToggleSelectAll = toggleSelectAll,
+                    onInfoClick = {
+                        val first = selectedSongs.firstOrNull()
+                        if (first != null) {
+                            infoSongForDialog = first
                         }
-                    }) {
-                        Icon(
-                            if (isSearchActive) Icons.Default.Clear else Icons.Default.Search,
-                            contentDescription = "بحث"
-                        )
+                    },
+                    onMoreOptionsClick = {
+                        val first = selectedSongs.firstOrNull()
+                        if (first != null) {
+                            selectedSongForSheet = first
+                        }
+                    },
+                    onCloseClick = {
+                        selectedSongs = emptySet()
                     }
-                }
-            )
-        },
-        bottomBar = {
-            Column {
-                MusicMiniPlayer(
-                    state = playerState,
-                    onPlayPauseClick = { viewModel.controller.togglePlayPause() },
-                    onPreviousClick = { viewModel.controller.skipToPrevious() },
-                    onNextClick = { viewModel.controller.skipToNext() },
-                    onCloseClick = { viewModel.controller.stop() },
-                    onClick = onOpenPlayer
                 )
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 8.dp
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val navItems = listOf(
-                            Triple(0, "الأغاني", Icons.Default.MusicNote),
-                            Triple(1, "الألبومات", Icons.Default.Album),
-                            Triple(2, "الفنانون", Icons.Default.Person)
-                        )
-
-                        navItems.forEach { (index, label, icon) ->
-                            val selected = pagerState.currentPage == index
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        scope.launch {
-                                            pagerState.animateScrollToPage(index)
+            } else {
+                TopAppBar(
+                    title = {
+                        if (isSearchActive) {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { viewModel.onSearchQueryChange(it) },
+                                placeholder = { Text("بحث عن أغنية، ألبوم، فنان...") },
+                                singleLine = true,
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { viewModel.onSearchQueryChange("") }) {
+                                            Icon(Icons.Default.Clear, contentDescription = "مسح")
                                         }
                                     }
-                                    .padding(horizontal = 20.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = label,
-                                    modifier = Modifier.size(20.dp),
-                                    tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = label,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color.Transparent,
+                                    unfocusedBorderColor = Color.Transparent
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Text("مكتبة الموسيقى", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = handleBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "رجوع")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showSortSheet = true }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Sort,
+                                contentDescription = "فرز وترتيب الأغاني"
+                            )
+                        }
+                        IconButton(onClick = {
+                            if (isSearchActive) {
+                                viewModel.onSearchQueryChange("")
+                                isSearchActive = false
+                            } else {
+                                isSearchActive = true
+                            }
+                        }) {
+                            Icon(
+                                if (isSearchActive) Icons.Default.Clear else Icons.Default.Search,
+                                contentDescription = "بحث"
+                            )
+                        }
+                    }
+                )
+            }
+        },
+        bottomBar = {
+            if (isSelectionMode) {
+                SelectionBottomActionBar(
+                    selectedCount = selectedSongs.size,
+                    onTagClick = {
+                        if (selectedSongs.isNotEmpty()) {
+                            showPlaylistPickerSheet = true
+                        }
+                    },
+                    onShareClick = {
+                        if (selectedSongs.isNotEmpty()) {
+                            FileOperationsUtil.shareSongs(context, selectedSongs.toList())
+                            selectedSongs = emptySet()
+                        }
+                    },
+                    onRenameClick = {},
+                    onDeleteClick = {
+                        if (selectedSongs.isNotEmpty()) {
+                            showDeleteDialog = true
+                        }
+                    },
+                    onCopyClick = {},
+                    onMoveClick = {},
+                    onPlayClick = {
+                        val first = selectedSongs.firstOrNull()
+                        if (first != null) {
+                            viewModel.playSong(first, selectedSongs.toList())
+                            selectedSongs = emptySet()
+                            onOpenPlayer()
+                        }
+                    }
+                )
+            } else {
+                Column {
+                    MusicMiniPlayer(
+                        state = playerState,
+                        onPlayPauseClick = { viewModel.controller.togglePlayPause() },
+                        onPreviousClick = { viewModel.controller.skipToPrevious() },
+                        onNextClick = { viewModel.controller.skipToNext() },
+                        onCloseClick = { viewModel.controller.stop() },
+                        onClick = onOpenPlayer
+                    )
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 8.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val navItems = listOf(
+                                Triple(0, "الأغاني", Icons.Default.MusicNote),
+                                Triple(1, "الألبومات", Icons.Default.Album),
+                                Triple(2, "الفنانون", Icons.Default.Person)
+                            )
+
+                            navItems.forEach { (index, label, icon) ->
+                                val selected = pagerState.currentPage == index
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            scope.launch {
+                                                pagerState.animateScrollToPage(index)
+                                            }
+                                        }
+                                        .padding(horizontal = 20.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -308,8 +397,25 @@ fun MusicLibraryScreen(
                     songs = songs,
                     albums = albums,
                     artists = artists,
-                    onSongClick = { song -> viewModel.playSong(song, songs) },
-                    onSongOptionsClick = { song -> selectedSongForSheet = song },
+                    selectedSongs = selectedSongs,
+                    isSelectionMode = isSelectionMode,
+                    onSongClick = { song ->
+                        if (isSelectionMode) {
+                            toggleSongSelection(song)
+                        } else {
+                            viewModel.playSong(song, songs)
+                        }
+                    },
+                    onSongLongClick = { song ->
+                        toggleSongSelection(song)
+                    },
+                    onSongOptionsClick = { song ->
+                        if (isSelectionMode) {
+                            toggleSongSelection(song)
+                        } else {
+                            selectedSongForSheet = song
+                        }
+                    },
                     onAlbumClick = onAlbumClick,
                     onArtistClick = onArtistClick
                 )
@@ -321,10 +427,27 @@ fun MusicLibraryScreen(
                     when (page) {
                         0 -> SongsTabContent(
                             songs = songs,
+                            selectedSongs = selectedSongs,
+                            isSelectionMode = isSelectionMode,
                             sortBy = sortBy,
                             sortAscending = sortAscending,
-                            onSongClick = { song -> viewModel.playSong(song, songs) },
-                            onSongOptionsClick = { song -> selectedSongForSheet = song },
+                            onSongClick = { song ->
+                                if (isSelectionMode) {
+                                    toggleSongSelection(song)
+                                } else {
+                                    viewModel.playSong(song, songs)
+                                }
+                            },
+                            onSongLongClick = { song ->
+                                toggleSongSelection(song)
+                            },
+                            onSongOptionsClick = { song ->
+                                if (isSelectionMode) {
+                                    toggleSongSelection(song)
+                                } else {
+                                    selectedSongForSheet = song
+                                }
+                            },
                             onPlayAll = { viewModel.playAll() },
                             onShuffleAll = { viewModel.shuffleAll() },
                             onOpenSort = { showSortSheet = true },
@@ -350,7 +473,45 @@ fun MusicLibraryScreen(
                     onPlayNow = { viewModel.playSong(song, songs) },
                     onAddToQueue = { viewModel.controller.addToQueue(song) },
                     onNavigateToAlbum = onAlbumClick,
-                    onNavigateToArtist = onArtistClick
+                    onNavigateToArtist = onArtistClick,
+                    onDelete = {
+                        viewModel.deleteSong(song, context)
+                        selectedSongs = selectedSongs - song
+                    }
+                )
+            }
+
+            if (showDeleteDialog && selectedSongs.isNotEmpty()) {
+                DeleteConfirmDialog(
+                    itemCount = selectedSongs.size,
+                    onConfirm = {
+                        val toDelete = selectedSongs.toList()
+                        viewModel.deleteSongs(toDelete, context)
+                        selectedSongs = emptySet()
+                        showDeleteDialog = false
+                    },
+                    onDismiss = {
+                        showDeleteDialog = false
+                    }
+                )
+            }
+
+            if (showPlaylistPickerSheet && selectedSongs.isNotEmpty()) {
+                PlaylistPickerSheet(
+                    songIds = selectedSongs.map { it.id },
+                    onDismiss = {
+                        showPlaylistPickerSheet = false
+                        selectedSongs = emptySet()
+                    }
+                )
+            }
+
+            if (infoSongForDialog != null) {
+                FileInfoDialog(
+                    song = infoSongForDialog!!,
+                    onDismiss = {
+                        infoSongForDialog = null
+                    }
                 )
             }
 
@@ -475,9 +636,12 @@ fun MusicLibraryScreen(
 @Composable
 private fun SongsTabContent(
     songs: List<Song>,
+    selectedSongs: Set<Song> = emptySet(),
+    isSelectionMode: Boolean = false,
     sortBy: String = "date",
     sortAscending: Boolean = false,
     onSongClick: (Song) -> Unit,
+    onSongLongClick: (Song) -> Unit = {},
     onSongOptionsClick: (Song) -> Unit,
     onPlayAll: () -> Unit,
     onShuffleAll: () -> Unit,
@@ -592,7 +756,10 @@ private fun SongsTabContent(
 
         SongList(
             songs = songs,
+            selectedSongs = selectedSongs,
+            isSelectionMode = isSelectionMode,
             onSongClick = onSongClick,
+            onSongLongClick = onSongLongClick,
             onOptionsClick = onSongOptionsClick
         )
     }
@@ -601,7 +768,10 @@ private fun SongsTabContent(
 @Composable
 fun SongList(
     songs: List<Song>,
+    selectedSongs: Set<Song> = emptySet(),
+    isSelectionMode: Boolean = false,
     onSongClick: (Song) -> Unit,
+    onSongLongClick: (Song) -> Unit = {},
     onOptionsClick: ((Song) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -624,7 +794,10 @@ fun SongList(
             items(songs, key = { it.id }) { song ->
                 SongRow(
                     song = song,
+                    isSelected = selectedSongs.contains(song),
+                    isSelectionMode = isSelectionMode,
                     onClick = { onSongClick(song) },
+                    onLongClick = { onSongLongClick(song) },
                     onOptionsClick = { onOptionsClick?.invoke(song) }
                 )
             }
@@ -636,7 +809,10 @@ fun SongList(
 @Composable
 fun SongRow(
     song: Song,
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     onOptionsClick: () -> Unit
 ) {
     val durationText = remember(song.duration) {
@@ -650,13 +826,31 @@ fun SongRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(72.dp)
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                else Color.Transparent
+            )
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onOptionsClick
+                onLongClick = onLongClick
             )
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (isSelectionMode) {
+            IconButton(
+                onClick = onLongClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
+                    contentDescription = if (isSelected) "محدد" else "غير محدد",
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+
         AsyncImage(
             model = song.albumArtUri,
             contentDescription = null,
@@ -695,7 +889,15 @@ fun SongRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        IconButton(onClick = onOptionsClick) {
+        IconButton(
+            onClick = {
+                if (isSelectionMode) {
+                    onLongClick()
+                } else {
+                    onOptionsClick()
+                }
+            }
+        ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = "خيارات الأغنية",
@@ -886,7 +1088,10 @@ private fun SearchResultsContent(
     songs: List<Song>,
     albums: List<Album>,
     artists: List<Artist>,
+    selectedSongs: Set<Song> = emptySet(),
+    isSelectionMode: Boolean = false,
     onSongClick: (Song) -> Unit,
+    onSongLongClick: (Song) -> Unit = {},
     onSongOptionsClick: (Song) -> Unit,
     onAlbumClick: (Long) -> Unit,
     onArtistClick: (String) -> Unit
@@ -921,7 +1126,10 @@ private fun SearchResultsContent(
                 items(songs, key = { "search_song_${it.id}" }) { song ->
                     SongRow(
                         song = song,
+                        isSelected = selectedSongs.contains(song),
+                        isSelectionMode = isSelectionMode,
                         onClick = { onSongClick(song) },
+                        onLongClick = { onSongLongClick(song) },
                         onOptionsClick = { onSongOptionsClick(song) }
                     )
                 }

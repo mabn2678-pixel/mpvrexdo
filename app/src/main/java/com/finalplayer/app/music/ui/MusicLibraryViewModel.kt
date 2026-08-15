@@ -1,12 +1,15 @@
 package com.finalplayer.app.music.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.finalplayer.app.music.data.db.MusicDatabase
 import com.finalplayer.app.music.data.model.Album
 import com.finalplayer.app.music.data.model.Artist
 import com.finalplayer.app.music.data.model.Song
 import com.finalplayer.app.music.data.repository.MusicRepository
 import com.finalplayer.app.music.player.MusicController
+import com.finalplayer.app.utils.FileOperationsUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +18,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MusicLibraryViewModel(
     private val repository: MusicRepository,
@@ -156,5 +160,62 @@ class MusicLibraryViewModel(
                 controller.toggleShuffle()
             }
         }
+    }
+
+    fun deleteSongs(
+        songsToDelete: List<Song>,
+        context: Context,
+        onResult: ((Boolean, String) -> Unit)? = null
+    ) {
+        if (songsToDelete.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // If currently playing song is deleted, stop playback
+                val currentSong = controller.state.value.currentSong
+                if (currentSong != null && songsToDelete.any { it.id == currentSong.id }) {
+                    controller.stop()
+                }
+
+                // Remove from playlist database
+                try {
+                    val db = MusicDatabase.getInstance(context)
+                    val dao = db.playlistDao()
+                    for (s in songsToDelete) {
+                        dao.removeSongFromAllPlaylists(s.id)
+                    }
+                } catch (_: Exception) {}
+
+                // Delete physical files and clean MediaStore
+                val result = FileOperationsUtil.deleteSongs(context, songsToDelete)
+
+                // Update UI state immediately
+                val deletedIds = songsToDelete.map { it.id }.toSet()
+                _songs.value = _songs.value.filterNot { deletedIds.contains(it.id) }
+
+                // Refresh everything
+                loadAll()
+
+                withContext(Dispatchers.Main) {
+                    val message = if (songsToDelete.size == 1) {
+                        "تم حذف الأغنية بنجاح"
+                    } else {
+                        "تم حذف ${songsToDelete.size} أغاني بنجاح"
+                    }
+                    onResult?.invoke(result.isSuccess, message)
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onResult?.invoke(false, e.localizedMessage ?: "حدث خطأ أثناء الحذف")
+                }
+            }
+        }
+    }
+
+    fun deleteSong(
+        song: Song,
+        context: Context,
+        onResult: ((Boolean, String) -> Unit)? = null
+    ) {
+        deleteSongs(listOf(song), context, onResult)
     }
 }

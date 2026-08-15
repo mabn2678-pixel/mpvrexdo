@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -146,6 +147,23 @@ class PlayerViewModel(
 
     private val _selectedSecondarySubId = MutableStateFlow<Int?>(0)
     val selectedSecondarySubId: StateFlow<Int?> = _selectedSecondarySubId.asStateFlow()
+
+    val hasActiveSubtitles: StateFlow<Boolean> = combine(
+        _subtitleTracks,
+        _selectedSubId,
+        _selectedSecondarySubId
+    ) { tracks, primaryId, secondaryId ->
+        val p = primaryId ?: 0
+        val s = secondaryId ?: 0
+        tracks.isNotEmpty() && (p > 0 || s > 0) && tracks.any { it.id == p || it.id == s }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun hasActiveSubtitles(): Boolean {
+        val currentP = _selectedSubId.value ?: mpvController.getCurrentSid()
+        val currentS = _selectedSecondarySubId.value ?: mpvController.getCurrentSecondarySid()
+        val tracks = _subtitleTracks.value
+        return tracks.isNotEmpty() && (currentP > 0 || currentS > 0) && tracks.any { it.id == currentP || it.id == currentS }
+    }
 
     private val _selectedAudioId = MutableStateFlow<Int?>(0)
     val selectedAudioId: StateFlow<Int?> = _selectedAudioId.asStateFlow()
@@ -778,6 +796,10 @@ class PlayerViewModel(
     private var currentSubPosFloat: Float = 100f
 
     fun handleSubtitleVerticalDrag(pixelDeltaY: Float, screenHeight: Float) {
+        if (!hasActiveSubtitles()) {
+            _subPosOverlayText.value = null
+            return
+        }
         val h = if (screenHeight > 0f) screenHeight else 1000f
         val percentDelta = (pixelDeltaY / h) * 100f
         currentSubPosFloat = (currentSubPosFloat + percentDelta).coerceIn(0f, 100f)
@@ -985,10 +1007,21 @@ class PlayerViewModel(
 
     fun onFileLoaded(fileName: String) {
         hasAttemptedAutoSelectSub = false
+        _externalSubtitles.clear()
         _videoTitle.value = fileName
         resetOrientationOverride()
         setAspectRatio("default")
         applyAllSubtitlePreferences()
+        updateTracks()
+    }
+
+    fun onAppResumed(context: Context) {
+        applyAllSubtitlePreferences()
+        updateTracks()
+        val path = currentVideoId.value ?: mpvController.playerState.value.currentFilePath
+        if (!path.isNullOrEmpty()) {
+            autoLoadSubtitlesFromVideoFolder(Uri.parse(path))
+        }
     }
 
     fun updateTracks() {
@@ -1297,7 +1330,20 @@ class PlayerViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             subtitleAddMutex.withLock {
                 val subPath = uri.toString()
-                if (_externalSubtitles.contains(subPath)) return@withLock
+                val currentTracks = withContext(Dispatchers.Main) { mpvController.getTracks() }
+                val isAlreadyInMpv = currentTracks.any { track ->
+                    track.type == "sub" && (
+                        track.externalFilename == subPath ||
+                        track.title == subPath ||
+                        (uri.path != null && track.externalFilename == uri.path) ||
+                        (uri.lastPathSegment != null && track.title?.contains(uri.lastPathSegment ?: "") == true)
+                    )
+                }
+
+                if (isAlreadyInMpv) {
+                    _externalSubtitles.add(subPath)
+                    return@withLock
+                }
 
                 if (uri.scheme == "content") {
                     try {
@@ -1312,6 +1358,7 @@ class PlayerViewModel(
 
                 withContext(Dispatchers.Main) {
                     mpvController.addSubtitle(subPath, select)
+                    applyAllSubtitlePreferences()
                     updateTracks()
                 }
                 _externalSubtitles.add(subPath)
@@ -1762,13 +1809,13 @@ class PlayerViewModel(
                     }
                 }
 
-                // Auto resume to saved progress when playback starts
+                // Auto resume to exact saved progress automatically without showing any banner or asking
                 if (!hasAppliedAutoResume && _resumePositionSec.value != null && durSec > 0f) {
                     val targetResume = _resumePositionSec.value!!
-                    if (targetResume > 2.0 && posSec < targetResume - 1.0) {
+                    if (targetResume > 1.0 && (posSec < targetResume - 0.8 || posSec < 2.0)) {
                         hasAppliedAutoResume = true
                         seekTo(targetResume.toFloat())
-                    } else if (posSec >= targetResume - 1.0) {
+                    } else if (posSec >= targetResume - 0.8) {
                         hasAppliedAutoResume = true
                     }
                 }

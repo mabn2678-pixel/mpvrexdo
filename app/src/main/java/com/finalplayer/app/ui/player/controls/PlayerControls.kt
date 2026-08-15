@@ -256,6 +256,10 @@ fun PlayerControls(
         }
     }
 
+    val hasActiveSubtitles = subtitleTracks.isNotEmpty() &&
+            ((selectedSubId ?: 0) > 0 || (selectedSecondarySubId ?: 0) > 0) &&
+            subtitleTracks.any { it.id == (selectedSubId ?: 0) || it.id == (selectedSecondarySubId ?: 0) }
+
     GestureHandler(
         onSingleTap = onToggleControls,
         onLeftDoubleTap = onLeftDoubleTap,
@@ -267,6 +271,7 @@ fun PlayerControls(
         onHorizontalDrag = onHorizontalDrag,
         onHorizontalDragEnd = onHorizontalDragEnd,
         onSubtitlePositionDrag = onSubtitlePositionDrag,
+        hasActiveSubtitles = hasActiveSubtitles,
         onPinchZoom = onPinchZoom,
         onLongPressStart = onLongPressStart,
         onLongPressDrag = onLongPressDrag,
