@@ -27,9 +27,34 @@ jobs:
     - name: Build with Gradle
       run: gradle assembleRelease --no-daemon
 
+    - name: Sign APK
+      uses: r0adkll/sign-android-release@v1
+      if: env.KEYSTORE_BASE64 != ''
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      with:
+        releaseDirectory: app/build/outputs/apk/release
+        signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+        alias: ${{ secrets.KEY_ALIAS }}
+        keyStorePassword: ${{ secrets.STORE_PASSWORD }}
+        keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+    - name: Fallback Sign with Keytool (if GitHub secrets not set)
+      if: env.KEYSTORE_BASE64 == ''
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      run: |
+        keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=FinalPlayer"
+        APKSIGNER=$(find $ANDROID_SDK_ROOT/build-tools -name apksigner | sort -r | head -n 1)
+        UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*unsigned.apk" | head -n 1)
+        if [ -f "$UNSIGNED_APK" ]; then
+          $APKSIGNER sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --out app/build/outputs/apk/release/app-release-signed.apk "$UNSIGNED_APK"
+          echo "Signed APK created at app/build/outputs/apk/release/app-release-signed.apk"
+        fi
+
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
         name: app-release
-        path: app/build/outputs/apk/release/
+        path: app/build/outputs/apk/release/*.apk
 
