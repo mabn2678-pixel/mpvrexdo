@@ -104,7 +104,7 @@ fun FolderDetailScreen(
     folderPath: String,
     viewModel: HomeViewModel = koinViewModel(),
     secureFolderViewModel: SecureFolderViewModel = koinViewModel(),
-    onVideoClick: (VideoItem) -> Unit,
+    onVideoClick: (VideoItem, List<VideoItem>, Int) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -276,7 +276,8 @@ fun FolderDetailScreen(
                     onPlayClick = {
                         val first = selectedVideos.firstOrNull()
                         if (first != null) {
-                            onVideoClick(first)
+                            val idx = sortedVideos.indexOf(first).coerceAtLeast(0)
+                            onVideoClick(first, sortedVideos, idx)
                         }
                     }
                 )
@@ -293,7 +294,8 @@ fun FolderDetailScreen(
                             } else null
                         }.maxByOrNull { it.second }?.first ?: sortedVideos.first()
 
-                        onVideoClick(lastPlayedVideo)
+                        val idx = sortedVideos.indexOf(lastPlayedVideo).coerceAtLeast(0)
+                        onVideoClick(lastPlayedVideo, sortedVideos, idx)
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
@@ -326,7 +328,7 @@ fun FolderDetailScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = padding
             ) {
-                itemsIndexed(sortedVideos, key = { index, video -> "${video.id}_$index" }) { _, video ->
+                itemsIndexed(sortedVideos, key = { index, video -> "${video.id}_$index" }) { index, video ->
                     VideoGridItem(
                         video = video,
                         isOpened = playedVideoIds.contains(video.id) || playedVideoIds.contains(video.uri),
@@ -337,7 +339,7 @@ fun FolderDetailScreen(
                             if (isSelectionMode) {
                                 toggleSelection(video)
                             } else {
-                                onVideoClick(video)
+                                onVideoClick(video, sortedVideos, index)
                             }
                         },
                         onLongClick = {
@@ -364,7 +366,7 @@ fun FolderDetailScreen(
                     .thinScrollbar(state = listState, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
                 contentPadding = padding
             ) {
-                itemsIndexed(sortedVideos, key = { index, video -> "${video.id}_$index" }) { _, video ->
+                itemsIndexed(sortedVideos, key = { index, video -> "${video.id}_$index" }) { index, video ->
                     VideoListItem(
                         video = video,
                         isOpened = playedVideoIds.contains(video.id) || playedVideoIds.contains(video.uri),
@@ -375,7 +377,7 @@ fun FolderDetailScreen(
                             if (isSelectionMode) {
                                 toggleSelection(video)
                             } else {
-                                onVideoClick(video)
+                                onVideoClick(video, sortedVideos, index)
                             }
                         },
                         onLongClick = {
@@ -431,7 +433,8 @@ fun FolderDetailScreen(
             selectedItems = items,
             onDismiss = { contextMenuVideos = null },
             onPlay = { selectedVideo ->
-                onVideoClick(selectedVideo)
+                val idx = sortedVideos.indexOf(selectedVideo).coerceAtLeast(0)
+                onVideoClick(selectedVideo, sortedVideos, idx)
             },
             onShare = { shareItems ->
                 FileOperationsUtil.shareVideos(context, shareItems)
@@ -635,28 +638,7 @@ fun VideoListItem(
                 }
             }
 
-            Spacer(modifier = Modifier.width(6.dp))
-
-            // 3-dots button with click (popup) and long-click (multi-selection)
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .combinedClickable(
-                        onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
-                        onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "خيارات الفيديو",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             // Thumbnail with Duration Overlay & Status Badge & Selection Overlay
             Box(
@@ -723,6 +705,27 @@ fun VideoListItem(
                         }
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // 3-dots button on the other side of the thumbnail
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .combinedClickable(
+                        onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
+                        onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "خيارات الفيديو",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
     }

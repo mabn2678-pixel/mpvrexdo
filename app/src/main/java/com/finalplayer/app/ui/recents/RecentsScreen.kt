@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -43,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.finalplayer.app.domain.model.VideoItem
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,13 +63,15 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecentsScreen(
-    onVideoClick: (String, String) -> Unit = { _, _ -> },
+    onVideoClick: (VideoItem, List<VideoItem>, Int) -> Unit = { _, _, _ -> },
     viewModel: RecentsViewModel = koinViewModel()
 ) {
     val recents by viewModel.recentlyPlayed.collectAsState()
 
     val primaryAccent = MaterialTheme.colorScheme.primary
     val containerBg = MaterialTheme.colorScheme.surface
+
+    val allRecentVideos = remember(recents) { recents.map { it.video } }
 
     Scaffold(
         topBar = {
@@ -151,7 +155,7 @@ fun RecentsScreen(
                         )
                         MostRecentCard(
                             item = mostRecent,
-                            onClick = { onVideoClick(mostRecent.video.uri, mostRecent.video.title) },
+                            onClick = { onVideoClick(mostRecent.video, allRecentVideos, 0) },
                             onRemove = { viewModel.removeFromHistory(mostRecent.video.id) }
                         )
                     }
@@ -168,10 +172,10 @@ fun RecentsScreen(
                             )
                         }
 
-                        items(remainingRecents, key = { "${it.video.id}_${it.progress.lastPlayedTimestamp}" }) { item ->
+                        itemsIndexed(remainingRecents, key = { _, item -> "${item.video.id}_${item.progress.lastPlayedTimestamp}" }) { index, item ->
                             RecentVideoCard(
                                 item = item,
-                                onClick = { onVideoClick(item.video.uri, item.video.title) },
+                                onClick = { onVideoClick(item.video, allRecentVideos, index + 1) },
                                 onRemove = { viewModel.removeFromHistory(item.video.id) }
                             )
                         }

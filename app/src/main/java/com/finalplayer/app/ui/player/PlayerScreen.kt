@@ -47,6 +47,7 @@ fun PlayerScreen(
     val activity = context as? Activity
     val configuration = LocalConfiguration.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val mpvView = remember { MPVView(context) }
 
     LaunchedEffect(configuration.orientation) {
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
@@ -56,10 +57,15 @@ fun PlayerScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_DESTROY) {
-                if (activity?.isFinishing == true) {
+                val hasSleepTimer = viewModel.remainingTime.value > 0
+                if (activity?.isFinishing == true || !hasSleepTimer) {
                     try {
                         viewModel.pause()
-                        MPVLib.command("stop")
+                        viewModel.stopPlayback()
+                        mpvView.stop()
+                        if (activity?.isFinishing == true) {
+                            mpvView.destroy()
+                        }
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
@@ -69,10 +75,15 @@ fun PlayerScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            if (activity?.isFinishing == true) {
+            val hasSleepTimer = viewModel.remainingTime.value > 0
+            if (activity?.isFinishing == true || !hasSleepTimer) {
                 try {
                     viewModel.pause()
-                    MPVLib.command("stop")
+                    viewModel.stopPlayback()
+                    mpvView.stop()
+                    if (activity?.isFinishing == true) {
+                        mpvView.destroy()
+                    }
                 } catch (_: Exception) {}
             }
         }
@@ -94,6 +105,8 @@ fun PlayerScreen(
     val longPressSpeedValue by viewModel.longPressSpeedValue.collectAsStateWithLifecycle()
     val zoomOverlayText by viewModel.zoomOverlayText.collectAsStateWithLifecycle()
     val subPosOverlayText by viewModel.subPosOverlayText.collectAsStateWithLifecycle()
+    val isSubtitleBoxDragging by viewModel.isSubtitleBoxDragging.collectAsStateWithLifecycle()
+    val currentSubPos by viewModel.currentSubPos.collectAsStateWithLifecycle()
 
     val subtitleTracks by viewModel.subtitleTracks.collectAsStateWithLifecycle()
     val audioTracks by viewModel.audioTracks.collectAsStateWithLifecycle()
@@ -122,8 +135,6 @@ fun PlayerScreen(
     val currentVideoZoom by viewModel.currentVideoZoom.collectAsStateWithLifecycle()
     val videoAspect by viewModel.videoAspect.collectAsStateWithLifecycle()
     val isBuffering by viewModel.isBuffering.collectAsStateWithLifecycle()
-
-    val mpvView = remember { MPVView(context) }
 
     // Initialize initial system audio & brightness
     LaunchedEffect(Unit) {
@@ -188,6 +199,15 @@ fun PlayerScreen(
 
         onDispose {
             viewModel.saveCurrentProgressNow()
+            val hasSleepTimer = viewModel.remainingTime.value > 0
+            if (activity?.isFinishing == true || !hasSleepTimer) {
+                try {
+                    mpvView.stop()
+                    if (activity?.isFinishing == true) {
+                        mpvView.destroy()
+                    }
+                } catch (_: Throwable) {}
+            }
             viewModel.mpvController.detachView()
         }
     }
@@ -223,7 +243,11 @@ fun PlayerScreen(
             longPressSpeedValue = longPressSpeedValue,
             zoomOverlayText = zoomOverlayText,
             subPosOverlayText = subPosOverlayText,
+            isSubtitleBoxDragging = isSubtitleBoxDragging,
+            currentSubPos = currentSubPos,
+            onSubtitleDragStart = { viewModel.onSubtitleDragStart() },
             onSubtitlePositionDrag = { delta, screenH -> viewModel.handleSubtitleVerticalDrag(delta, screenH) },
+            onSubtitleDragEnd = { viewModel.onSubtitleDragEnd() },
             onPinchZoom = { delta -> viewModel.onPinchZoom(delta) },
             onLongPressStart = { viewModel.onLongPressSpeedStart() },
             onLongPressDrag = { delta -> viewModel.onLongPressSpeedDrag(delta) },

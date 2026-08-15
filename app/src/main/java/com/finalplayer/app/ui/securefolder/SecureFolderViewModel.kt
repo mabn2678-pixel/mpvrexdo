@@ -164,20 +164,14 @@ class SecureFolderViewModel(
 
     // ════ Media Management ════
 
-    fun addToSecureFolder(videoId: String, originalPath: String) {
+    fun removeFromSecureFolder(videoId: String, context: android.content.Context, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
         viewModelScope.launch {
-            secureMediaDao.insert(
-                SecureMediaEntity(
-                    videoId = videoId,
-                    originalPath = originalPath
-                )
-            )
-        }
-    }
-
-    fun removeFromSecureFolder(videoId: String) {
-        viewModelScope.launch {
-            secureMediaDao.remove(videoId)
+            val result = videoRepository.restoreVideoFromSecureFolder(videoId, context)
+            if (result.isSuccess) {
+                onResult(true, "تمت استعادة الفيديو بنجاح إلى هاتفك")
+            } else {
+                onResult(false, result.exceptionOrNull()?.localizedMessage ?: "حدث خطأ أثناء استعادة الفيديو")
+            }
         }
     }
 

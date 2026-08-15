@@ -21,6 +21,7 @@ import com.finalplayer.app.data.preferences.SubtitlesPreferences
 import com.finalplayer.app.player.core.MPVController
 import com.finalplayer.app.player.service.MediaPlaybackService
 import com.finalplayer.app.player.core.MPVLib
+import com.finalplayer.app.player.core.MPVView
 import com.finalplayer.app.player.core.TrackSelector
 import com.finalplayer.app.ui.player.ChapterNode
 import com.finalplayer.app.ui.player.Decoder
@@ -29,6 +30,7 @@ import com.finalplayer.app.ui.player.controls.components.sheets.TrackNode
 import com.finalplayer.app.domain.model.PlaybackProgress
 import com.finalplayer.app.domain.model.VideoItem
 import com.finalplayer.app.domain.repository.PlaybackRepository
+import com.finalplayer.app.domain.repository.VideoRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -41,6 +43,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -49,7 +52,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import android.provider.MediaStore
 import java.io.File
 import org.koin.core.component.KoinComponent
@@ -80,6 +82,7 @@ class PlayerViewModel(
 
     private val context: Context by inject()
     private val playbackRepository: PlaybackRepository by inject()
+    private val videoRepository: VideoRepository by inject()
 
     private val trackSelector: TrackSelector? by lazy {
         if (subtitlesPrefs != null && audioPrefs != null) {
@@ -188,6 +191,12 @@ class PlayerViewModel(
 
     private val _subPosOverlayText = MutableStateFlow<String?>(null)
     val subPosOverlayText: StateFlow<String?> = _subPosOverlayText.asStateFlow()
+
+    private val _isSubtitleBoxDragging = MutableStateFlow(false)
+    val isSubtitleBoxDragging: StateFlow<Boolean> = _isSubtitleBoxDragging.asStateFlow()
+
+    private val _currentSubPos = MutableStateFlow(100)
+    val currentSubPos: StateFlow<Int> = _currentSubPos.asStateFlow()
 
     private val _isSliderDragging = MutableStateFlow(false)
     val isSliderDragging: StateFlow<Boolean> = _isSliderDragging.asStateFlow()
@@ -405,21 +414,74 @@ class PlayerViewModel(
 
     fun setShortsPlaylist(items: List<VideoItem>, startIndex: Int = 0) {
         _isShortsMode.value = true
-        setPlaylist(items, startIndex)
+        _playlistItems.value = items
+        _isPlaylistMode.value = items.size > 1
+        if (items.isNotEmpty() && startIndex in items.indices) {
+            _currentPlaylistIndex.value = startIndex
+            val item = items[startIndex]
+            _currentVideoId.value = item.id
+            _videoTitle.value = item.title
+        }
     }
 
     fun setPlaylist(items: List<VideoItem>, startIndex: Int = 0) {
         _playlistItems.value = items
-        _isPlaylistMode.value = items.isNotEmpty()
+        _isPlaylistMode.value = items.size > 1
         if (items.isNotEmpty() && startIndex in items.indices) {
             _currentPlaylistIndex.value = startIndex
-            playPlaylistItem(startIndex)
+            val item = items[startIndex]
+            _currentVideoId.value = item.id
+            _videoTitle.value = item.title
+        }
+    }
+
+    fun autoDiscoverPlaylistForVideo(videoPath: String, videoId: String?) {
+        if (_playlistItems.value.isNotEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val allVideos = videoRepository.getAllVideos().firstOrNull() ?: emptyList()
+                if (allVideos.isEmpty()) return@launch
+
+                val currentVideo = allVideos.find {
+                    it.id == videoId || it.uri == videoPath || it.uri == videoId || it.id == videoPath
+                }
+
+                val folderVideos = if (currentVideo != null && currentVideo.folderPath.isNotBlank()) {
+                    allVideos.filter { it.folderPath == currentVideo.folderPath }
+                } else {
+                    val parent = try { File(videoPath).parent } catch (_: Exception) { null }
+                    if (!parent.isNullOrBlank()) {
+                        allVideos.filter { it.folderPath == parent || it.uri.startsWith(parent) }
+                    } else {
+                        emptyList()
+                    }
+                }
+
+                val targetList = if (folderVideos.size > 1) folderVideos else allVideos
+                if (targetList.size > 1) {
+                    val foundIndex = targetList.indexOfFirst {
+                        it.id == videoId || it.uri == videoPath || it.uri == videoId || it.id == videoPath
+                    }.coerceAtLeast(0)
+
+                    withContext(Dispatchers.Main) {
+                        if (_playlistItems.value.isEmpty()) {
+                            _playlistItems.value = targetList
+                            _currentPlaylistIndex.value = foundIndex
+                            _isPlaylistMode.value = true
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("PlayerViewModel", "autoDiscoverPlaylistForVideo error", e)
+            }
         }
     }
 
     fun playPlaylistItem(index: Int) {
         val items = _playlistItems.value
         if (index in items.indices) {
+            saveCurrentProgressNow()
+            eofHandled = false
             _currentPlaylistIndex.value = index
             val item = items[index]
             _currentVideoId.value = item.id
@@ -427,6 +489,13 @@ class PlayerViewModel(
             prefetchVideoAspect(item.uri)
             mpvController.play(item.uri)
             checkSavedProgress(item.id)
+            try {
+                autoLoadSubtitlesFromVideoFolder(Uri.parse(item.uri))
+                applyAllSubtitlePreferences()
+                updateTracks()
+            } catch (e: Exception) {
+                Log.e("PlayerViewModel", "Error loading subtitles/tracks for playlist item", e)
+            }
         }
     }
 
@@ -703,13 +772,12 @@ class PlayerViewModel(
             MPVLib.setPropertyString("sub-auto", if (autoLoad) "fuzzy" else "no")
             MPVLib.setOptionString("sub-auto", if (autoLoad) "fuzzy" else "no")
 
-            val scaleVal = "no"
-            MPVLib.setPropertyString("sub-scale-by-window", scaleVal)
-            MPVLib.setOptionString("sub-scale-by-window", scaleVal)
-            MPVLib.setPropertyString("sub-scale-with-window", scaleVal)
-            MPVLib.setOptionString("sub-scale-with-window", scaleVal)
-            MPVLib.setPropertyString("sub-ass-scale-with-window", "no")
-            MPVLib.setOptionString("sub-ass-scale-with-window", "no")
+            MPVLib.setPropertyString("sub-scale-by-window", "yes")
+            MPVLib.setOptionString("sub-scale-by-window", "yes")
+            MPVLib.setPropertyString("sub-scale-with-window", "yes")
+            MPVLib.setOptionString("sub-scale-with-window", "yes")
+            MPVLib.setPropertyString("sub-ass-scale-with-window", "yes")
+            MPVLib.setOptionString("sub-ass-scale-with-window", "yes")
             MPVLib.setPropertyString("sub-ass-override", "force")
             MPVLib.setOptionString("sub-ass-override", "force")
 
@@ -745,9 +813,8 @@ class PlayerViewModel(
             MPVLib.setPropertyInt("sub-font-size", fontSize)
             MPVLib.setOptionString("sub-font-size", fontSize.toString())
 
-            val computedScale = fontSize / 55.0f
-            MPVLib.setPropertyFloat("sub-scale", computedScale)
-            MPVLib.setOptionString("sub-scale", computedScale.toString())
+            MPVLib.setPropertyFloat("sub-scale", 1.0f)
+            MPVLib.setOptionString("sub-scale", "1.0")
 
             MPVLib.setPropertyString("blend-subtitles", "no")
             MPVLib.setOptionString("blend-subtitles", "no")
@@ -799,15 +866,33 @@ class PlayerViewModel(
 
     private var currentSubPosFloat: Float = 100f
 
+    fun onSubtitleDragStart() {
+        _isSubtitleBoxDragging.value = true
+        subPosHideJob?.cancel()
+        val current = currentSubPosFloat.toInt()
+        _subPosOverlayText.value = "موضع الترجمة: $current%"
+    }
+
+    fun onSubtitleDragEnd() {
+        _isSubtitleBoxDragging.value = false
+        subPosHideJob?.cancel()
+        subPosHideJob = viewModelScope.launch {
+            delay(1200)
+            _subPosOverlayText.value = null
+        }
+    }
+
     fun handleSubtitleVerticalDrag(pixelDeltaY: Float, screenHeight: Float) {
         if (!hasActiveSubtitles()) {
             _subPosOverlayText.value = null
+            _isSubtitleBoxDragging.value = false
             return
         }
         val h = if (screenHeight > 0f) screenHeight else 1000f
         val percentDelta = (pixelDeltaY / h) * 100f
         currentSubPosFloat = (currentSubPosFloat + percentDelta).coerceIn(0f, 100f)
         val newPos = currentSubPosFloat.toInt()
+        _currentSubPos.value = newPos
 
         MPVLib.setPropertyString("blend-subtitles", "no")
         MPVLib.setOptionString("blend-subtitles", "no")
@@ -821,10 +906,6 @@ class PlayerViewModel(
         _subPosOverlayText.value = "موضع الترجمة: $newPos%"
 
         subPosHideJob?.cancel()
-        subPosHideJob = viewModelScope.launch {
-            delay(1500)
-            _subPosOverlayText.value = null
-        }
 
         subtitlesPrefs?.let { prefs ->
             viewModelScope.launch {
@@ -839,27 +920,19 @@ class PlayerViewModel(
 
     fun adjustSubtitleScaleForOrientation(isPortrait: Boolean) {
         try {
-            val baseFontSize = subtitlesPrefs?.fontSize?.get() ?: 55
-            val baseScale = baseFontSize / 55.0
-            val orientationMultiplier = if (isPortrait) 0.5 else 1.0
-            val finalScale = baseScale * orientationMultiplier
-            try {
-                MPVLib.setPropertyDouble("sub-scale", finalScale)
-            } catch (_: Throwable) {}
-            try {
-                MPVLib.setPropertyFloat("sub-scale", finalScale.toFloat())
-                MPVLib.setOptionString("sub-scale", finalScale.toString())
-            } catch (_: Throwable) {}
-            try {
-                MPVLib.setPropertyString("sub-scale-by-window", "no")
-                MPVLib.setOptionString("sub-scale-by-window", "no")
-                MPVLib.setPropertyString("sub-scale-with-window", "no")
-                MPVLib.setOptionString("sub-scale-with-window", "no")
-                MPVLib.setPropertyString("sub-ass-scale-with-window", "no")
-                MPVLib.setOptionString("sub-ass-scale-with-window", "no")
-                MPVLib.setPropertyString("sub-ass-override", "force")
-                MPVLib.setOptionString("sub-ass-override", "force")
-            } catch (_: Throwable) {}
+            val fontSize = subtitlesPrefs?.fontSize?.get() ?: 55
+            MPVLib.setPropertyString("sub-scale-by-window", "yes")
+            MPVLib.setOptionString("sub-scale-by-window", "yes")
+            MPVLib.setPropertyString("sub-scale-with-window", "yes")
+            MPVLib.setOptionString("sub-scale-with-window", "yes")
+            MPVLib.setPropertyString("sub-ass-scale-with-window", "yes")
+            MPVLib.setOptionString("sub-ass-scale-with-window", "yes")
+            MPVLib.setPropertyString("sub-ass-override", "force")
+            MPVLib.setOptionString("sub-ass-override", "force")
+            MPVLib.setPropertyInt("sub-font-size", fontSize)
+            MPVLib.setOptionString("sub-font-size", fontSize.toString())
+            MPVLib.setPropertyFloat("sub-scale", 1.0f)
+            MPVLib.setOptionString("sub-scale", "1.0")
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -908,9 +981,12 @@ class PlayerViewModel(
                 prefs.fontSize.changes().collect { size ->
                     MPVLib.setPropertyInt("sub-font-size", size)
                     MPVLib.setOptionString("sub-font-size", size.toString())
-                    val computedScale = size / 55.0f
-                    MPVLib.setPropertyFloat("sub-scale", computedScale)
-                    MPVLib.setOptionString("sub-scale", computedScale.toString())
+                    MPVLib.setPropertyFloat("sub-scale", 1.0f)
+                    MPVLib.setOptionString("sub-scale", "1.0")
+                    MPVLib.setPropertyString("sub-scale-by-window", "yes")
+                    MPVLib.setOptionString("sub-scale-by-window", "yes")
+                    MPVLib.setPropertyString("sub-scale-with-window", "yes")
+                    MPVLib.setOptionString("sub-scale-with-window", "yes")
                     MPVLib.setPropertyString("sub-ass-override", "force")
                     MPVLib.setOptionString("sub-ass-override", "force")
                 }
@@ -1488,6 +1564,16 @@ class PlayerViewModel(
         _paused.value = true
     }
 
+    fun stopPlayback() {
+        try {
+            mpvController.stop()
+            mpvController.getAttachedView()?.stop()
+            MPVView.stopAll()
+            MPVLib.command("stop")
+        } catch (_: Throwable) {}
+        _paused.value = true
+    }
+
     fun seekBy(offsetSeconds: Int) {
         val currentPos = _precisePosition.value
         val duration = _preciseDuration.value.coerceAtLeast(1f)
@@ -1928,6 +2014,8 @@ class PlayerViewModel(
 
     override fun onCleared() {
         saveCurrentProgressNow()
+        stopPlayback()
+        mpvController.stopAndDestroy()
         pollingJob?.cancel()
         sleepTimerJob?.cancel()
         seekCoalescingJob?.cancel()

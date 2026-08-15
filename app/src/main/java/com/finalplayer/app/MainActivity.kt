@@ -108,12 +108,25 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun openPlayer(path: String, title: String, videoId: String? = null) {
+    private fun openPlayer(
+        path: String,
+        title: String,
+        videoId: String? = null,
+        playlist: List<com.finalplayer.app.domain.model.VideoItem> = emptyList(),
+        index: Int = 0
+    ) {
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra(PlayerActivity.EXTRA_VIDEO_PATH, path)
             putExtra(PlayerActivity.EXTRA_VIDEO_TITLE, title)
             if (!videoId.isNullOrEmpty()) {
                 putExtra(PlayerActivity.EXTRA_VIDEO_ID, videoId)
+            }
+            if (playlist.isNotEmpty()) {
+                putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, index)
+                putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_URIS, ArrayList(playlist.map { it.uri }))
+                putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_TITLES, ArrayList(playlist.map { it.title }))
+                putStringArrayListExtra(PlayerActivity.EXTRA_PLAYLIST_IDS, ArrayList(playlist.map { it.id }))
+                putExtra(PlayerActivity.EXTRA_PLAYLIST_DURATIONS, playlist.map { it.duration }.toLongArray())
             }
         }
         startActivity(intent)
@@ -199,6 +212,9 @@ class MainActivity : FragmentActivity() {
                                         launchSingleTop = true
                                     }
                                 },
+                                onVideoClick = { video, list, index ->
+                                    openPlayer(video.uri, video.title, video.id, list, index)
+                                },
                                 onRecentVideoClick = { path, title ->
                                     openPlayer(path, title)
                                 },
@@ -217,7 +233,8 @@ class MainActivity : FragmentActivity() {
                                         }.maxByOrNull { it.second }?.first ?: allVideos.firstOrNull()
 
                                         if (lastPlayed != null) {
-                                            openPlayer(lastPlayed.uri, lastPlayed.title, lastPlayed.id)
+                                            val idx = allVideos.indexOf(lastPlayed).coerceAtLeast(0)
+                                            openPlayer(lastPlayed.uri, lastPlayed.title, lastPlayed.id, allVideos, idx)
                                         } else {
                                             val firstFolder = homeViewModel.uiState.value.folders.firstOrNull()
                                             if (firstFolder != null) {
@@ -252,8 +269,8 @@ class MainActivity : FragmentActivity() {
 
                         composable("secure_folder") {
                             SecureFolderScreen(
-                                onVideoClick = { video ->
-                                    openPlayer(video.uri, video.title, video.id)
+                                onVideoClick = { video, list, index ->
+                                    openPlayer(video.uri, video.title, video.id, list, index)
                                 },
                                 onBack = { navController.popBackStack() }
                             )
@@ -268,8 +285,8 @@ class MainActivity : FragmentActivity() {
                             FolderDetailScreen(
                                 folderPath = folderPath,
                                 viewModel = homeViewModel,
-                                onVideoClick = { video ->
-                                    openPlayer(video.uri, video.title, video.id)
+                                onVideoClick = { video, list, index ->
+                                    openPlayer(video.uri, video.title, video.id, list, index)
                                 },
                                 onBack = { navController.popBackStack() }
                             )
@@ -278,8 +295,8 @@ class MainActivity : FragmentActivity() {
                         composable("search") {
                             SearchScreen(
                                 onBack = { navController.popBackStack() },
-                                onVideoClick = { videoId, title ->
-                                    openPlayer(videoId, title)
+                                onVideoClick = { video, list, index ->
+                                    openPlayer(video.uri, video.title, video.id, list, index)
                                 },
                                 onFolderClick = { folderPath ->
                                     val encoded = encodeNavPath(folderPath)

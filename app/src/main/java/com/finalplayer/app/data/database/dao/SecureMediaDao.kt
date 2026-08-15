@@ -18,6 +18,9 @@ interface SecureMediaDao {
     @Query("SELECT videoId FROM secure_media")
     suspend fun getAllSecureVideoIdsOnce(): List<String>
 
+    @Query("SELECT * FROM secure_media WHERE videoId = :videoId LIMIT 1")
+    suspend fun getByVideoId(videoId: String): SecureMediaEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: SecureMediaEntity)
 

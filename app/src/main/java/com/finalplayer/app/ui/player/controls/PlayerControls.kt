@@ -149,7 +149,11 @@ fun PlayerControls(
     longPressSpeedValue: Float = 2.5f,
     zoomOverlayText: String? = null,
     subPosOverlayText: String? = null,
+    isSubtitleBoxDragging: Boolean = false,
+    currentSubPos: Int = 100,
+    onSubtitleDragStart: () -> Unit = {},
     onSubtitlePositionDrag: (deltaPx: Float, screenHeightPx: Float) -> Unit = { _, _ -> },
+    onSubtitleDragEnd: () -> Unit = {},
     onPinchZoom: (Float) -> Unit = {},
     onLongPressStart: () -> Unit = {},
     onLongPressDrag: (Float) -> Unit = {},
@@ -270,7 +274,9 @@ fun PlayerControls(
         onHorizontalDragStart = onHorizontalDragStart,
         onHorizontalDrag = onHorizontalDrag,
         onHorizontalDragEnd = onHorizontalDragEnd,
+        onSubtitleDragStart = onSubtitleDragStart,
         onSubtitlePositionDrag = onSubtitlePositionDrag,
+        onSubtitleDragEnd = onSubtitleDragEnd,
         hasActiveSubtitles = hasActiveSubtitles,
         onPinchZoom = onPinchZoom,
         onLongPressStart = onLongPressStart,
@@ -812,9 +818,9 @@ fun PlayerControls(
 
             SubPositionOverlay(
                 subPosText = subPosOverlayText,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 24.dp)
+                isDragging = isSubtitleBoxDragging,
+                subPosPercent = currentSubPos,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }

@@ -13,7 +13,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FolderSpecial
@@ -43,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import com.finalplayer.app.domain.model.VideoItem
+import kotlinx.coroutines.launch
 import com.finalplayer.app.ui.securefolder.components.PinInputDialog
 import com.finalplayer.app.ui.securefolder.components.SecureFolderSortBottomSheet
 import com.finalplayer.app.ui.securefolder.components.SecureVideoGridItem
@@ -54,7 +57,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun SecureFolderScreen(
     viewModel: SecureFolderViewModel = koinViewModel(),
-    onVideoClick: (VideoItem) -> Unit,
+    onVideoClick: (VideoItem, List<VideoItem>, Int) -> Unit,
     onBack: () -> Unit
 ) {
     val isUnlocked by viewModel.isUnlocked.collectAsState()
@@ -69,6 +72,9 @@ fun SecureFolderScreen(
     var showSortSheet by remember { mutableStateOf(false) }
     val sortSheetState = rememberModalBottomSheetState()
     val activity = LocalActivity.current as? FragmentActivity
+    val context = LocalContext.current
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
     if (!isPinSet) {
         SecureFolderSetupScreen(
@@ -100,6 +106,7 @@ fun SecureFolderScreen(
     }
 
     Scaffold(
+        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -218,12 +225,16 @@ fun SecureFolderScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(secureVideos, key = { it.id }) { video ->
+                        itemsIndexed(secureVideos, key = { _, it -> it.id }) { index, video ->
                             SecureVideoGridItem(
                                 video = video,
-                                onClick = { onVideoClick(video) },
+                                onClick = { onVideoClick(video, secureVideos, index) },
                                 onRemove = {
-                                    viewModel.removeFromSecureFolder(video.id)
+                                    viewModel.removeFromSecureFolder(video.id, context) { _, msg ->
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(msg)
+                                        }
+                                    }
                                 }
                             )
                         }
@@ -234,12 +245,16 @@ fun SecureFolderScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(secureVideos, key = { it.id }) { video ->
+                        itemsIndexed(secureVideos, key = { _, it -> it.id }) { index, video ->
                             SecureVideoItem(
                                 video = video,
-                                onClick = { onVideoClick(video) },
+                                onClick = { onVideoClick(video, secureVideos, index) },
                                 onRemove = {
-                                    viewModel.removeFromSecureFolder(video.id)
+                                    viewModel.removeFromSecureFolder(video.id, context) { _, msg ->
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(msg)
+                                        }
+                                    }
                                 }
                             )
                         }

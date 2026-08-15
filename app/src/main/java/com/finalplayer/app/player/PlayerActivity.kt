@@ -208,6 +208,12 @@ class PlayerActivity : ComponentActivity() {
         val shortsTitles = intent.getStringArrayListExtra(EXTRA_SHORTS_TITLES)
         val shortsIds = intent.getStringArrayListExtra(EXTRA_SHORTS_IDS)
 
+        val playlistIndex = intent.getIntExtra(EXTRA_PLAYLIST_INDEX, 0)
+        val playlistUris = intent.getStringArrayListExtra(EXTRA_PLAYLIST_URIS)
+        val playlistTitles = intent.getStringArrayListExtra(EXTRA_PLAYLIST_TITLES)
+        val playlistIds = intent.getStringArrayListExtra(EXTRA_PLAYLIST_IDS)
+        val playlistDurations = intent.getLongArrayExtra(EXTRA_PLAYLIST_DURATIONS)
+
         if (isShortsMode && !shortsUris.isNullOrEmpty()) {
             val items = shortsUris.mapIndexed { index, uri ->
                 com.finalplayer.app.domain.model.VideoItem(
@@ -221,8 +227,23 @@ class PlayerActivity : ComponentActivity() {
                 )
             }
             viewModel.setShortsPlaylist(items, shortsIndex)
+        } else if (!playlistUris.isNullOrEmpty()) {
+            val items = playlistUris.mapIndexed { index, uri ->
+                com.finalplayer.app.domain.model.VideoItem(
+                    id = playlistIds?.getOrNull(index) ?: uri,
+                    uri = uri,
+                    title = playlistTitles?.getOrNull(index) ?: "Video",
+                    duration = playlistDurations?.getOrNull(index) ?: 0L,
+                    sizeBytes = 0L,
+                    dateAdded = 0L,
+                    folderPath = ""
+                )
+            }
+            viewModel.setCurrentVideoDetails(videoId, videoTitle)
+            viewModel.setPlaylist(items, playlistIndex)
         } else {
             viewModel.setCurrentVideoDetails(videoId, videoTitle)
+            viewModel.autoDiscoverPlaylistForVideo(videoPath, videoId)
         }
 
         MpvTeardownCoordinator.markActivityCoreInitialized()
@@ -422,15 +443,14 @@ class PlayerActivity : ComponentActivity() {
             viewModel.setControlsShown(true)
             if (wasInPipMode) {
                 wasInPipMode = false
-                if (isFinishing) {
+                if (isFinishing || lifecycle.currentState < androidx.lifecycle.Lifecycle.State.RESUMED) {
                     closedFromPipMode = true
                     viewModel.pause()
-                    try {
-                        com.finalplayer.app.player.core.MPVLib.command("stop")
-                    } catch (_: Exception) {}
+                    viewModel.stopPlayback()
+                    com.finalplayer.app.player.core.MPVView.stopAll()
                     viewModel.setBackgroundPlay(false)
                     MediaPlaybackService.stopService(applicationContext)
-                    finish()
+                    finishAndRemoveTask()
                 }
             }
         }
@@ -450,6 +470,8 @@ class PlayerActivity : ComponentActivity() {
             enableBackgroundAudioService()
         } else {
             viewModel.pause()
+            viewModel.stopPlayback()
+            com.finalplayer.app.player.core.MPVView.stopAll()
             viewModel.setBackgroundPlay(false)
             MediaPlaybackService.stopService(applicationContext)
         }
@@ -461,8 +483,10 @@ class PlayerActivity : ComponentActivity() {
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
         val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
 
-        if (!isPipMode && !hasActiveSleepTimer) {
+        if (isFinishing || closedFromPipMode || (!isPipMode && !hasActiveSleepTimer)) {
             viewModel.pause()
+            viewModel.stopPlayback()
+            com.finalplayer.app.player.core.MPVView.stopAll()
             viewModel.setBackgroundPlay(false)
             MediaPlaybackService.stopService(applicationContext)
         }
@@ -512,11 +536,10 @@ class PlayerActivity : ComponentActivity() {
             }
         }
         val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
-        if (!hasActiveSleepTimer || isFinishing) {
+        if (!hasActiveSleepTimer || isFinishing || closedFromPipMode) {
             viewModel.pause()
-            try {
-                com.finalplayer.app.player.core.MPVLib.command("stop")
-            } catch (_: Exception) {}
+            viewModel.stopPlayback()
+            com.finalplayer.app.player.core.MPVView.stopAll()
             viewModel.setBackgroundPlay(false)
             MediaPlaybackService.stopService(applicationContext)
             val mpvView = viewModel.mpvController.getAttachedView()
@@ -537,6 +560,10 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_VIDEO_TITLE = "EXTRA_VIDEO_TITLE"
         const val EXTRA_PLAYLIST_ID = "EXTRA_PLAYLIST_ID"
         const val EXTRA_PLAYLIST_INDEX = "EXTRA_PLAYLIST_INDEX"
+        const val EXTRA_PLAYLIST_URIS = "EXTRA_PLAYLIST_URIS"
+        const val EXTRA_PLAYLIST_TITLES = "EXTRA_PLAYLIST_TITLES"
+        const val EXTRA_PLAYLIST_IDS = "EXTRA_PLAYLIST_IDS"
+        const val EXTRA_PLAYLIST_DURATIONS = "EXTRA_PLAYLIST_DURATIONS"
 
         const val EXTRA_IS_SHORTS_MODE = "EXTRA_IS_SHORTS_MODE"
         const val EXTRA_SHORTS_INDEX = "EXTRA_SHORTS_INDEX"

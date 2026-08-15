@@ -39,6 +39,27 @@ class MPVController(private val context: Context) {
         this.mpvView = null
     }
 
+    fun stopAndDestroy() {
+        pollingJob?.cancel()
+        try {
+            mpvView?.stop()
+            mpvView?.destroy()
+        } catch (_: Throwable) {}
+        if (MPVLib.activeView == this.mpvView) {
+            MPVLib.activeView = null
+        }
+        this.mpvView = null
+        _playerState.update {
+            it.copy(
+                isPlaying = false,
+                positionMs = 0L,
+                durationMs = 0L,
+                currentFilePath = null,
+                isBuffering = false
+            )
+        }
+    }
+
     fun getAttachedView(): MPVView? = mpvView
 
     fun isIdle(): Boolean = mpvView?.isIdle() ?: true

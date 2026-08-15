@@ -2,7 +2,6 @@ package com.finalplayer.app.ui.player.controls
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -13,13 +12,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import com.finalplayer.app.data.preferences.GesturePreferences
 import com.finalplayer.app.data.preferences.PlayerPreferences
+import com.finalplayer.app.data.preferences.SubtitlesPreferences
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -52,7 +51,9 @@ fun GestureHandler(
     onHorizontalDragStart: () -> Unit,
     onHorizontalDrag: (deltaPx: Float, screenWidthPx: Float) -> Unit,
     onHorizontalDragEnd: () -> Unit,
+    onSubtitleDragStart: () -> Unit = {},
     onSubtitlePositionDrag: (deltaPx: Float, screenHeightPx: Float) -> Unit = { _, _ -> },
+    onSubtitleDragEnd: () -> Unit = {},
     hasActiveSubtitles: Boolean = false,
     onPinchZoom: (zoomDelta: Float) -> Unit = {},
     onLongPressStart: () -> Unit = {},
@@ -68,6 +69,7 @@ fun GestureHandler(
     modifier: Modifier = Modifier,
     gesturePrefs: GesturePreferences = koinInject(),
     playerPrefs: PlayerPreferences = koinInject(),
+    subtitlesPrefs: SubtitlesPreferences = koinInject(),
     content: @Composable () -> Unit = {}
 ) {
     val brightnessEnabled by gesturePrefs.brightnessGestureEnabled.asFlow().collectAsState(initial = true)
@@ -81,6 +83,7 @@ fun GestureHandler(
     val enableSubtitleDrag by playerPrefs.enableSubtitleDrag.asFlow().collectAsState(initial = true)
     val gestSubDrag by gesturePrefs.subtitleDrag.asFlow().collectAsState(initial = true)
     val effectiveSubtitleDrag = enableSubtitleDrag || gestSubDrag
+    val subPosPref by subtitlesPrefs.subPos.asFlow().collectAsState(initial = 100)
     val enableSubtitleSeekGesture by playerPrefs.enableSubtitleSeekGesture.asFlow().collectAsState(initial = true)
     val seekSensitivity by playerPrefs.seekSensitivity.asFlow().collectAsState(initial = 50)
     val allowPanelGestures by playerPrefs.allowPanelGestures.asFlow().collectAsState(initial = false)
@@ -103,42 +106,18 @@ fun GestureHandler(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(isLocked, isAnySheetOpen, allowPanelGestures, effectiveSubtitleDrag) {
-                if (!isLocked && (!isAnySheetOpen || allowPanelGestures) && effectiveSubtitleDrag) {
-                    detectDragGesturesAfterLongPress(
-                        onDragStart = {
-                            try {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            } catch (_: Throwable) {}
-                        },
-                        onDragEnd = { },
-                        onDragCancel = { },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            val screenHeight = size.height.toFloat().coerceAtLeast(100f)
-                            onSubtitlePositionDrag(dragAmount.y, screenHeight)
-                        }
-                    )
-                }
-            }
             .pointerInput(
                 isShortsMode,
                 isLocked,
                 isAnySheetOpen,
-                brightnessEnabled,
-                playerBrightnessEnabled,
                 effectiveBrightnessEnabled,
-                volumeEnabled,
-                playerVolumeEnabled,
                 effectiveVolumeEnabled,
-                seekEnabled,
-                playerHorizontalSeekEnabled,
                 effectiveSeekEnabled,
                 isPinchAllowed,
                 swapVolBright,
-                enableSubtitleDrag,
                 effectiveSubtitleDrag,
-                enableSubtitleSeekGesture,
+                hasActiveSubtitles,
+                subPosPref,
                 sensitivity,
                 swipeSpeed,
                 seekSensitivity,
@@ -156,12 +135,15 @@ fun GestureHandler(
                     val screenHeight = size.height.toFloat().coerceAtLeast(100f)
 
                     val edgeMarginPx = 36.dp.toPx()
-                    val topEdgeMarginPx = 56.dp.toPx()
-                    val bottomEdgeMarginPx = 56.dp.toPx()
-
                     val isNearHorizontalEdge = downX < edgeMarginPx || downX > screenWidth - edgeMarginPx
-                    val isNearTopEdge = downY < topEdgeMarginPx
-                    val isNearBottomEdge = downY > screenHeight - bottomEdgeMarginPx
+
+                    // Calculate subtitle box boundary based on subPos (0 to 100)
+                    val subCenterY = (subPosPref / 100f) * screenHeight
+                    val subMinY = (subCenterY - 0.18f * screenHeight).coerceAtLeast(0f)
+                    val subMaxY = (subCenterY + 0.10f * screenHeight).coerceAtMost(screenHeight)
+                    val isTouchOnSubtitleBox = hasActiveSubtitles && effectiveSubtitleDrag &&
+                            (downY in subMinY..subMaxY) &&
+                            (downX in (screenWidth * 0.06f)..(screenWidth * 0.94f))
 
                     var activeGesture = ActiveGesture.NONE
                     var longPressTriggered = false
@@ -173,14 +155,27 @@ fun GestureHandler(
                     var lastX = downX
                     var lastY = downY
 
-                    // Launch long press timer only if not locked and no sheet open
-                    val longPressJob: Job? = if (!isLocked && !isAnySheetOpen) {
+                    // Long-press timer: if on subtitle box -> subtitle dragging; else -> fast forward speed
+                    val longPressJob: Job? = if (!isLocked && (!isAnySheetOpen || allowPanelGestures)) {
                         scope.launch {
                             delay(350)
                             if (activeGesture == ActiveGesture.NONE) {
-                                activeGesture = ActiveGesture.LONG_PRESS
-                                longPressTriggered = true
-                                onLongPressStart()
+                                if (isTouchOnSubtitleBox) {
+                                    activeGesture = ActiveGesture.SUBTITLE_POSITION
+                                    longPressTriggered = true
+                                    try {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    } catch (_: Throwable) {}
+                                    onSubtitleDragStart()
+                                    onSubtitlePositionDrag(0f, screenHeight)
+                                } else {
+                                    activeGesture = ActiveGesture.LONG_PRESS
+                                    longPressTriggered = true
+                                    try {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    } catch (_: Throwable) {}
+                                    onLongPressStart()
+                                }
                             }
                         }
                     } else null
@@ -206,7 +201,11 @@ fun GestureHandler(
                                         horizontalSeekStarted = false
                                     }
                                     if (longPressTriggered) {
-                                        onLongPressEnd()
+                                        if (activeGesture == ActiveGesture.SUBTITLE_POSITION) {
+                                            onSubtitleDragEnd()
+                                        } else {
+                                            onLongPressEnd()
+                                        }
                                         longPressTriggered = false
                                     }
                                     activeGesture = if (isPinchAllowed) ActiveGesture.PINCH_ZOOM else ActiveGesture.COMPLETED
@@ -263,15 +262,14 @@ fun GestureHandler(
                                             if (isShortsMode) {
                                                 activeGesture = ActiveGesture.SHORTS_FLIP
                                             } else {
-                                                val isLeftZone = downX < screenWidth * 0.40f
-                                                val isRightZone = downX > screenWidth * 0.60f
+                                                val isLeftZone = downX < screenWidth * 0.45f
+                                                val isRightZone = downX > screenWidth * 0.55f
 
                                                 if (isLeftZone) {
                                                     activeGesture = if (swapVolBright) ActiveGesture.VOLUME else ActiveGesture.BRIGHTNESS
                                                 } else if (isRightZone) {
                                                     activeGesture = if (swapVolBright) ActiveGesture.BRIGHTNESS else ActiveGesture.VOLUME
                                                 } else {
-                                                    // Center zone: normal vertical swipes adjust Volume or Brightness depending on screen side
                                                     activeGesture = if (downX < screenWidth * 0.5f) {
                                                         if (swapVolBright) ActiveGesture.VOLUME else ActiveGesture.BRIGHTNESS
                                                     } else {
@@ -287,16 +285,11 @@ fun GestureHandler(
                             when (activeGesture) {
                                 ActiveGesture.LONG_PRESS -> {
                                     change.consume()
-                                    if (effectiveSubtitleDrag && hasActiveSubtitles && (abs(dy) > abs(dx) * 1.1f || abs(totalDy) > 4.dp.toPx())) {
-                                        if (longPressTriggered) {
-                                            onLongPressEnd()
-                                            longPressTriggered = false
-                                        }
-                                        activeGesture = ActiveGesture.SUBTITLE_POSITION
-                                        onSubtitlePositionDrag(dy, screenHeight)
-                                    } else {
-                                        onLongPressDrag(dx)
-                                    }
+                                    onLongPressDrag(dx)
+                                }
+                                ActiveGesture.SUBTITLE_POSITION -> {
+                                    change.consume()
+                                    onSubtitlePositionDrag(dy, screenHeight)
                                 }
                                 ActiveGesture.HORIZONTAL_SEEK -> {
                                     change.consume()
@@ -321,10 +314,6 @@ fun GestureHandler(
                                         onVerticalVolumeDrag(deltaRatio)
                                     }
                                 }
-                                ActiveGesture.SUBTITLE_POSITION -> {
-                                    change.consume()
-                                    onSubtitlePositionDrag(dy, screenHeight)
-                                }
                                 ActiveGesture.SHORTS_FLIP -> {
                                     change.consume()
                                     val threshold = 80.dp.toPx()
@@ -347,7 +336,9 @@ fun GestureHandler(
                         val totalDist = hypot(totalDx, totalDy)
                         val touchSlop = 18.dp.toPx()
 
-                        if (longPressTriggered) {
+                        if (activeGesture == ActiveGesture.SUBTITLE_POSITION) {
+                            onSubtitleDragEnd()
+                        } else if (longPressTriggered && activeGesture == ActiveGesture.LONG_PRESS) {
                             onLongPressEnd()
                         } else if (horizontalSeekStarted) {
                             onHorizontalDragEnd()
@@ -391,3 +382,4 @@ fun GestureHandler(
         content()
     }
 }
+

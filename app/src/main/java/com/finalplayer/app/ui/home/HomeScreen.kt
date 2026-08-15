@@ -87,6 +87,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     secureFolderViewModel: SecureFolderViewModel = koinViewModel(),
     onFolderClick: (String) -> Unit = {},
+    onVideoClick: (VideoItem, List<VideoItem>, Int) -> Unit = { _, _, _ -> },
     onRecentVideoClick: (String, String) -> Unit = { _, _ -> },
     onShortsVideoClick: (List<com.finalplayer.app.domain.model.VideoItem>, Int) -> Unit = { _, _ -> },
     onPlayButtonClick: () -> Unit = {},
@@ -243,7 +244,8 @@ fun HomeScreen(
                     onPlayClick = {
                         val first = selectedVideos.firstOrNull()
                         if (first != null) {
-                            onRecentVideoClick(first.uri, first.title)
+                            val idx = uiState.allVideos.indexOf(first).coerceAtLeast(0)
+                            onVideoClick(first, uiState.allVideos, idx)
                         }
                     }
                 )
@@ -266,7 +268,7 @@ fun HomeScreen(
             when (uiState.selectedTab) {
                 HomeTab.RECENTS -> {
                     RecentsScreen(
-                        onVideoClick = onRecentVideoClick
+                        onVideoClick = onVideoClick
                     )
                 }
                 HomeTab.SHORTS -> {
@@ -325,7 +327,7 @@ fun HomeScreen(
                                         itemsIndexed(
                                             items = uiState.allVideos,
                                             key = { index, video -> "${video.id}_$index" }
-                                        ) { _, video ->
+                                        ) { index, video ->
                                             VideoListItem(
                                                 video = video,
                                                 isOpened = uiState.playedVideoIds.contains(video.id) || uiState.playedVideoIds.contains(video.uri),
@@ -335,7 +337,7 @@ fun HomeScreen(
                                                     if (isSelectionMode) {
                                                         toggleSelection(video)
                                                     } else {
-                                                        onRecentVideoClick(video.uri, video.title)
+                                                        onVideoClick(video, uiState.allVideos, index)
                                                     }
                                                 },
                                                 onLongClick = {
@@ -365,7 +367,7 @@ fun HomeScreen(
                                         itemsIndexed(
                                             items = uiState.allVideos,
                                             key = { index, video -> "${video.id}_$index" }
-                                        ) { _, video ->
+                                        ) { index, video ->
                                             VideoListItem(
                                                 video = video,
                                                 isOpened = uiState.playedVideoIds.contains(video.id) || uiState.playedVideoIds.contains(video.uri),
@@ -375,7 +377,7 @@ fun HomeScreen(
                                                     if (isSelectionMode) {
                                                         toggleSelection(video)
                                                     } else {
-                                                        onRecentVideoClick(video.uri, video.title)
+                                                        onVideoClick(video, uiState.allVideos, index)
                                                     }
                                                 },
                                                 onLongClick = {
@@ -531,7 +533,8 @@ fun HomeScreen(
             selectedItems = items,
             onDismiss = { contextMenuVideos = null },
             onPlay = { selectedVideo ->
-                onRecentVideoClick(selectedVideo.uri, selectedVideo.title)
+                val idx = uiState.allVideos.indexOf(selectedVideo).coerceAtLeast(0)
+                onVideoClick(selectedVideo, uiState.allVideos, idx)
             },
             onShare = { shareItems ->
                 FileOperationsUtil.shareVideos(context, shareItems)

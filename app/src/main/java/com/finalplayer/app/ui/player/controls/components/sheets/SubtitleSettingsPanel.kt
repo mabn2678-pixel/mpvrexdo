@@ -189,16 +189,19 @@ fun SubtitleSettingsPanel(
                         fontSize = fontSize,
                         onFontSizeChange = { size ->
                             fontSize = size
-                            val fontScale = size / 55.0f
                             MPVLib.setPropertyInt("sub-font-size", size)
                             MPVLib.setOptionString("sub-font-size", size.toString())
-                            MPVLib.setPropertyFloat("sub-scale", fontScale)
-                            MPVLib.setOptionString("sub-scale", fontScale.toString())
+                            MPVLib.setPropertyFloat("sub-scale", 1.0f)
+                            MPVLib.setOptionString("sub-scale", "1.0")
+                            MPVLib.setPropertyString("sub-scale-by-window", "yes")
+                            MPVLib.setOptionString("sub-scale-by-window", "yes")
+                            MPVLib.setPropertyString("sub-scale-with-window", "yes")
+                            MPVLib.setOptionString("sub-scale-with-window", "yes")
                             MPVLib.setPropertyString("sub-ass-override", "force")
                             MPVLib.setOptionString("sub-ass-override", "force")
                             coroutineScope.launch {
                                 subPrefs.fontSize.set(size)
-                                subPrefs.subScale.set(fontScale)
+                                subPrefs.subScale.set(1.0f)
                                 subPrefs.overrideAssSubs.set(true)
                             }
                         },
@@ -727,9 +730,8 @@ private fun applyTypographyToMPV(
     // sub-font-size & sub-scale: حجم الخط المطبق ونسبة التكبير
     MPVLib.setPropertyInt("sub-font-size", fontSize)
     MPVLib.setOptionString("sub-font-size", fontSize.toString())
-    val fontScale = fontSize / 55.0f
-    MPVLib.setPropertyFloat("sub-scale", fontScale)
-    MPVLib.setOptionString("sub-scale", fontScale.toString())
+    MPVLib.setPropertyFloat("sub-scale", 1.0f)
+    MPVLib.setOptionString("sub-scale", "1.0")
 
     // sub-outline-size: حجم الحدود (0..20)
     MPVLib.setPropertyInt("sub-outline-size", borderSize)

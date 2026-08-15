@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -58,7 +59,7 @@ import org.koin.androidx.compose.koinViewModel
 fun SearchScreen(
     viewModel: SearchViewModel = koinViewModel(),
     onBack: () -> Unit,
-    onVideoClick: (videoId: String, title: String) -> Unit,
+    onVideoClick: (VideoItem, List<VideoItem>, Int) -> Unit,
     onFolderClick: (folderPath: String) -> Unit = {}
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
@@ -169,14 +170,14 @@ fun SearchScreen(
                             modifier = Modifier.padding(vertical = 8.dp)
                         )
                     }
-                    items(
+                    itemsIndexed(
                         items = searchResults.videos,
-                        key = { v -> "video_${v.id}" }
-                    ) { video ->
+                        key = { index, v -> "video_${v.id}_$index" }
+                    ) { index, video ->
                         SearchResultVideoCard(
                             video = video,
                             query = query,
-                            onClick = { onVideoClick(video.id, video.title) }
+                            onClick = { onVideoClick(video, searchResults.videos, index) }
                         )
                     }
                 }

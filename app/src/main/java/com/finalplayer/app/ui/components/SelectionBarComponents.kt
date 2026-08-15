@@ -53,7 +53,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SelectionTopAppBar(
     totalCount: Int,
@@ -61,56 +60,75 @@ fun SelectionTopAppBar(
     isAllSelected: Boolean,
     onToggleSelectAll: () -> Unit,
     onInfoClick: () -> Unit,
-    onMoreOptionsClick: () -> Unit,
+    onMoreOptionsClick: (() -> Unit)? = null,
     onCloseClick: () -> Unit
 ) {
-    TopAppBar(
-        title = {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 3.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left Action: Select/Deselect All (dashed selection square)
+            IconButton(
+                onClick = onToggleSelectAll,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.SelectAll,
+                    contentDescription = if (isAllSelected) "إلغاء تحديد الكل" else "تحديد الكل",
+                    tint = if (isAllSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            // Left Action: Info icon (circle-i)
+            IconButton(
+                onClick = onInfoClick,
+                modifier = Modifier.size(44.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = "معلومات",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Right side: Selected counter text (e.g. selected 25 / 1)
             Text(
                 text = "selected $totalCount / $selectedCount",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
+                    fontSize = 22.sp
                 ),
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(end = 4.dp)
             )
-        },
-        navigationIcon = {
-            IconButton(onClick = onToggleSelectAll) {
-                Icon(
-                    imageVector = if (isAllSelected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
-                    contentDescription = if (isAllSelected) "إلغاء تحديد الكل" else "تحديد الكل",
-                    tint = if (isAllSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        actions = {
-            IconButton(onClick = onInfoClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = "معلومات",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            IconButton(onClick = onMoreOptionsClick) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "المزيد من الخيارات",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            IconButton(onClick = onCloseClick) {
+
+            // Right side: Close 'X' button
+            IconButton(
+                onClick = onCloseClick,
+                modifier = Modifier.size(44.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "إلغاء التحديد",
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(28.dp)
                 )
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
-    )
+        }
+    }
 }
 
 @Composable

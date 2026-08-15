@@ -34,13 +34,35 @@ class VideoRepositoryImpl(
     }
 
     override fun getSecureVideos(): Flow<List<VideoItem>> {
-        return videoDao.getAllVideos()
-            .combine(secureMediaDao.getAllSecureVideoIds()) { videos, secureIds ->
-                val secureSet = secureIds.toSet()
-                videos
-                    .filter { it.id in secureSet }
-                    .map { it.toDomainModel() }
+        return secureMediaDao.getAllSecureMedia().map { entities ->
+            entities.map { entity ->
+                val displayUri = if (entity.vaultPath.isNotBlank() && File(entity.vaultPath).exists()) {
+                    entity.vaultPath
+                } else if (entity.originalPath.isNotBlank() && File(entity.originalPath).exists()) {
+                    entity.originalPath
+                } else {
+                    entity.vaultPath.ifBlank { entity.originalPath }
+                }
+
+                val displayTitle = if (entity.title.isNotBlank()) {
+                    entity.title
+                } else {
+                    File(entity.originalPath).name.ifBlank { "فيديو محمي" }
+                }
+
+                VideoItem(
+                    id = entity.videoId,
+                    uri = displayUri,
+                    title = displayTitle,
+                    duration = entity.duration,
+                    sizeBytes = entity.sizeBytes,
+                    thumbnailPath = displayUri,
+                    dateAdded = entity.dateAdded,
+                    resolution = entity.resolution,
+                    folderPath = "المجلد الآمن"
+                )
             }
+        }
     }
 
     override fun getVideosByFolder(folderPath: String): Flow<List<VideoItem>> {
@@ -102,17 +124,131 @@ class VideoRepositoryImpl(
 
     override suspend fun hideVideosToSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
         return try {
-            val files = videos.map { FileOperationsUtil.getVideoFile(it) }
-            FileOperationsUtil.hideFiles(context, files)
+            val vaultDir = File(context.filesDir, ".secure_vault").apply { mkdirs() }
+            val nomediaFile = File(vaultDir, ".nomedia")
+            if (!nomediaFile.exists()) {
+                try { nomediaFile.createNewFile() } catch (_: Exception) {}
+            }
+
             for (video in videos) {
-                val fullPath = if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
+                val originalFile = FileOperationsUtil.getVideoFile(video)
+                val originalPathStr = if (originalFile.exists()) originalFile.absolutePath else if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
+                
+                val safeFileName = (if (originalFile.exists()) originalFile.name else video.title).replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val safeId = video.id.replace(Regex("[^a-zA-Z0-9_]"), "_")
+                val vaultFile = File(vaultDir, "${safeId}_$safeFileName")
+
+                var finalVaultPath = originalPathStr
+                if (originalFile.exists()) {
+                    val moved = if (originalFile.renameTo(vaultFile)) {
+                        true
+                    } else {
+                        try {
+                            originalFile.inputStream().use { input ->
+                                vaultFile.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            originalFile.delete()
+                            true
+                        } catch (e: Exception) {
+                            false
+                        }
+                    }
+
+                    if (moved && vaultFile.exists()) {
+                        finalVaultPath = vaultFile.absolutePath
+                        try {
+                            android.media.MediaScannerConnection.scanFile(
+                                context,
+                                arrayOf(originalFile.absolutePath),
+                                null,
+                                null
+                            )
+                        } catch (_: Exception) {}
+                    }
+                }
+
+                val actualSize = if (File(finalVaultPath).exists()) File(finalVaultPath).length() else video.sizeBytes
+
                 secureMediaDao.insert(
                     SecureMediaEntity(
                         videoId = video.id,
-                        originalPath = fullPath
+                        title = video.title,
+                        vaultPath = finalVaultPath,
+                        originalPath = originalPathStr,
+                        duration = video.duration,
+                        sizeBytes = actualSize,
+                        dateAdded = video.dateAdded,
+                        resolution = video.resolution,
+                        folderPath = video.folderPath,
+                        addedAt = System.currentTimeMillis()
                     )
                 )
+
+                // Remove from regular video database
+                videoDao.deleteVideo(video.id)
             }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun restoreVideoFromSecureFolder(videoId: String, context: android.content.Context): Result<Unit> {
+        return try {
+            val entity = secureMediaDao.getByVideoId(videoId) ?: return Result.failure(Exception("الملف غير موجود في المجلد الآمن"))
+            val vaultFile = File(entity.vaultPath)
+            val originalTargetFile = File(entity.originalPath)
+            val parent = originalTargetFile.parentFile ?: android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+            if (!parent.exists()) {
+                parent.mkdirs()
+            }
+            val destinationFile = File(parent, originalTargetFile.name.removePrefix("."))
+
+            if (vaultFile.exists()) {
+                val restored = if (vaultFile.renameTo(destinationFile)) {
+                    true
+                } else {
+                    try {
+                        vaultFile.inputStream().use { input ->
+                            destinationFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        vaultFile.delete()
+                        true
+                    } catch (e: Exception) {
+                        false
+                    }
+                }
+
+                if (restored && destinationFile.exists()) {
+                    try {
+                        android.media.MediaScannerConnection.scanFile(
+                            context,
+                            arrayOf(destinationFile.absolutePath),
+                            null,
+                            null
+                        )
+                    } catch (_: Exception) {}
+
+                    val videoEntity = com.finalplayer.app.data.database.entities.VideoEntity(
+                        id = entity.videoId,
+                        title = entity.title.ifBlank { destinationFile.name },
+                        uri = destinationFile.absolutePath,
+                        duration = entity.duration,
+                        sizeBytes = destinationFile.length(),
+                        dateAdded = if (entity.dateAdded > 0) entity.dateAdded else (System.currentTimeMillis() / 1000L),
+                        resolution = entity.resolution,
+                        folderPath = parent.absolutePath,
+                        mimeType = "video/*"
+                    )
+                    videoDao.insertVideos(listOf(videoEntity))
+                }
+            }
+
+            secureMediaDao.remove(videoId)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

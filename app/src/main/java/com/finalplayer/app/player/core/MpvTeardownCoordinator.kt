@@ -68,6 +68,9 @@ object MpvTeardownCoordinator {
     }
 
     private fun destroyNativeCore(view: MPVView?) {
+        try {
+            MPVView.stopAll()
+        } catch (_: Throwable) {}
         if (view == null) return
         try {
             Log.d(TAG, "Pausing MPV player before teardown")
@@ -80,10 +83,11 @@ object MpvTeardownCoordinator {
             view.detachSurface()
 
             Log.d(TAG, "Sending quit command to MPV")
+            view.command(arrayOf("stop"))
             view.command(arrayOf("quit"))
 
             // Allow short window for commands to drain
-            Thread.sleep(200)
+            Thread.sleep(100)
 
             Log.d(TAG, "Calling MPV destroy")
             view.destroy()

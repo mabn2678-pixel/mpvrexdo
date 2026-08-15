@@ -56,6 +56,9 @@ class MPVView @JvmOverloads constructor(
                     initOptions(configDir, lib)
                     lib.init()
                     isInitialized = true
+                    synchronized(activeInstances) {
+                        activeInstances.add(this)
+                    }
                     Log.d(TAG, "MPVLib initialized successfully")
 
                     if (isSurfaceReady) {
@@ -223,9 +226,9 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("sub-use-margins", "yes")
             lib.setOptionString("blend-subtitles", "no")
             lib.setOptionString("sub-margin-y", "5")
-            lib.setOptionString("sub-scale-by-window", "no")
-            lib.setOptionString("sub-scale-with-window", "no")
-            lib.setOptionString("sub-ass-scale-with-window", "no")
+            lib.setOptionString("sub-scale-by-window", "yes")
+            lib.setOptionString("sub-scale-with-window", "yes")
+            lib.setOptionString("sub-ass-scale-with-window", "yes")
             lib.setOptionString("sub-font-size", "55")
             lib.setOptionString("sub-scale", "1.0")
             lib.setOptionString("sub-pos", "100")
@@ -485,12 +488,16 @@ class MPVView @JvmOverloads constructor(
         val libToDestroy = synchronized(this) {
             if (!isInitialized) return
             isInitialized = false
+            synchronized(activeInstances) {
+                activeInstances.remove(this)
+            }
             val lib = mpvLib
             mpvLib = null
             lib
         } ?: return
 
         try {
+            libToDestroy.command(arrayOf("stop"))
             libToDestroy.detachSurface()
             libToDestroy.destroy()
             Log.d(TAG, "MPVLib destroyed")
@@ -532,5 +539,19 @@ class MPVView @JvmOverloads constructor(
 
     companion object {
         private const val TAG = "MPVView"
+        private val activeInstances = java.util.Collections.newSetFromMap(java.util.WeakHashMap<MPVView, Boolean>())
+
+        fun stopAll() {
+            synchronized(activeInstances) {
+                val copy = ArrayList(activeInstances)
+                for (view in copy) {
+                    try {
+                        view.stop()
+                        view.destroy()
+                    } catch (_: Throwable) {}
+                }
+                activeInstances.clear()
+            }
+        }
     }
 }

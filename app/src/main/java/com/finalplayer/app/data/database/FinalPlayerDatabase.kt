@@ -17,7 +17,7 @@ import com.finalplayer.app.data.database.entities.VideoEntity
         PlaybackProgressEntity::class,
         SecureMediaEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class FinalPlayerDatabase : RoomDatabase() {
