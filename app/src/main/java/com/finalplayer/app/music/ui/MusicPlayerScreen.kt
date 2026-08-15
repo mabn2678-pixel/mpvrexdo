@@ -79,8 +79,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.palette.graphics.Palette
-import coil.ImageLoader
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import kotlinx.coroutines.Dispatchers
@@ -183,7 +183,7 @@ fun MusicPlayerScreen(
 
             if (model != null) {
                 try {
-                    val imageLoader = ImageLoader(context)
+                    val imageLoader = context.imageLoader
                     val request = ImageRequest.Builder(context)
                         .data(model)
                         .allowHardware(false)

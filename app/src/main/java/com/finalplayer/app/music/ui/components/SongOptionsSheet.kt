@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Delete
@@ -22,12 +23,11 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Queue
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -123,7 +123,7 @@ fun SongOptionsSheet(
                 }
             }
 
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             // Options List
             SheetOptionItem(
@@ -145,7 +145,7 @@ fun SongOptionsSheet(
             )
 
             SheetOptionItem(
-                icon = Icons.Default.PlaylistAdd,
+                icon = Icons.AutoMirrored.Filled.PlaylistAdd,
                 title = "إضافة إلى قائمة تشغيل",
                 onClick = {
                     showPlaylistSheet = true
@@ -375,7 +375,7 @@ fun PlaylistPickerSheet(
                 )
             }
 
-            Divider()
+            HorizontalDivider()
 
             LazyColumn {
                 items(playlists) { playlist ->
@@ -398,7 +398,7 @@ fun PlaylistPickerSheet(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Default.PlaylistAdd,
+                            Icons.AutoMirrored.Filled.PlaylistAdd,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
