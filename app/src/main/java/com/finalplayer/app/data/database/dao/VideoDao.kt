@@ -39,6 +39,9 @@ interface VideoDao {
     @Query("SELECT DISTINCT folderPath FROM videos")
     fun getDistinctFolders(): Flow<List<String>>
 
+    @Query("SELECT * FROM videos WHERE duration <= 0")
+    suspend fun getZeroDurationVideos(): List<VideoEntity>
+
     @Query("""
         SELECT * FROM videos 
         WHERE title LIKE :query OR folderPath LIKE :query

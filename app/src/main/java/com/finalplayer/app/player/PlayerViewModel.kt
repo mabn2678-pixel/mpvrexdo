@@ -869,7 +869,8 @@ class PlayerViewModel(
     fun onSubtitleDragStart() {
         _isSubtitleBoxDragging.value = true
         subPosHideJob?.cancel()
-        val current = currentSubPosFloat.toInt()
+        val current = _currentSubPos.value
+        currentSubPosFloat = current.toFloat()
         _subPosOverlayText.value = "موضع الترجمة: $current%"
     }
 
@@ -879,6 +880,12 @@ class PlayerViewModel(
         subPosHideJob = viewModelScope.launch {
             delay(1200)
             _subPosOverlayText.value = null
+        }
+        val finalPos = _currentSubPos.value
+        subtitlesPrefs?.let { prefs ->
+            viewModelScope.launch {
+                prefs.subPos.set(finalPos)
+            }
         }
     }
 
@@ -892,25 +899,11 @@ class PlayerViewModel(
         val percentDelta = (pixelDeltaY / h) * 100f
         currentSubPosFloat = (currentSubPosFloat + percentDelta).coerceIn(0f, 100f)
         val newPos = currentSubPosFloat.toInt()
-        _currentSubPos.value = newPos
-
-        MPVLib.setPropertyString("blend-subtitles", "no")
-        MPVLib.setOptionString("blend-subtitles", "no")
-        MPVLib.setPropertyString("sub-use-margins", "yes")
-        MPVLib.setOptionString("sub-use-margins", "yes")
-        MPVLib.setPropertyInt("sub-margin-y", 5)
-        MPVLib.setOptionString("sub-margin-y", "5")
-        MPVLib.setPropertyInt("sub-pos", newPos)
-        MPVLib.setOptionString("sub-pos", newPos.toString())
-
-        _subPosOverlayText.value = "موضع الترجمة: $newPos%"
-
-        subPosHideJob?.cancel()
-
-        subtitlesPrefs?.let { prefs ->
-            viewModelScope.launch {
-                prefs.subPos.set(newPos)
-            }
+        
+        if (newPos != _currentSubPos.value) {
+            _currentSubPos.value = newPos
+            MPVLib.setPropertyInt("sub-pos", newPos)
+            _subPosOverlayText.value = "موضع الترجمة: $newPos%"
         }
     }
 

@@ -72,12 +72,18 @@ class MediaStoreVideoScanner(private val context: Context) {
                     val resolution = if (width > 0 && height > 0) "${width}x${height}" else null
                     val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id).toString()
 
+                    val finalDuration = if (duration > 0L) {
+                        duration
+                    } else {
+                        extractDurationForVideo(fullPath, uri)
+                    }
+
                     videoList.add(
                         VideoEntity(
                             id = id.toString(),
                             uri = uri,
                             title = title,
-                            duration = duration,
+                            duration = finalDuration,
                             sizeBytes = sizeBytes,
                             thumbnailPath = null,
                             dateAdded = trueDateAdded,
@@ -172,11 +178,12 @@ class MediaStoreVideoScanner(private val context: Context) {
                             unindexedFiles.add(file)
 
                             val parentPath = file.parent ?: "/storage/emulated/0"
+                            val fileDuration = extractDurationForVideo(path, "")
                             val entity = VideoEntity(
                                 id = "file_${path.hashCode()}",
                                 uri = file.absolutePath,
                                 title = file.name,
-                                duration = 0L,
+                                duration = fileDuration,
                                 sizeBytes = file.length(),
                                 thumbnailPath = null,
                                 dateAdded = file.lastModified() / 1000L,
@@ -200,6 +207,28 @@ class MediaStoreVideoScanner(private val context: Context) {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    fun extractDurationForVideo(filePath: String?, uriString: String): Long {
+        var retriever: android.media.MediaMetadataRetriever? = null
+        return try {
+            retriever = android.media.MediaMetadataRetriever()
+            if (!filePath.isNullOrEmpty() && File(filePath).exists()) {
+                retriever.setDataSource(filePath)
+            } else if (uriString.isNotEmpty()) {
+                retriever.setDataSource(context, android.net.Uri.parse(uriString))
+            } else {
+                return 0L
+            }
+            val durStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+            durStr?.toLongOrNull() ?: 0L
+        } catch (_: Throwable) {
+            0L
+        } finally {
+            try {
+                retriever?.release()
+            } catch (_: Throwable) {}
         }
     }
 }

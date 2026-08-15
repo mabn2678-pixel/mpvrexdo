@@ -293,7 +293,7 @@ fun MusicLibraryScreen(
             if (isSelectionMode) {
                 SelectionBottomActionBar(
                     selectedCount = selectedSongs.size,
-                    onTagClick = {
+                    onHideClick = {
                         if (selectedSongs.isNotEmpty()) {
                             showPlaylistPickerSheet = true
                         }

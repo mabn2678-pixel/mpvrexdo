@@ -113,6 +113,21 @@ class VideoRepositoryImpl(
         if (scannedVideos.isNotEmpty()) {
             videoDao.insertVideos(scannedVideos)
             videoDao.deleteMissingVideos(scannedVideos.map { it.id })
+            
+            try {
+                val zeroDurationList = videoDao.getZeroDurationVideos()
+                if (zeroDurationList.isNotEmpty()) {
+                    val repaired = zeroDurationList.mapNotNull { entity ->
+                        val f = if (entity.uri.startsWith("content://")) null else File(entity.uri)
+                        val path = f?.absolutePath ?: if (entity.folderPath.isNotBlank()) "${entity.folderPath}/${entity.title}" else ""
+                        val dur = mediaStoreScanner.extractDurationForVideo(path, entity.uri)
+                        if (dur > 0L) entity.copy(duration = dur) else null
+                    }
+                    if (repaired.isNotEmpty()) {
+                        videoDao.insertVideos(repaired)
+                    }
+                }
+            } catch (_: Throwable) {}
         } else {
             videoDao.clearAllVideos()
         }
@@ -249,6 +264,39 @@ class VideoRepositoryImpl(
             }
 
             secureMediaDao.remove(videoId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun restoreVideosFromSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
+        return try {
+            for (video in videos) {
+                restoreVideoFromSecureFolder(video.id, context)
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun deleteSecureVideos(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
+        return try {
+            for (video in videos) {
+                val entity = secureMediaDao.getByVideoId(video.id)
+                if (entity != null) {
+                    if (entity.vaultPath.isNotBlank()) {
+                        val vf = File(entity.vaultPath)
+                        if (vf.exists()) vf.delete()
+                    }
+                    secureMediaDao.remove(video.id)
+                } else {
+                    val f = File(video.uri)
+                    if (f.exists()) f.delete()
+                    secureMediaDao.remove(video.id)
+                }
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

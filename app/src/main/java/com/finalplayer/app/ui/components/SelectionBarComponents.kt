@@ -53,6 +53,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+
 @Composable
 fun SelectionTopAppBar(
     totalCount: Int,
@@ -61,16 +65,18 @@ fun SelectionTopAppBar(
     onToggleSelectAll: () -> Unit,
     onInfoClick: () -> Unit,
     onMoreOptionsClick: (() -> Unit)? = null,
-    onCloseClick: () -> Unit
+    onCloseClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 3.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -109,7 +115,7 @@ fun SelectionTopAppBar(
                 text = "selected $totalCount / $selectedCount",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp
+                    fontSize = 20.sp
                 ),
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(end = 4.dp)
@@ -134,7 +140,7 @@ fun SelectionTopAppBar(
 @Composable
 fun SelectionBottomActionBar(
     selectedCount: Int,
-    onTagClick: () -> Unit,
+    onHideClick: () -> Unit,
     onShareClick: () -> Unit,
     onRenameClick: () -> Unit,
     onDeleteClick: () -> Unit,
@@ -163,9 +169,9 @@ fun SelectionBottomActionBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SelectionActionItem(
-                    icon = Icons.Outlined.LocalOffer,
-                    label = "وسم",
-                    onClick = onTagClick
+                    icon = Icons.Default.Lock,
+                    label = "إخفاء",
+                    onClick = onHideClick
                 )
                 SelectionActionItem(
                     icon = Icons.Default.Share,
@@ -198,6 +204,61 @@ fun SelectionBottomActionBar(
                     icon = Icons.Default.PlayArrow,
                     label = "FeedPlay",
                     tint = MaterialTheme.colorScheme.primary,
+                    onClick = onPlayClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SecureSelectionBottomActionBar(
+    selectedCount: Int,
+    onRestoreClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onPlayClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 8.dp,
+        shadowElevation = 8.dp
+    ) {
+        Column(modifier = Modifier.navigationBarsPadding()) {
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                thickness = 1.dp
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SelectionActionItem(
+                    icon = Icons.Default.LockOpen,
+                    label = "استعادة للهاتف",
+                    tint = MaterialTheme.colorScheme.primary,
+                    onClick = onRestoreClick
+                )
+                SelectionActionItem(
+                    icon = Icons.Default.Share,
+                    label = "مشاركة",
+                    onClick = onShareClick
+                )
+                SelectionActionItem(
+                    icon = Icons.Default.Delete,
+                    label = "حذف نهائي",
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = onDeleteClick
+                )
+                SelectionActionItem(
+                    icon = Icons.Default.PlayArrow,
+                    label = "تشغيل",
+                    tint = MaterialTheme.colorScheme.secondary,
                     onClick = onPlayClick
                 )
             }

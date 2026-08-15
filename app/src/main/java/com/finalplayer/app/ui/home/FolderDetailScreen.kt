@@ -238,14 +238,13 @@ fun FolderDetailScreen(
             if (isSelectionMode) {
                 SelectionBottomActionBar(
                     selectedCount = selectedVideos.size,
-                    onTagClick = {
-                        val first = selectedVideos.firstOrNull()
-                        if (first != null) {
-                            coroutineScope.launch {
-                                val file = FileOperationsUtil.getVideoFile(first)
-                                fileInfoForDialog = FileOperationsUtil.getFileInfo(file, first)
-                                showInfoDialog = true
+                    onHideClick = {
+                        if (selectedVideos.isNotEmpty()) {
+                            val items = selectedVideos.toList()
+                            viewModel.hideVideosToSecureFolder(items, context) { _, message ->
+                                coroutineScope.launch { snackbarHostState.showSnackbar(message) }
                             }
+                            selectedVideos = emptySet()
                         }
                     },
                     onShareClick = {

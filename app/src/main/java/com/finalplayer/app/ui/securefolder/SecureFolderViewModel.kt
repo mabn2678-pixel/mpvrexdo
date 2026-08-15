@@ -175,6 +175,28 @@ class SecureFolderViewModel(
         }
     }
 
+    fun restoreVideosFromSecureFolder(videos: List<VideoItem>, context: android.content.Context, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            val result = videoRepository.restoreVideosFromSecureFolder(videos, context)
+            if (result.isSuccess) {
+                onResult(true, "تمت استعادة ${videos.size} عنصر بنجاح إلى هاتفك")
+            } else {
+                onResult(false, result.exceptionOrNull()?.localizedMessage ?: "حدث خطأ أثناء استعادة العناصر")
+            }
+        }
+    }
+
+    fun deleteSecureVideos(videos: List<VideoItem>, context: android.content.Context, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            val result = videoRepository.deleteSecureVideos(videos, context)
+            if (result.isSuccess) {
+                onResult(true, "تم حذف ${videos.size} عنصر نهائياً")
+            } else {
+                onResult(false, result.exceptionOrNull()?.localizedMessage ?: "حدث خطأ أثناء الحذف")
+            }
+        }
+    }
+
     suspend fun isSecure(videoId: String): Boolean =
         secureMediaDao.isSecure(videoId)
 

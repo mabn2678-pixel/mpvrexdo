@@ -1,7 +1,10 @@
 package com.finalplayer.app.ui.securefolder.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,8 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayCircleFilled
@@ -45,10 +50,14 @@ import com.finalplayer.app.domain.model.VideoItem
 import com.finalplayer.app.ui.components.VideoThumbnailImage
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SecureVideoItem(
     video: VideoItem,
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onRemove: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -56,11 +65,29 @@ fun SecureVideoItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .then(
+                if (isSelectionMode) {
+                    Modifier.clickable(onClick = onClick)
+                } else if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isSelected)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
+            else
+                MaterialTheme.colorScheme.surface
         ),
+        border = if (isSelected)
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        else
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
@@ -100,6 +127,28 @@ fun SecureVideoItem(
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                         )
+                    }
+                }
+
+                if (isSelected) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "محدد",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(3.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -142,49 +191,55 @@ fun SecureVideoItem(
             }
 
             // Actions Menu
-            Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "خيارات",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            if (!isSelectionMode) {
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "خيارات",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("تشغيل الفيديو") },
-                        onClick = {
-                            showMenu = false
-                            onClick()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.PlayCircleFilled, null, tint = MaterialTheme.colorScheme.primary)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("إلغاء الإخفاء واستعادة إلى الهاتف") },
-                        onClick = {
-                            showMenu = false
-                            onRemove()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.tertiary)
-                        }
-                    )
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("تشغيل الفيديو") },
+                            onClick = {
+                                showMenu = false
+                                onClick()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.PlayCircleFilled, null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("إلغاء الإخفاء واستعادة إلى الهاتف") },
+                            onClick = {
+                                showMenu = false
+                                onRemove()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.tertiary)
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SecureVideoGridItem(
     video: VideoItem,
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onRemove: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -193,11 +248,29 @@ fun SecureVideoGridItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(4.dp)
-            .clickable(onClick = onClick),
+            .then(
+                if (isSelectionMode) {
+                    Modifier.clickable(onClick = onClick)
+                } else if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                }
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isSelected)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
+            else
+                MaterialTheme.colorScheme.surface
         ),
+        border = if (isSelected)
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        else
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -239,49 +312,73 @@ fun SecureVideoGridItem(
                     }
                 }
 
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(2.dp)
-                ) {
+                if (isSelected) {
                     Surface(
-                        shape = RoundedCornerShape(50),
-                        color = Color.Black.copy(alpha = 0.5f)
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.padding(4.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "محدد",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(4.dp)
+                                )
+                            }
+                        }
                     }
                 }
 
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("تشغيل الفيديو") },
-                        onClick = {
-                            showMenu = false
-                            onClick()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.PlayCircleFilled, null, tint = MaterialTheme.colorScheme.primary)
+                if (!isSelectionMode) {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(2.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color.Black.copy(alpha = 0.5f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.padding(4.dp)
+                            )
                         }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("إلغاء الإخفاء واستعادة إلى الهاتف") },
-                        onClick = {
-                            showMenu = false
-                            onRemove()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.tertiary)
-                        }
-                    )
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("تشغيل الفيديو") },
+                            onClick = {
+                                showMenu = false
+                                onClick()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.PlayCircleFilled, null, tint = MaterialTheme.colorScheme.primary)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("إلغاء الإخفاء واستعادة إلى الهاتف") },
+                            onClick = {
+                                showMenu = false
+                                onRemove()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.tertiary)
+                            }
+                        )
+                    }
                 }
             }
 
