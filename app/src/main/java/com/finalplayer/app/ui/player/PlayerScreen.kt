@@ -22,9 +22,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.finalplayer.app.player.core.MPVLib
 import com.finalplayer.app.player.PlayerActivity
 import com.finalplayer.app.player.PlayerViewModel
 import com.finalplayer.app.player.core.MPVView
@@ -40,6 +45,38 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val configuration = LocalConfiguration.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(configuration.orientation) {
+        val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+        viewModel.adjustSubtitleScaleForOrientation(isPortrait)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_DESTROY) {
+                if (activity?.isFinishing == true) {
+                    try {
+                        viewModel.pause()
+                        MPVLib.command("stop")
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            if (activity?.isFinishing == true) {
+                try {
+                    viewModel.pause()
+                    MPVLib.command("stop")
+                } catch (_: Exception) {}
+            }
+        }
+    }
 
     val isPaused by viewModel.paused.collectAsStateWithLifecycle()
     val positionSeconds by viewModel.precisePosition.collectAsStateWithLifecycle()

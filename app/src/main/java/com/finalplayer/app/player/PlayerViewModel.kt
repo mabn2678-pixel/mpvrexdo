@@ -703,11 +703,15 @@ class PlayerViewModel(
             MPVLib.setPropertyString("sub-auto", if (autoLoad) "fuzzy" else "no")
             MPVLib.setOptionString("sub-auto", if (autoLoad) "fuzzy" else "no")
 
-            val scaleVal = "yes"
+            val scaleVal = "no"
             MPVLib.setPropertyString("sub-scale-by-window", scaleVal)
             MPVLib.setOptionString("sub-scale-by-window", scaleVal)
             MPVLib.setPropertyString("sub-scale-with-window", scaleVal)
             MPVLib.setOptionString("sub-scale-with-window", scaleVal)
+            MPVLib.setPropertyString("sub-ass-scale-with-window", "no")
+            MPVLib.setOptionString("sub-ass-scale-with-window", "no")
+            MPVLib.setPropertyString("sub-ass-override", "force")
+            MPVLib.setOptionString("sub-ass-override", "force")
 
             if (fontsDir.isNotBlank()) {
                 MPVLib.setPropertyString("sub-fonts-dir", fontsDir)
@@ -831,6 +835,34 @@ class PlayerViewModel(
 
     fun updateSubPositionByDelta(deltaYPx: Float, screenHeightPx: Float = 1000f) {
         handleSubtitleVerticalDrag(deltaYPx, screenHeightPx)
+    }
+
+    fun adjustSubtitleScaleForOrientation(isPortrait: Boolean) {
+        try {
+            val baseFontSize = subtitlesPrefs?.fontSize?.get() ?: 55
+            val baseScale = baseFontSize / 55.0
+            val orientationMultiplier = if (isPortrait) 0.5 else 1.0
+            val finalScale = baseScale * orientationMultiplier
+            try {
+                MPVLib.setPropertyDouble("sub-scale", finalScale)
+            } catch (_: Throwable) {}
+            try {
+                MPVLib.setPropertyFloat("sub-scale", finalScale.toFloat())
+                MPVLib.setOptionString("sub-scale", finalScale.toString())
+            } catch (_: Throwable) {}
+            try {
+                MPVLib.setPropertyString("sub-scale-by-window", "no")
+                MPVLib.setOptionString("sub-scale-by-window", "no")
+                MPVLib.setPropertyString("sub-scale-with-window", "no")
+                MPVLib.setOptionString("sub-scale-with-window", "no")
+                MPVLib.setPropertyString("sub-ass-scale-with-window", "no")
+                MPVLib.setOptionString("sub-ass-scale-with-window", "no")
+                MPVLib.setPropertyString("sub-ass-override", "force")
+                MPVLib.setOptionString("sub-ass-override", "force")
+            } catch (_: Throwable) {}
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun observePreferencesAndApply() {

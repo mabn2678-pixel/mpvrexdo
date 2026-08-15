@@ -425,6 +425,9 @@ class PlayerActivity : ComponentActivity() {
                 if (isFinishing) {
                     closedFromPipMode = true
                     viewModel.pause()
+                    try {
+                        com.finalplayer.app.player.core.MPVLib.command("stop")
+                    } catch (_: Exception) {}
                     viewModel.setBackgroundPlay(false)
                     MediaPlaybackService.stopService(applicationContext)
                     finish()
@@ -509,8 +512,11 @@ class PlayerActivity : ComponentActivity() {
             }
         }
         val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
-        if (!hasActiveSleepTimer) {
+        if (!hasActiveSleepTimer || isFinishing) {
             viewModel.pause()
+            try {
+                com.finalplayer.app.player.core.MPVLib.command("stop")
+            } catch (_: Exception) {}
             viewModel.setBackgroundPlay(false)
             MediaPlaybackService.stopService(applicationContext)
             val mpvView = viewModel.mpvController.getAttachedView()
