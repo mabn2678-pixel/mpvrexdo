@@ -586,23 +586,41 @@ fun VideoListItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Text Details Column (Title + Chips + Subtitle languages)
             Column(
                 modifier = Modifier.weight(1f)
             ) {
+                // Dynamic font sizing based on title length so long titles fit completely
+                val titleLength = video.title.length
+                val titleFontSize = when {
+                    titleLength > 55 -> 11.5.sp
+                    titleLength > 40 -> 12.5.sp
+                    titleLength > 25 -> 13.5.sp
+                    else -> 15.sp
+                }
+                val titleLineHeight = when {
+                    titleLength > 55 -> 15.sp
+                    titleLength > 40 -> 16.5.sp
+                    titleLength > 25 -> 18.sp
+                    else -> 20.sp
+                }
+
                 Text(
                     text = video.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = titleFontSize,
+                        lineHeight = titleLineHeight
+                    ),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 AppFlowRow(
                     horizontalSpacing = 4.dp,
@@ -637,13 +655,13 @@ fun VideoListItem(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Thumbnail with Duration Overlay & Status Badge & Selection Overlay
             Box(
                 modifier = Modifier
-                    .width(110.dp)
-                    .height(68.dp)
+                    .width(108.dp)
+                    .height(66.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
@@ -706,12 +724,12 @@ fun VideoListItem(
                 }
             }
 
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(2.dp))
 
-            // 3-dots button on the other side of the thumbnail
+            // 3-dots button placed right next to the thumbnail
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .combinedClickable(
                         onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },

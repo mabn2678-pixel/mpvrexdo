@@ -58,32 +58,30 @@ fun PlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_DESTROY) {
                 val hasSleepTimer = viewModel.remainingTime.value > 0
-                if (activity?.isFinishing == true || !hasSleepTimer) {
+                val isBackgroundPlay = viewModel.isBackgroundPlay.value
+                if (activity?.isFinishing == true) {
                     try {
                         viewModel.pause()
                         viewModel.stopPlayback()
                         mpvView.stop()
-                        if (activity?.isFinishing == true) {
-                            mpvView.destroy()
-                        }
+                        mpvView.destroy()
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
+                } else if (!hasSleepTimer && !isBackgroundPlay) {
+                    viewModel.pause()
                 }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            val hasSleepTimer = viewModel.remainingTime.value > 0
-            if (activity?.isFinishing == true || !hasSleepTimer) {
+            if (activity?.isFinishing == true) {
                 try {
                     viewModel.pause()
                     viewModel.stopPlayback()
                     mpvView.stop()
-                    if (activity?.isFinishing == true) {
-                        mpvView.destroy()
-                    }
+                    mpvView.destroy()
                 } catch (_: Exception) {}
             }
         }
@@ -199,13 +197,10 @@ fun PlayerScreen(
 
         onDispose {
             viewModel.saveCurrentProgressNow()
-            val hasSleepTimer = viewModel.remainingTime.value > 0
-            if (activity?.isFinishing == true || !hasSleepTimer) {
+            if (activity?.isFinishing == true) {
                 try {
                     mpvView.stop()
-                    if (activity?.isFinishing == true) {
-                        mpvView.destroy()
-                    }
+                    mpvView.destroy()
                 } catch (_: Throwable) {}
             }
             viewModel.mpvController.detachView()

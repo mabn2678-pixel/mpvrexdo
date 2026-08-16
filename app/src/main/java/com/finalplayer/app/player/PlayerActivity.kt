@@ -423,6 +423,10 @@ class PlayerActivity : ComponentActivity() {
         super.onResume()
         closedFromPipMode = false
         viewModel.onAppResumed(applicationContext)
+        val resumeOnUnlock = viewModel.playerPrefs?.resumeOnUnlock?.get() ?: false
+        if (resumeOnUnlock) {
+            viewModel.play()
+        }
     }
 
     override fun onUserLeaveHint() {
@@ -461,19 +465,16 @@ class PlayerActivity : ComponentActivity() {
         viewModel.saveCurrentProgressNow()
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
         val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
+        val isBackgroundPlay = viewModel.isBackgroundPlay.value
 
         if (isPipMode) {
             return
         }
 
-        if (hasActiveSleepTimer) {
+        if (hasActiveSleepTimer || isBackgroundPlay) {
             enableBackgroundAudioService()
         } else {
             viewModel.pause()
-            viewModel.stopPlayback()
-            com.finalplayer.app.player.core.MPVView.stopAll()
-            viewModel.setBackgroundPlay(false)
-            MediaPlaybackService.stopService(applicationContext)
         }
     }
 
@@ -482,13 +483,16 @@ class PlayerActivity : ComponentActivity() {
         viewModel.saveCurrentProgressNow()
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
         val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
+        val isBackgroundPlay = viewModel.isBackgroundPlay.value
 
-        if (isFinishing || closedFromPipMode || (!isPipMode && !hasActiveSleepTimer)) {
+        if (isFinishing || closedFromPipMode) {
             viewModel.pause()
             viewModel.stopPlayback()
             com.finalplayer.app.player.core.MPVView.stopAll()
             viewModel.setBackgroundPlay(false)
             MediaPlaybackService.stopService(applicationContext)
+        } else if (!isPipMode && !hasActiveSleepTimer && !isBackgroundPlay) {
+            viewModel.pause()
         }
     }
 

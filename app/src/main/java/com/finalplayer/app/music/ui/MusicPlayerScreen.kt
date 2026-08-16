@@ -1,5 +1,6 @@
 package com.finalplayer.app.music.ui
 
+import android.app.Activity
 import android.graphics.drawable.BitmapDrawable
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -58,6 +59,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -78,6 +80,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.palette.graphics.Palette
 import coil.compose.AsyncImage
 import coil.imageLoader
@@ -100,6 +105,25 @@ fun MusicPlayerScreen(
     val currentLineIndex by viewModel.currentLineIndex.collectAsState()
 
     val context = LocalContext.current
+    val activity = context as? Activity
+
+    // Hide status bar / notifications bar for immersive full-screen lyrics viewing experience
+    DisposableEffect(activity) {
+        val window = activity?.window
+        if (window != null) {
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            val prevBarsBehavior = insetsController.systemBarsBehavior
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.statusBars())
+            onDispose {
+                insetsController.systemBarsBehavior = prevBarsBehavior
+                insetsController.show(WindowInsetsCompat.Type.statusBars())
+            }
+        } else {
+            onDispose {}
+        }
+    }
 
     // Controls auto-hide state after 7 seconds of inactivity
     var isControlsVisible by remember { mutableStateOf(true) }
@@ -320,7 +344,7 @@ fun MusicPlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
+                .padding(top = 12.dp)
                 .navigationBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
