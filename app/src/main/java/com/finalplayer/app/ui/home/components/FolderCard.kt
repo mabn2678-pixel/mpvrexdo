@@ -37,6 +37,7 @@ import java.util.Date
 import java.util.Locale
 
 import androidx.compose.ui.text.style.TextOverflow
+import com.finalplayer.app.ui.components.AppFlowRow
 
 @Composable
 fun FolderCard(
@@ -99,23 +100,23 @@ fun FolderCard(
                 if (showDate || showFolderSize || showTotalMedia || showTotalDuration) {
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Chips Row
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Chips Flow
+                    AppFlowRow(
+                        horizontalSpacing = 6.dp,
+                        verticalSpacing = 4.dp
                     ) {
-                        if (showDate) {
-                            val dateStr = formatDate(folder.lastModified)
-                            if (dateStr.isNotEmpty()) InfoChip(text = dateStr)
-                        }
-                        if (showFolderSize) {
-                            InfoChip(text = formatFileSize(folder.totalSizeBytes))
+                        if (showTotalDuration) {
+                            InfoChip(text = formatDuration(folder.totalDuration))
                         }
                         if (showTotalMedia) {
                             InfoChip(text = "Items ${folder.videoCount}")
                         }
-                        if (showTotalDuration) {
-                            InfoChip(text = formatDuration(folder.totalDuration))
+                        if (showFolderSize) {
+                            InfoChip(text = formatFileSize(folder.totalSizeBytes))
+                        }
+                        if (showDate) {
+                            val dateStr = formatDate(folder.lastModified)
+                            if (dateStr.isNotEmpty()) InfoChip(text = dateStr)
                         }
                     }
                 }
@@ -256,10 +257,13 @@ fun FolderGridCard(
 
             if (showDate || showFolderSize || showTotalMedia || showTotalDuration) {
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                AppFlowRow(
+                    horizontalSpacing = 4.dp,
+                    verticalSpacing = 4.dp
                 ) {
+                    if (showTotalDuration) {
+                        InfoChip(text = formatDuration(folder.totalDuration))
+                    }
                     if (showTotalMedia) {
                         InfoChip(text = "${folder.videoCount} items")
                     }
@@ -269,9 +273,6 @@ fun FolderGridCard(
                     if (showDate) {
                         val dateStr = formatDate(folder.lastModified)
                         if (dateStr.isNotEmpty()) InfoChip(text = dateStr)
-                    }
-                    if (showTotalDuration) {
-                        InfoChip(text = formatDuration(folder.totalDuration))
                     }
                 }
             }
@@ -291,7 +292,9 @@ private fun InfoChip(text: String) {
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,
-            fontSize = 11.sp
+            fontSize = 11.sp,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -320,6 +323,6 @@ private fun formatFileSize(sizeBytes: Long): String {
 private fun formatDate(timestamp: Long): String {
     if (timestamp <= 0) return ""
     val ms = if (timestamp > 0 && timestamp < 100_000_000_000L) timestamp * 1000L else timestamp
-    val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     return sdf.format(Date(ms))
 }

@@ -1070,7 +1070,9 @@ private fun MetaChip(text: String) {
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             fontSize = 10.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -1087,7 +1089,9 @@ private fun SubtitleChip(language: String) {
             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             fontSize = 10.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

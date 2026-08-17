@@ -1118,6 +1118,10 @@ class PlayerViewModel(
 
     fun onAppResumed(context: Context) {
         mpvController.refreshVideoSurface()
+        viewModelScope.launch(Dispatchers.Main) {
+            delay(150)
+            mpvController.refreshVideoSurface()
+        }
         applyAllSubtitlePreferences()
         updateTracks()
         val path = currentVideoId.value ?: mpvController.playerState.value.currentFilePath

@@ -78,8 +78,8 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("config", "yes")
             lib.setOptionString("config-dir", configDir.absolutePath)
 
-            // Hardware decoding setup (mediacodec direct/copy for maximum hardware efficiency & surface recreation resilience)
-            lib.setOptionString("hwdec", "mediacodec,mediacodec-copy,no")
+            // Hardware decoding setup with mediacodec-copy / mediacodec fallback
+            lib.setOptionString("hwdec", "mediacodec-copy,mediacodec,auto-safe")
             lib.setOptionString("hwdec-codecs", "all")
 
             // Video output setup
@@ -117,16 +117,7 @@ class MPVView @JvmOverloads constructor(
             if (isInitialized) {
                 try {
                     mpvLib?.attachSurface(holder.surface)
-                    val lib = mpvLib
-                    if (lib != null && lib.getPropertyBoolean("idle-active") == false) {
-                        // Re-trigger video output refresh so frames immediately draw on the newly attached surface
-                        val currentVid = lib.getPropertyString("vid") ?: "auto"
-                        if (currentVid != "no") {
-                            lib.setPropertyString("vid", "no")
-                            lib.setPropertyString("vid", currentVid)
-                        }
-                        lib.command(arrayOf("seek", "0", "relative+exact"))
-                    }
+                    triggerVideoRenderRefresh()
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error attaching surface", e)
                 }
@@ -140,10 +131,7 @@ class MPVView @JvmOverloads constructor(
             if (isInitialized) {
                 try {
                     mpvLib?.setPropertyString("android-surface-size", "${width}x${height}")
-                    val lib = mpvLib
-                    if (lib != null && lib.getPropertyBoolean("idle-active") == false) {
-                        lib.command(arrayOf("seek", "0", "relative+exact"))
-                    }
+                    triggerVideoRenderRefresh()
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error updating surface size", e)
                 }
@@ -151,10 +139,15 @@ class MPVView @JvmOverloads constructor(
         }
     }
 
-    fun refreshVideoSurface() {
-        val lib = getActiveLib() ?: return
+    private fun triggerVideoRenderRefresh() {
+        val lib = mpvLib ?: return
         try {
             if (lib.getPropertyBoolean("idle-active") == false) {
+                // If hardware decoder surface became invalid, resetting hwdec re-initializes MediaCodec with the active Surface
+                val currentHwdec = lib.getPropertyString("hwdec") ?: "mediacodec-copy,mediacodec,auto-safe"
+                lib.setPropertyString("hwdec", "no")
+                lib.setPropertyString("hwdec", currentHwdec)
+
                 val currentVid = lib.getPropertyString("vid") ?: "auto"
                 if (currentVid != "no") {
                     lib.setPropertyString("vid", "no")
@@ -163,7 +156,21 @@ class MPVView @JvmOverloads constructor(
                 lib.command(arrayOf("seek", "0", "relative+exact"))
             }
         } catch (e: Throwable) {
-            Log.e(TAG, "Error refreshing video surface", e)
+            Log.e(TAG, "Error triggering video render refresh", e)
+        }
+    }
+
+    fun refreshVideoSurface() {
+        synchronized(this) {
+            val lib = getActiveLib() ?: return
+            try {
+                if (holder.surface != null && holder.surface.isValid) {
+                    lib.attachSurface(holder.surface)
+                }
+                triggerVideoRenderRefresh()
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error refreshing video surface", e)
+            }
         }
     }
 
