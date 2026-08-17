@@ -78,8 +78,8 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("config", "yes")
             lib.setOptionString("config-dir", configDir.absolutePath)
 
-            // Hardware decoding setup (mediacodec direct zero-copy for maximum hardware efficiency)
-            lib.setOptionString("hwdec", "mediacodec")
+            // Hardware decoding setup (mediacodec direct/copy for maximum hardware efficiency & surface recreation resilience)
+            lib.setOptionString("hwdec", "mediacodec,mediacodec-copy,no")
             lib.setOptionString("hwdec-codecs", "all")
 
             // Video output setup
@@ -117,6 +117,16 @@ class MPVView @JvmOverloads constructor(
             if (isInitialized) {
                 try {
                     mpvLib?.attachSurface(holder.surface)
+                    val lib = mpvLib
+                    if (lib != null && lib.getPropertyBoolean("idle-active") == false) {
+                        // Re-trigger video output refresh so frames immediately draw on the newly attached surface
+                        val currentVid = lib.getPropertyString("vid") ?: "auto"
+                        if (currentVid != "no") {
+                            lib.setPropertyString("vid", "no")
+                            lib.setPropertyString("vid", currentVid)
+                        }
+                        lib.command(arrayOf("seek", "0", "relative+exact"))
+                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error attaching surface", e)
                 }
@@ -130,10 +140,30 @@ class MPVView @JvmOverloads constructor(
             if (isInitialized) {
                 try {
                     mpvLib?.setPropertyString("android-surface-size", "${width}x${height}")
+                    val lib = mpvLib
+                    if (lib != null && lib.getPropertyBoolean("idle-active") == false) {
+                        lib.command(arrayOf("seek", "0", "relative+exact"))
+                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error updating surface size", e)
                 }
             }
+        }
+    }
+
+    fun refreshVideoSurface() {
+        val lib = getActiveLib() ?: return
+        try {
+            if (lib.getPropertyBoolean("idle-active") == false) {
+                val currentVid = lib.getPropertyString("vid") ?: "auto"
+                if (currentVid != "no") {
+                    lib.setPropertyString("vid", "no")
+                    lib.setPropertyString("vid", currentVid)
+                }
+                lib.command(arrayOf("seek", "0", "relative+exact"))
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error refreshing video surface", e)
         }
     }
 

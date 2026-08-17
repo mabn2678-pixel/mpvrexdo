@@ -62,6 +62,10 @@ class MPVController(private val context: Context) {
 
     fun getAttachedView(): MPVView? = mpvView
 
+    fun refreshVideoSurface() {
+        mpvView?.refreshVideoSurface()
+    }
+
     fun isIdle(): Boolean = mpvView?.isIdle() ?: true
 
     fun play(path: String) {

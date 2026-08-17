@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.finalplayer.app.ui.components.AppFlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.finalplayer.app.domain.model.PlaybackProgress
 import com.finalplayer.app.domain.model.VideoItem
 import com.finalplayer.app.ui.components.DeleteConfirmDialog
 import com.finalplayer.app.ui.components.FileInfoDialog
@@ -328,9 +331,12 @@ fun FolderDetailScreen(
                 contentPadding = padding
             ) {
                 itemsIndexed(sortedVideos, key = { index, video -> "${video.id}_$index" }) { index, video ->
+                    val videoProgress = playbackProgresses.find { it.videoId == video.id || it.videoId == video.uri }
                     VideoGridItem(
                         video = video,
                         isOpened = playedVideoIds.contains(video.id) || playedVideoIds.contains(video.uri),
+                        playbackProgress = videoProgress,
+                        visibleFields = folderConfig.visibleFields,
                         subtitleLangs = subtitleLangsMap[video.id] ?: emptyList(),
                         isSelected = selectedVideos.contains(video),
                         isSelectionMode = isSelectionMode,
@@ -366,9 +372,12 @@ fun FolderDetailScreen(
                 contentPadding = padding
             ) {
                 itemsIndexed(sortedVideos, key = { index, video -> "${video.id}_$index" }) { index, video ->
+                    val videoProgress = playbackProgresses.find { it.videoId == video.id || it.videoId == video.uri }
                     VideoListItem(
                         video = video,
                         isOpened = playedVideoIds.contains(video.id) || playedVideoIds.contains(video.uri),
+                        playbackProgress = videoProgress,
+                        visibleFields = folderConfig.visibleFields,
                         subtitleLangs = subtitleLangsMap[video.id] ?: emptyList(),
                         isSelected = selectedVideos.contains(video),
                         isSelectionMode = isSelectionMode,
@@ -547,6 +556,8 @@ fun FolderDetailScreen(
 fun VideoListItem(
     video: VideoItem,
     isOpened: Boolean = false,
+    playbackProgress: PlaybackProgress? = null,
+    visibleFields: Set<String> = emptySet(),
     subtitleLangs: List<String> = emptyList(),
     isSelected: Boolean = false,
     isSelectionMode: Boolean = false,
@@ -555,6 +566,14 @@ fun VideoListItem(
     onOptionsClick: (() -> Unit)? = null,
     onOptionsLongClick: (() -> Unit)? = null
 ) {
+    val showFullName = visibleFields.contains("Full Name")
+    val showPath = visibleFields.contains("Path")
+    val showProgressBar = (visibleFields.isEmpty() || visibleFields.contains("Progress Bar"))
+    val progressRatio = if (playbackProgress != null && playbackProgress.durationMs > 0 && playbackProgress.positionMs > 0) {
+        (playbackProgress.positionMs.toFloat() / playbackProgress.durationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val hasProgress = showProgressBar && progressRatio > 0.005f
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -589,7 +608,7 @@ fun VideoListItem(
                 .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Text Details Column (Title + Chips + Subtitle languages)
+            // Text Details Column (Title + Optional Path + Chips + Subtitle languages)
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -616,48 +635,74 @@ fun VideoListItem(
                     ),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 3,
+                    maxLines = if (showFullName) 6 else 3,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                if (showPath) {
+                    val cleanVideoPath = video.folderPath.ifEmpty { video.uri.substringBeforeLast("/") }
+                    if (cleanVideoPath.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = cleanVideoPath,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            fontSize = 10.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
 
-                AppFlowRow(
-                    horizontalSpacing = 4.dp,
-                    verticalSpacing = 4.dp
-                ) {
-                    // Resolution tag e.g. 1080p
-                    val resText = when {
-                        video.resolution != null && video.resolution.contains("x") -> {
-                            val h = video.resolution.substringAfter("x").toIntOrNull() ?: 0
-                            if (h > 0) "${h}p" else video.resolution
+                val showResolution = visibleFields.isEmpty() || visibleFields.contains("Resolution")
+                val showFileSize = visibleFields.isEmpty() || visibleFields.contains("File Size")
+                val showDate = visibleFields.isEmpty() || visibleFields.contains("Date")
+                val showTotalDuration = visibleFields.contains("Total Duration")
+
+                if (showResolution || showFileSize || showDate || showTotalDuration || subtitleLangs.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    AppFlowRow(
+                        horizontalSpacing = 4.dp,
+                        verticalSpacing = 4.dp
+                    ) {
+                        if (showResolution) {
+                            val resText = when {
+                                video.resolution != null && video.resolution.contains("x") -> {
+                                    val h = video.resolution.substringAfter("x").toIntOrNull() ?: 0
+                                    if (h > 0) "${h}p" else video.resolution
+                                }
+                                else -> "1080p"
+                            }
+                            MetaChip(text = resText)
                         }
-                        else -> "1080p"
-                    }
-                    MetaChip(text = resText)
 
-                    // File size tag
-                    val sizeText = formatFileSize(video.sizeBytes)
-                    if (sizeText.isNotEmpty()) {
-                        MetaChip(text = sizeText)
-                    }
+                        if (showFileSize) {
+                            val sizeText = formatFileSize(video.sizeBytes)
+                            if (sizeText.isNotEmpty()) {
+                                MetaChip(text = sizeText)
+                            }
+                        }
 
-                    // Date tag
-                    if (video.dateAdded > 0) {
-                        MetaChip(text = formatDateShort(video.dateAdded))
-                    }
+                        if (showDate && video.dateAdded > 0) {
+                            MetaChip(text = formatDateShort(video.dateAdded))
+                        }
 
-                    // Subtitle Language Tags
-                    val langs = subtitleLangs
-                    langs.forEach { lang ->
-                        SubtitleChip(language = lang)
+                        if (showTotalDuration && video.duration > 0) {
+                            MetaChip(text = formatDuration(video.duration))
+                        }
+
+                        // Subtitle Language Tags
+                        subtitleLangs.forEach { lang ->
+                            SubtitleChip(language = lang)
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.width(6.dp))
 
-            // Thumbnail with Duration Overlay & Status Badge & Selection Overlay
+            // Thumbnail with Duration Overlay, Progress Bar, Status Badge & Selection Overlay
             Box(
                 modifier = Modifier
                     .width(108.dp)
@@ -677,7 +722,12 @@ fun VideoListItem(
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(4.dp),
+                        .padding(
+                            start = 4.dp,
+                            bottom = if (hasProgress) 7.dp else 4.dp,
+                            end = 4.dp,
+                            top = 4.dp
+                        ),
                     shape = RoundedCornerShape(4.dp),
                     color = Color.Black.copy(alpha = 0.75f),
                     contentColor = Color.White
@@ -690,6 +740,24 @@ fun VideoListItem(
                         ),
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
+                }
+
+                // Progress Bar at bottom of thumbnail
+                if (hasProgress) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(3.5.dp)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progressRatio)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
                 }
 
                 // New / Running Status Badge (Top-End)
@@ -753,6 +821,8 @@ fun VideoListItem(
 fun VideoGridItem(
     video: VideoItem,
     isOpened: Boolean = false,
+    playbackProgress: PlaybackProgress? = null,
+    visibleFields: Set<String> = emptySet(),
     subtitleLangs: List<String> = emptyList(),
     isSelected: Boolean = false,
     isSelectionMode: Boolean = false,
@@ -761,6 +831,14 @@ fun VideoGridItem(
     onOptionsClick: (() -> Unit)? = null,
     onOptionsLongClick: (() -> Unit)? = null
 ) {
+    val showFullName = visibleFields.contains("Full Name")
+    val showPath = visibleFields.contains("Path")
+    val showProgressBar = (visibleFields.isEmpty() || visibleFields.contains("Progress Bar"))
+    val progressRatio = if (playbackProgress != null && playbackProgress.durationMs > 0 && playbackProgress.positionMs > 0) {
+        (playbackProgress.positionMs.toFloat() / playbackProgress.durationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val hasProgress = showProgressBar && progressRatio > 0.005f
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -810,7 +888,12 @@ fun VideoGridItem(
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(6.dp),
+                        .padding(
+                            start = 6.dp,
+                            bottom = if (hasProgress) 8.dp else 6.dp,
+                            end = 6.dp,
+                            top = 6.dp
+                        ),
                     shape = RoundedCornerShape(4.dp),
                     color = Color.Black.copy(alpha = 0.75f),
                     contentColor = Color.White
@@ -823,6 +906,23 @@ fun VideoGridItem(
                         ),
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                     )
+                }
+
+                if (hasProgress) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(progressRatio)
+                                .background(MaterialTheme.colorScheme.primary)
+                        )
+                    }
                 }
 
                 VideoStatusBadge(
@@ -870,7 +970,7 @@ fun VideoGridItem(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
+                        maxLines = if (showFullName) 5 else 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
@@ -894,29 +994,63 @@ fun VideoGridItem(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                if (showPath) {
+                    val cleanVideoPath = video.folderPath.ifEmpty { video.uri.substringBeforeLast("/") }
+                    if (cleanVideoPath.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = cleanVideoPath,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
 
-                AppFlowRow(
-                    horizontalSpacing = 4.dp,
-                    verticalSpacing = 4.dp
-                ) {
-                    val resText = when {
-                        video.resolution != null && video.resolution.contains("x") -> {
-                            val h = video.resolution.substringAfter("x").toIntOrNull() ?: 0
-                            if (h > 0) "${h}p" else video.resolution
+                val showResolution = visibleFields.isEmpty() || visibleFields.contains("Resolution")
+                val showFileSize = visibleFields.isEmpty() || visibleFields.contains("File Size")
+                val showDate = visibleFields.isEmpty() || visibleFields.contains("Date")
+                val showTotalDuration = visibleFields.contains("Total Duration")
+
+                if (showResolution || showFileSize || showDate || showTotalDuration || subtitleLangs.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    AppFlowRow(
+                        horizontalSpacing = 4.dp,
+                        verticalSpacing = 4.dp
+                    ) {
+                        if (showResolution) {
+                            val resText = when {
+                                video.resolution != null && video.resolution.contains("x") -> {
+                                    val h = video.resolution.substringAfter("x").toIntOrNull() ?: 0
+                                    if (h > 0) "${h}p" else video.resolution
+                                }
+                                else -> "1080p"
+                            }
+                            MetaChip(text = resText)
                         }
-                        else -> "1080p"
-                    }
-                    MetaChip(text = resText)
 
-                    val sizeText = formatFileSize(video.sizeBytes)
-                    if (sizeText.isNotEmpty()) {
-                        MetaChip(text = sizeText)
-                    }
+                        if (showFileSize) {
+                            val sizeText = formatFileSize(video.sizeBytes)
+                            if (sizeText.isNotEmpty()) {
+                                MetaChip(text = sizeText)
+                            }
+                        }
 
-                    val langs = subtitleLangs
-                    langs.forEach { lang ->
-                        SubtitleChip(language = lang)
+                        if (showDate && video.dateAdded > 0) {
+                            MetaChip(text = formatDateShort(video.dateAdded))
+                        }
+
+                        if (showTotalDuration && video.duration > 0) {
+                            MetaChip(text = formatDuration(video.duration))
+                        }
+
+                        val langs = subtitleLangs
+                        langs.forEach { lang ->
+                            SubtitleChip(language = lang)
+                        }
                     }
                 }
             }

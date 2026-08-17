@@ -27,7 +27,7 @@ data class FolderSortConfig(
     val sortBy: String = "title",
     val sortAscending: Boolean = true,
     val layoutMode: String = "list",
-    val visibleFields: Set<String> = setOf("Path", "Folder Size", "Total Media")
+    val visibleFields: Set<String> = setOf("Path", "Folder Size", "Total Media", "Progress Bar")
 )
 
 class HomeViewModel(
@@ -188,10 +188,13 @@ private data class SortConfig(
                 }
                 val finalVideos = if (sortConfig.sortAscending) sortedVideos else sortedVideos.reversed()
 
+                val progressMap = progressList.associateBy { it.videoId }
+
                 _uiState.value.copy(
                     folders = finalFolders,
                     allVideos = finalVideos,
                     playedVideoIds = playedIds,
+                    playbackProgressMap = progressMap,
                     sortBy = sortConfig.sortBy,
                     sortAscending = sortConfig.sortAscending,
                     viewMode = sortConfig.viewMode,

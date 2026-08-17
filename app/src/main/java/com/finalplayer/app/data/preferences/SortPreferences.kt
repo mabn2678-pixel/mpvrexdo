@@ -12,7 +12,7 @@ class SortPreferences(dataStore: DataStore<Preferences>) {
     val sortAscending = DataStorePreference(dataStore, booleanPreferencesKey("sort_ascending"), true)
     val viewMode = DataStorePreference(dataStore, stringPreferencesKey("view_mode"), "folder")
     val layoutMode = DataStorePreference(dataStore, stringPreferencesKey("layout_mode"), "list")
-    val visibleFields = DataStorePreference(dataStore, stringSetPreferencesKey("visible_fields"), setOf("Path", "Folder Size", "Total Media"))
+    val visibleFields = DataStorePreference(dataStore, stringSetPreferencesKey("visible_fields"), setOf("Path", "Folder Size", "Total Media", "Progress Bar"))
     val onlyForFolderList = DataStorePreference(dataStore, booleanPreferencesKey("only_for_folder_list"), false)
     val showAudioFiles = DataStorePreference(dataStore, booleanPreferencesKey("show_audio_files"), false)
 }

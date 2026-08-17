@@ -47,6 +47,8 @@ fun FolderCard(
 ) {
     val cleanPath = folder.path.replace("//", "/").trimEnd('/')
     val displayName = folder.name.ifEmpty { File(cleanPath).name }
+    val showFullName = visibleFields.contains("Full Name")
+    val showPath = visibleFields.contains("Path")
 
     Card(
         modifier = Modifier
@@ -73,30 +75,49 @@ fun FolderCard(
                     text = displayName,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
+                    maxLines = if (showFullName) 5 else 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = cleanPath,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (showPath) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = cleanPath,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                val showDate = visibleFields.contains("Date") && folder.lastModified > 0
+                val showFolderSize = visibleFields.contains("Folder Size") && folder.totalSizeBytes > 0
+                val showTotalMedia = visibleFields.contains("Total Media")
+                val showTotalDuration = visibleFields.contains("Total Duration") && folder.totalDuration > 0
 
-                // Chips Row
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    InfoChip(text = formatDate(folder.lastModified))
-                    InfoChip(text = formatFileSize(folder.totalSizeBytes))
-                    InfoChip(text = "Items ${folder.videoCount}")
+                if (showDate || showFolderSize || showTotalMedia || showTotalDuration) {
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Chips Row
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (showDate) {
+                            val dateStr = formatDate(folder.lastModified)
+                            if (dateStr.isNotEmpty()) InfoChip(text = dateStr)
+                        }
+                        if (showFolderSize) {
+                            InfoChip(text = formatFileSize(folder.totalSizeBytes))
+                        }
+                        if (showTotalMedia) {
+                            InfoChip(text = "Items ${folder.videoCount}")
+                        }
+                        if (showTotalDuration) {
+                            InfoChip(text = formatDuration(folder.totalDuration))
+                        }
+                    }
                 }
             }
 
@@ -150,6 +171,8 @@ fun FolderGridCard(
 ) {
     val cleanPath = folder.path.replace("//", "/").trimEnd('/')
     val displayName = folder.name.ifEmpty { File(cleanPath).name }
+    val showFullName = visibleFields.contains("Full Name")
+    val showPath = visibleFields.contains("Path")
 
     Card(
         modifier = Modifier
@@ -210,17 +233,47 @@ fun FolderGridCard(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
+                maxLines = if (showFullName) 4 else 2,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                InfoChip(text = "${folder.videoCount} items")
-                InfoChip(text = formatFileSize(folder.totalSizeBytes))
+            if (showPath) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = cleanPath,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            val showDate = visibleFields.contains("Date") && folder.lastModified > 0
+            val showFolderSize = visibleFields.contains("Folder Size") && folder.totalSizeBytes > 0
+            val showTotalMedia = visibleFields.contains("Total Media")
+            val showTotalDuration = visibleFields.contains("Total Duration") && folder.totalDuration > 0
+
+            if (showDate || showFolderSize || showTotalMedia || showTotalDuration) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (showTotalMedia) {
+                        InfoChip(text = "${folder.videoCount} items")
+                    }
+                    if (showFolderSize) {
+                        InfoChip(text = formatFileSize(folder.totalSizeBytes))
+                    }
+                    if (showDate) {
+                        val dateStr = formatDate(folder.lastModified)
+                        if (dateStr.isNotEmpty()) InfoChip(text = dateStr)
+                    }
+                    if (showTotalDuration) {
+                        InfoChip(text = formatDuration(folder.totalDuration))
+                    }
+                }
             }
         }
     }

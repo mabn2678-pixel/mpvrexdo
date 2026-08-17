@@ -327,9 +327,12 @@ fun HomeScreen(
                                             items = uiState.allVideos,
                                             key = { index, video -> "${video.id}_$index" }
                                         ) { index, video ->
-                                            VideoListItem(
+                                            val videoProgress = uiState.playbackProgressMap[video.id] ?: uiState.playbackProgressMap[video.uri]
+                                            VideoGridItem(
                                                 video = video,
                                                 isOpened = uiState.playedVideoIds.contains(video.id) || uiState.playedVideoIds.contains(video.uri),
+                                                playbackProgress = videoProgress,
+                                                visibleFields = uiState.visibleFields,
                                                 isSelected = selectedVideos.contains(video),
                                                 isSelectionMode = isSelectionMode,
                                                 onClick = {
@@ -367,9 +370,12 @@ fun HomeScreen(
                                             items = uiState.allVideos,
                                             key = { index, video -> "${video.id}_$index" }
                                         ) { index, video ->
+                                            val videoProgress = uiState.playbackProgressMap[video.id] ?: uiState.playbackProgressMap[video.uri]
                                             VideoListItem(
                                                 video = video,
                                                 isOpened = uiState.playedVideoIds.contains(video.id) || uiState.playedVideoIds.contains(video.uri),
+                                                playbackProgress = videoProgress,
+                                                visibleFields = uiState.visibleFields,
                                                 isSelected = selectedVideos.contains(video),
                                                 isSelectionMode = isSelectionMode,
                                                 onClick = {
