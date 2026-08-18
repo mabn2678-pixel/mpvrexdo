@@ -423,7 +423,7 @@ class PlayerActivity : ComponentActivity() {
         super.onResume()
         closedFromPipMode = false
         viewModel.onAppResumed(applicationContext)
-        val resumeOnUnlock = viewModel.playerPrefs?.resumeOnUnlock?.get() ?: false
+        val resumeOnUnlock = viewModel.playerPrefs?.resumeOnUnlock?.get() ?: true
         if (resumeOnUnlock) {
             viewModel.play()
         }

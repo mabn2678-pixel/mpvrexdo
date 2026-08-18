@@ -143,16 +143,13 @@ class MPVView @JvmOverloads constructor(
         val lib = mpvLib ?: return
         try {
             if (lib.getPropertyBoolean("idle-active") == false) {
-                // If hardware decoder surface became invalid, resetting hwdec re-initializes MediaCodec with the active Surface
-                val currentHwdec = lib.getPropertyString("hwdec") ?: "mediacodec-copy,mediacodec,auto-safe"
-                lib.setPropertyString("hwdec", "no")
-                lib.setPropertyString("hwdec", currentHwdec)
-
+                // Ensure VO is unpaused and active
+                lib.setPropertyBoolean("pause", isPaused)
                 val currentVid = lib.getPropertyString("vid") ?: "auto"
                 if (currentVid != "no") {
-                    lib.setPropertyString("vid", "no")
                     lib.setPropertyString("vid", currentVid)
                 }
+                // Nudge playback to force frame presentation on new surface
                 lib.command(arrayOf("seek", "0", "relative+exact"))
             }
         } catch (e: Throwable) {
