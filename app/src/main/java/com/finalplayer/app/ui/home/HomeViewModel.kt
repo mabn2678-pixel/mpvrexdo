@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 data class FolderSortConfig(
@@ -341,6 +342,70 @@ private data class SortConfig(
             } else {
                 val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء الحذف"
                 onComplete(false, "فشلت العملية: $msg")
+            }
+        }
+    }
+
+    fun renameFolder(
+        folder: com.finalplayer.app.domain.model.VideoFolder,
+        newName: String,
+        context: android.content.Context,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val cleanPath = folder.path.replace("//", "/").trimEnd('/')
+                val currentDir = java.io.File(cleanPath)
+                val parentDir = currentDir.parentFile ?: java.io.File(cleanPath.substringBeforeLast('/'))
+                val targetDir = java.io.File(parentDir, newName)
+
+                val success = if (currentDir.exists()) {
+                    currentDir.renameTo(targetDir)
+                } else false
+
+                if (success) {
+                    com.finalplayer.app.utils.FileOperationsUtil.scanFile(context, targetDir)
+                    scanForVideosUseCase()
+                    withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onComplete(true, "تمت إعادة تسمية المجلد بنجاح")
+                    }
+                } else {
+                    withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onComplete(false, "تعذرت إعادة تسمية المجلد على وحدة التخزين")
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false, "فشلت العملية: ${e.message}")
+                }
+            }
+        }
+    }
+
+    fun deleteFolders(
+        folders: List<com.finalplayer.app.domain.model.VideoFolder>,
+        context: android.content.Context,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                var deletedCount = 0
+                for (folder in folders) {
+                    val cleanPath = folder.path.replace("//", "/").trimEnd('/')
+                    val dir = java.io.File(cleanPath)
+                    if (dir.exists()) {
+                        dir.deleteRecursively()
+                        deletedCount++
+                    }
+                }
+                scanForVideosUseCase()
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(true, "تم حذف $deletedCount مجلد بنجاح")
+                }
+            } catch (e: Exception) {
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false, "فشلت عملية الحذف: ${e.message}")
+                }
             }
         }
     }

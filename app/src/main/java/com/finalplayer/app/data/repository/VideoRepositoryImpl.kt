@@ -15,13 +15,50 @@ import kotlinx.coroutines.flow.map
 import com.finalplayer.app.data.database.entities.SecureMediaEntity
 import com.finalplayer.app.data.mapper.toEntity
 import com.finalplayer.app.utils.FileOperationsUtil
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 
 class VideoRepositoryImpl(
     private val videoDao: VideoDao,
     private val secureMediaDao: SecureMediaDao,
     private val mediaStoreScanner: MediaStoreVideoScanner
 ) : VideoRepository {
+
+    private fun getVaultDirForFile(context: android.content.Context, file: File?): File {
+        val externalDirs = try {
+            context.getExternalFilesDirs(null).filterNotNull()
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        if (file != null && file.exists()) {
+            val filePath = file.absolutePath
+            for (extDir in externalDirs) {
+                val extRoot = extDir.absolutePath.substringBefore("/Android/")
+                if (filePath.startsWith(extRoot)) {
+                    val vDir = File(extDir, ".secure_vault")
+                    if (!vDir.exists()) vDir.mkdirs()
+                    val nomedia = File(vDir, ".nomedia")
+                    if (!nomedia.exists()) {
+                        try { nomedia.createNewFile() } catch (_: Exception) {}
+                    }
+                    return vDir
+                }
+            }
+        }
+
+        val fallbackBase = context.getExternalFilesDir(null) ?: context.filesDir
+        val vDir = File(fallbackBase, ".secure_vault")
+        if (!vDir.exists()) vDir.mkdirs()
+        val nomedia = File(vDir, ".nomedia")
+        if (!nomedia.exists()) {
+            try { nomedia.createNewFile() } catch (_: Exception) {}
+        }
+        return vDir
+    }
 
     override fun getAllVideos(): Flow<List<VideoItem>> {
         return videoDao.getAllVideos()
@@ -107,7 +144,7 @@ class VideoRepositoryImpl(
             }
     }
 
-    override suspend fun scanDeviceForVideos() {
+    override suspend fun scanDeviceForVideos() = withContext(Dispatchers.IO) {
         videoDao.deleteMockVideos()
         val scannedVideos = mediaStoreScanner.scanDeviceVideos()
         if (scannedVideos.isNotEmpty()) {
@@ -133,22 +170,17 @@ class VideoRepositoryImpl(
         }
     }
 
-    override suspend fun deleteVideo(videoId: String) {
+    override suspend fun deleteVideo(videoId: String) = withContext(Dispatchers.IO) {
         videoDao.deleteVideo(videoId)
     }
 
-    override suspend fun hideVideosToSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
-        return try {
-            val vaultDir = File(context.filesDir, ".secure_vault").apply { mkdirs() }
-            val nomediaFile = File(vaultDir, ".nomedia")
-            if (!nomediaFile.exists()) {
-                try { nomediaFile.createNewFile() } catch (_: Exception) {}
-            }
-
+    override suspend fun hideVideosToSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
             for (video in videos) {
                 val originalFile = FileOperationsUtil.getVideoFile(video)
                 val originalPathStr = if (originalFile.exists()) originalFile.absolutePath else if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
                 
+                val vaultDir = getVaultDirForFile(context, if (originalFile.exists()) originalFile else null)
                 val safeFileName = (if (originalFile.exists()) originalFile.name else video.title).replace(Regex("[^a-zA-Z0-9._-]"), "_")
                 val safeId = video.id.replace(Regex("[^a-zA-Z0-9_]"), "_")
                 val vaultFile = File(vaultDir, "${safeId}_$safeFileName")
@@ -159,9 +191,9 @@ class VideoRepositoryImpl(
                         true
                     } else {
                         try {
-                            originalFile.inputStream().use { input ->
-                                vaultFile.outputStream().use { output ->
-                                    input.copyTo(output)
+                            FileInputStream(originalFile).use { input ->
+                                FileOutputStream(vaultFile).use { output ->
+                                    input.copyTo(output, bufferSize = 128 * 1024)
                                 }
                             }
                             originalFile.delete()
@@ -176,7 +208,7 @@ class VideoRepositoryImpl(
                         try {
                             android.media.MediaScannerConnection.scanFile(
                                 context,
-                                arrayOf(originalFile.absolutePath),
+                                arrayOf(originalFile.absolutePath, vaultFile.absolutePath),
                                 null,
                                 null
                             )
@@ -210,9 +242,9 @@ class VideoRepositoryImpl(
         }
     }
 
-    override suspend fun restoreVideoFromSecureFolder(videoId: String, context: android.content.Context): Result<Unit> {
-        return try {
-            val entity = secureMediaDao.getByVideoId(videoId) ?: return Result.failure(Exception("الملف غير موجود في المجلد الآمن"))
+    override suspend fun restoreVideoFromSecureFolder(videoId: String, context: android.content.Context): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val entity = secureMediaDao.getByVideoId(videoId) ?: return@withContext Result.failure(Exception("الملف غير موجود في المجلد الآمن"))
             val vaultFile = File(entity.vaultPath)
             val originalTargetFile = File(entity.originalPath)
             val parent = originalTargetFile.parentFile ?: android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
@@ -226,9 +258,9 @@ class VideoRepositoryImpl(
                     true
                 } else {
                     try {
-                        vaultFile.inputStream().use { input ->
-                            destinationFile.outputStream().use { output ->
-                                input.copyTo(output)
+                        FileInputStream(vaultFile).use { input ->
+                            FileOutputStream(destinationFile).use { output ->
+                                input.copyTo(output, bufferSize = 128 * 1024)
                             }
                         }
                         vaultFile.delete()
@@ -242,7 +274,7 @@ class VideoRepositoryImpl(
                     try {
                         android.media.MediaScannerConnection.scanFile(
                             context,
-                            arrayOf(destinationFile.absolutePath),
+                            arrayOf(destinationFile.absolutePath, vaultFile.absolutePath),
                             null,
                             null
                         )
@@ -270,8 +302,8 @@ class VideoRepositoryImpl(
         }
     }
 
-    override suspend fun restoreVideosFromSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
-        return try {
+    override suspend fun restoreVideosFromSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
             for (video in videos) {
                 restoreVideoFromSecureFolder(video.id, context)
             }
@@ -281,8 +313,8 @@ class VideoRepositoryImpl(
         }
     }
 
-    override suspend fun deleteSecureVideos(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
-        return try {
+    override suspend fun deleteSecureVideos(videos: List<VideoItem>, context: android.content.Context): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
             for (video in videos) {
                 val entity = secureMediaDao.getByVideoId(video.id)
                 if (entity != null) {
@@ -303,8 +335,8 @@ class VideoRepositoryImpl(
         }
     }
 
-    override suspend fun renameVideo(video: VideoItem, newName: String, context: android.content.Context): Result<File> {
-        return try {
+    override suspend fun renameVideo(video: VideoItem, newName: String, context: android.content.Context): Result<File> = withContext(Dispatchers.IO) {
+        try {
             val file = FileOperationsUtil.getVideoFile(video)
             val result = FileOperationsUtil.renameFile(context, file, newName)
             val targetFile = result.getOrNull() ?: File(file.parentFile ?: File(video.folderPath), newName)
@@ -320,8 +352,8 @@ class VideoRepositoryImpl(
         }
     }
 
-    override suspend fun moveVideos(videos: List<VideoItem>, destination: File, context: android.content.Context): Result<List<File>> {
-        return try {
+    override suspend fun moveVideos(videos: List<VideoItem>, destination: File, context: android.content.Context): Result<List<File>> = withContext(Dispatchers.IO) {
+        try {
             val files = videos.map { FileOperationsUtil.getVideoFile(it) }
             val diskResult = FileOperationsUtil.moveFiles(context, files, destination)
             val movedFiles = diskResult.getOrDefault(emptyList())
@@ -340,8 +372,8 @@ class VideoRepositoryImpl(
         }
     }
 
-    override suspend fun copyVideos(videos: List<VideoItem>, destination: File, context: android.content.Context): Result<List<File>> {
-        return try {
+    override suspend fun copyVideos(videos: List<VideoItem>, destination: File, context: android.content.Context): Result<List<File>> = withContext(Dispatchers.IO) {
+        try {
             val files = videos.map { FileOperationsUtil.getVideoFile(it) }
             val diskResult = FileOperationsUtil.copyFiles(context, files, destination)
             val copiedFiles = diskResult.getOrDefault(emptyList())
@@ -362,8 +394,8 @@ class VideoRepositoryImpl(
         }
     }
 
-    override suspend fun deleteVideos(videos: List<VideoItem>, context: android.content.Context): Result<Unit> {
-        return try {
+    override suspend fun deleteVideos(videos: List<VideoItem>, context: android.content.Context): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
             val files = videos.map { FileOperationsUtil.getVideoFile(it) }
             FileOperationsUtil.deleteFiles(context, files)
             for (video in videos) {

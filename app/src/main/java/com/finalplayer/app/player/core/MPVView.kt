@@ -116,8 +116,32 @@ class MPVView @JvmOverloads constructor(
         synchronized(this) {
             if (isInitialized) {
                 try {
-                    mpvLib?.attachSurface(holder.surface)
-                    triggerVideoRenderRefresh()
+                    val lib = mpvLib
+                    if (lib != null && holder.surface != null && holder.surface.isValid) {
+                        lib.attachSurface(holder.surface)
+
+                        // Check for album art video track on audio files
+                        val trackCount = runCatching { lib.getPropertyInt("track-list/count") ?: 0 }.getOrDefault(0)
+                        val albumArtTrackId = (0 until trackCount).firstNotNullOfOrNull { index ->
+                            val type = runCatching { lib.getPropertyString("track-list/$index/type") }.getOrNull()
+                            val isAlbumArt = runCatching { lib.getPropertyBoolean("track-list/$index/albumart") }.getOrNull()
+                            if (type == "video" && isAlbumArt == true) {
+                                runCatching { lib.getPropertyInt("track-list/$index/id") }.getOrNull()
+                            } else {
+                                null
+                            }
+                        }
+
+                        if (albumArtTrackId != null) {
+                            runCatching { lib.setPropertyInt("vid", albumArtTrackId) }
+                            runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
+                        } else {
+                            // The surface was just (re)created (e.g. screen lock/unlock).
+                            // mpv's render loop is idle while paused, so it never redraws into the fresh surface
+                            // on its own, leaving the screen black. Force a repaint of the current frame!
+                            triggerVideoRenderRefresh()
+                        }
+                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error attaching surface", e)
                 }
@@ -130,8 +154,13 @@ class MPVView @JvmOverloads constructor(
         synchronized(this) {
             if (isInitialized) {
                 try {
-                    mpvLib?.setPropertyString("android-surface-size", "${width}x${height}")
-                    triggerVideoRenderRefresh()
+                    val lib = mpvLib
+                    lib?.setPropertyString("android-surface-size", "${width}x${height}")
+                    // When paused, force repaint at new geometry to avoid stretch or blank buffer
+                    val paused = runCatching { lib?.getPropertyBoolean("pause") }.getOrNull() ?: isPaused
+                    if (paused) {
+                        runCatching { lib?.command(arrayOf("seek", "0", "relative+exact")) }
+                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error updating surface size", e)
                 }
@@ -142,15 +171,14 @@ class MPVView @JvmOverloads constructor(
     private fun triggerVideoRenderRefresh() {
         val lib = mpvLib ?: return
         try {
-            if (lib.getPropertyBoolean("idle-active") == false) {
-                // Ensure VO is unpaused and active
-                lib.setPropertyBoolean("pause", isPaused)
-                val currentVid = lib.getPropertyString("vid") ?: "auto"
+            val isIdle = runCatching { lib.getPropertyBoolean("idle-active") }.getOrNull() ?: false
+            if (!isIdle) {
+                val currentVid = runCatching { lib.getPropertyString("vid") }.getOrNull() ?: "auto"
                 if (currentVid != "no") {
-                    lib.setPropertyString("vid", currentVid)
+                    runCatching { lib.setPropertyString("vid", currentVid) }
                 }
-                // Nudge playback to force frame presentation on new surface
-                lib.command(arrayOf("seek", "0", "relative+exact"))
+                // Zero-distance exact seek forces re-decode & re-render of current frame
+                runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
             }
         } catch (e: Throwable) {
             Log.e(TAG, "Error triggering video render refresh", e)
