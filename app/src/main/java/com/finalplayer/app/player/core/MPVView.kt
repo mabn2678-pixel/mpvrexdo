@@ -17,6 +17,15 @@ class MPVView @JvmOverloads constructor(
     attrs: AttributeSet? = null
 ) : SurfaceView(context, attrs), SurfaceHolder.Callback {
 
+    private fun appendDebugLog(message: String) {
+        try {
+            val dir = context.getExternalFilesDir(null) ?: context.filesDir
+            val logFile = File(dir, "finalplayer_debug.log")
+            val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
+            logFile.appendText("[$timestamp] $message\n")
+        } catch (_: Throwable) {}
+    }
+
     private var mpvLib: MPVLib? = null
     private var savedVoForRestore: String? = null
     var isInitialized = false
@@ -113,6 +122,8 @@ class MPVView @JvmOverloads constructor(
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
+        val currentVoForLog = runCatching { mpvLib?.getPropertyString("vo") }.getOrNull()
+        appendDebugLog("surfaceCreated: isInitialized=$isInitialized vo=$currentVoForLog")
         isSurfaceReady = true
         synchronized(this) {
             if (isInitialized) {
@@ -178,15 +189,21 @@ class MPVView @JvmOverloads constructor(
             val isIdle = runCatching { lib.getPropertyBoolean("idle-active") }.getOrNull() ?: false
             if (!isIdle) {
                 val currentVid = runCatching { lib.getPropertyString("vid") }.getOrNull() ?: "auto"
-                if (currentVid != "no") {
+                if (currentVid != "no" && currentVid.isNotBlank()) {
+                    // Force a real decoder re-init: fully disable the video track,
+                    // then re-enable it with the same id, instead of re-assigning
+                    // the same value (which mpv treats as a no-op).
+                    runCatching { lib.setPropertyString("vid", "no") }
                     runCatching { lib.setPropertyString("vid", currentVid) }
                 }
-                // Zero-distance exact seek forces re-decode & re-render of current frame
                 runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
             }
         } catch (e: Throwable) {
             Log.e(TAG, "Error triggering video render refresh", e)
         }
+        val vidAfter = runCatching { mpvLib?.getPropertyString("vid") }.getOrNull()
+        val pauseAfter = runCatching { mpvLib?.getPropertyBoolean("pause") }.getOrNull()
+        appendDebugLog("renderRefresh done: vid=$vidAfter pause=$pauseAfter")
     }
 
     fun refreshVideoSurface() {
@@ -209,6 +226,9 @@ class MPVView @JvmOverloads constructor(
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        val voForLog = runCatching { mpvLib?.getPropertyString("vo") }.getOrNull()
+        val idleForLog = runCatching { mpvLib?.getPropertyBoolean("idle-active") }.getOrNull()
+        appendDebugLog("surfaceDestroyed: vo=$voForLog idle=$idleForLog")
         isSurfaceReady = false
         synchronized(this) {
             if (isInitialized) {
