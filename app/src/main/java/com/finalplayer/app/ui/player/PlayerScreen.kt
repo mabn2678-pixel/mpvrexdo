@@ -18,7 +18,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,7 +50,8 @@ fun PlayerScreen(
     val activity = context as? Activity
     val configuration = LocalConfiguration.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val mpvView = remember { MPVView(context) }
+    var surfaceRefreshKey by remember { mutableIntStateOf(0) }
+    val mpvView = remember(surfaceRefreshKey) { MPVView(context) }
 
     LaunchedEffect(configuration.orientation) {
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
@@ -67,6 +71,11 @@ fun PlayerScreen(
                     }
                 }
                 Lifecycle.Event.ON_RESUME -> {
+                    surfaceRefreshKey++
+                    try {
+                        MPVLib.setPropertyString("vid", "no")
+                        MPVLib.setPropertyString("vid", "auto")
+                    } catch (_: Exception) {}
                     try {
                         viewModel.onAppResumed(context)
                     } catch (_: Exception) {}
@@ -230,13 +239,15 @@ fun PlayerScreen(
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        AndroidView(
-            factory = {
-                (mpvView.parent as? ViewGroup)?.removeView(mpvView)
-                mpvView
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+        key(surfaceRefreshKey) {
+            AndroidView(
+                factory = {
+                    (mpvView.parent as? ViewGroup)?.removeView(mpvView)
+                    mpvView
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         PlayerControls(
             title = videoTitle,

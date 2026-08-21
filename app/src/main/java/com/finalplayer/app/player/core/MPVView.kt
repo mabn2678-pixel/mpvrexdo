@@ -88,8 +88,8 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("config", "yes")
             lib.setOptionString("config-dir", configDir.absolutePath)
 
-            // Hardware decoding setup with mediacodec-copy / mediacodec fallback
-            lib.setOptionString("hwdec", "mediacodec-copy,mediacodec,auto-safe")
+            // Hardware decoding setup with mediacodec-copy
+            lib.setOptionString("hwdec", "mediacodec-copy")
             lib.setOptionString("hwdec-codecs", "all")
 
             // Video output setup
