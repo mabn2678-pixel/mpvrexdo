@@ -277,6 +277,7 @@ fun PlayerControls(
         onSubtitleDragStart = onSubtitleDragStart,
         onSubtitlePositionDrag = onSubtitlePositionDrag,
         onSubtitleDragEnd = onSubtitleDragEnd,
+        onSubtitleClick = { onOpenSheet(Sheets.SubtitleSettings) },
         hasActiveSubtitles = hasActiveSubtitles,
         onPinchZoom = onPinchZoom,
         onLongPressStart = onLongPressStart,

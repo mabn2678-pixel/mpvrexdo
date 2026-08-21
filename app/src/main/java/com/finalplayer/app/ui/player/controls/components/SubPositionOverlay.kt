@@ -81,9 +81,9 @@ fun SubPositionOverlay(
             androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val availableHeight = maxHeight
                 val boxHeight = 56.dp
-                val normalizedPercent = subPosPercent.coerceIn(0, 100) / 100f
+                val normalizedPercent = subPosPercent.coerceIn(0, 120) / 100f
                 val targetTopY = (availableHeight * normalizedPercent) - (boxHeight * 0.9f)
-                val clampedTopY = targetTopY.coerceIn(16.dp, availableHeight - boxHeight - 16.dp)
+                val clampedTopY = targetTopY.coerceIn(16.dp, availableHeight - boxHeight - 8.dp)
 
                 Box(
                     modifier = Modifier

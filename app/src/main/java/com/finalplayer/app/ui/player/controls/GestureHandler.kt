@@ -55,6 +55,7 @@ fun GestureHandler(
     onSubtitleDragStart: () -> Unit = {},
     onSubtitlePositionDrag: (deltaPx: Float, screenHeightPx: Float) -> Unit = { _, _ -> },
     onSubtitleDragEnd: () -> Unit = {},
+    onSubtitleClick: () -> Unit = {},
     hasActiveSubtitles: Boolean = false,
     onPinchZoom: (zoomDelta: Float) -> Unit = {},
     onLongPressStart: () -> Unit = {},
@@ -111,6 +112,7 @@ fun GestureHandler(
     val currentOnSubtitleDragStart by rememberUpdatedState(onSubtitleDragStart)
     val currentOnSubtitlePositionDrag by rememberUpdatedState(onSubtitlePositionDrag)
     val currentOnSubtitleDragEnd by rememberUpdatedState(onSubtitleDragEnd)
+    val currentOnSubtitleClick by rememberUpdatedState(onSubtitleClick)
     val currentOnPinchZoom by rememberUpdatedState(onPinchZoom)
     val currentOnLongPressStart by rememberUpdatedState(onLongPressStart)
     val currentOnLongPressDrag by rememberUpdatedState(onLongPressDrag)
@@ -159,13 +161,13 @@ fun GestureHandler(
                     val edgeMarginPx = 36.dp.toPx()
                     val isNearHorizontalEdge = downX < edgeMarginPx || downX > screenWidth - edgeMarginPx
 
-                    // Generous subtitle touch box boundary based on subPos (0 to 100)
+                    // Subtitle touch box boundary based on subPos (centered horizontally with side safety margins)
                     val subCenterY = (currentSubPosPref / 100f) * screenHeight
-                    val subMinY = (subCenterY - 0.22f * screenHeight).coerceAtLeast(0f)
-                    val subMaxY = (subCenterY + 0.12f * screenHeight).coerceAtMost(screenHeight)
+                    val subMinY = (subCenterY - 0.14f * screenHeight).coerceAtLeast(0f)
+                    val subMaxY = (subCenterY + 0.10f * screenHeight).coerceAtMost(screenHeight)
                     val isTouchOnSubtitleBox = currentHasActiveSubtitles && currentEffectiveSubtitleDrag &&
                             (downY in subMinY..subMaxY) &&
-                            (downX in (screenWidth * 0.05f)..(screenWidth * 0.95f))
+                            (downX in (screenWidth * 0.18f)..(screenWidth * 0.82f))
 
                     var activeGesture = ActiveGesture.NONE
                     var longPressTriggered = false
@@ -177,10 +179,11 @@ fun GestureHandler(
                     var lastX = downX
                     var lastY = downY
 
-                    // Long-press timer: if on subtitle box -> subtitle dragging; else -> fast forward speed
+                    // Long-press timer: ONLY a long press on the subtitle box enables subtitle dragging;
+                    // otherwise long press activates 2.5x speed.
                     val longPressJob: Job? = if (!currentIsLocked && (!currentIsAnySheetOpen || currentAllowPanelGestures)) {
                         scope.launch {
-                            delay(300)
+                            delay(350)
                             if (activeGesture == ActiveGesture.NONE) {
                                 if (isTouchOnSubtitleBox) {
                                     activeGesture = ActiveGesture.SUBTITLE_POSITION
@@ -272,18 +275,7 @@ fun GestureHandler(
                                     } else {
                                         val isHorizontal = abs(totalDx) > abs(totalDy)
 
-                                        if (isTouchOnSubtitleBox && !isHorizontal) {
-                                            // Direct smooth dragging on subtitle
-                                            activeGesture = ActiveGesture.SUBTITLE_POSITION
-                                            longPressTriggered = true
-                                            try {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            } catch (_: Throwable) {}
-                                            currentOnSubtitleDragStart()
-                                            currentOnSubtitlePositionDrag(totalDy, screenHeight)
-                                            change.consume()
-                                            continue
-                                        } else if (isHorizontal) {
+                                        if (isHorizontal) {
                                             if (currentEffectiveSeekEnabled && !isNearHorizontalEdge) {
                                                 activeGesture = ActiveGesture.HORIZONTAL_SEEK
                                                 horizontalSeekStarted = true
@@ -403,7 +395,11 @@ fun GestureHandler(
                                 singleTapJob?.cancel()
                                 singleTapJob = scope.launch {
                                     delay(280)
-                                    currentOnSingleTap()
+                                    if (isTouchOnSubtitleBox && !currentIsLocked) {
+                                        currentOnSubtitleClick()
+                                    } else {
+                                        currentOnSingleTap()
+                                    }
                                     lastTapInfo = null
                                 }
                             }

@@ -18,6 +18,7 @@ class MPVView @JvmOverloads constructor(
 ) : SurfaceView(context, attrs), SurfaceHolder.Callback {
 
     private var mpvLib: MPVLib? = null
+    private var savedVoForRestore: String? = null
     var isInitialized = false
         private set
 
@@ -118,27 +119,30 @@ class MPVView @JvmOverloads constructor(
                 try {
                     val lib = mpvLib
                     if (lib != null && holder.surface != null && holder.surface.isValid) {
+                        // Restore the VO that was active before the surface was destroyed
+                        // (or "gpu" as a safe fallback), BEFORE attaching the new surface,
+                        // to force libmpv to fully reconfigure against the new window.
+                        val currentVo = runCatching { lib.getPropertyString("vo") }.getOrNull()
+                        if (currentVo == "null" || currentVo.isNullOrBlank()) {
+                            lib.setPropertyString("vo", savedVoForRestore ?: "gpu")
+                        }
+                        savedVoForRestore = null
+
                         lib.attachSurface(holder.surface)
 
-                        // Check for album art video track on audio files
                         val trackCount = runCatching { lib.getPropertyInt("track-list/count") ?: 0 }.getOrDefault(0)
                         val albumArtTrackId = (0 until trackCount).firstNotNullOfOrNull { index ->
                             val type = runCatching { lib.getPropertyString("track-list/$index/type") }.getOrNull()
                             val isAlbumArt = runCatching { lib.getPropertyBoolean("track-list/$index/albumart") }.getOrNull()
                             if (type == "video" && isAlbumArt == true) {
                                 runCatching { lib.getPropertyInt("track-list/$index/id") }.getOrNull()
-                            } else {
-                                null
-                            }
+                            } else null
                         }
 
                         if (albumArtTrackId != null) {
                             runCatching { lib.setPropertyInt("vid", albumArtTrackId) }
                             runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
                         } else {
-                            // The surface was just (re)created (e.g. screen lock/unlock).
-                            // mpv's render loop is idle while paused, so it never redraws into the fresh surface
-                            // on its own, leaving the screen black. Force a repaint of the current frame!
                             triggerVideoRenderRefresh()
                         }
                     }
@@ -190,9 +194,14 @@ class MPVView @JvmOverloads constructor(
             val lib = getActiveLib() ?: return
             try {
                 if (holder.surface != null && holder.surface.isValid) {
+                    val currentVo = runCatching { lib.getPropertyString("vo") }.getOrNull()
+                    if (currentVo == "null" || currentVo.isNullOrBlank()) {
+                        lib.setPropertyString("vo", savedVoForRestore ?: "gpu")
+                    }
+                    savedVoForRestore = null
                     lib.attachSurface(holder.surface)
+                    triggerVideoRenderRefresh()
                 }
-                triggerVideoRenderRefresh()
             } catch (e: Throwable) {
                 Log.e(TAG, "Error refreshing video surface", e)
             }
@@ -205,6 +214,15 @@ class MPVView @JvmOverloads constructor(
             if (isInitialized) {
                 try {
                     mpvLib?.detachSurface()
+                    val isEof = isEofReached
+                    val idle = runCatching { mpvLib?.getPropertyBoolean("idle-active") }.getOrNull() ?: false
+                    if (!isEof && !idle) {
+                        // Remember the current VO so surfaceCreated() can restore it exactly,
+                        // then switch to audio-only mode so mpv stops targeting a dead surface.
+                        savedVoForRestore = runCatching { mpvLib?.getPropertyString("vo") }
+                            .getOrNull()?.takeIf { it.isNotBlank() && it != "null" }
+                        mpvLib?.setPropertyString("vo", "null")
+                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error detaching surface", e)
                 }

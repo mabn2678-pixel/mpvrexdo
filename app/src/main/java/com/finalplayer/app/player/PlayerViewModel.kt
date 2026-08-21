@@ -897,12 +897,13 @@ class PlayerViewModel(
         }
         val h = if (screenHeight > 0f) screenHeight else 1000f
         val percentDelta = (pixelDeltaY / h) * 100f
-        currentSubPosFloat = (currentSubPosFloat + percentDelta).coerceIn(0f, 100f)
+        currentSubPosFloat = (currentSubPosFloat + percentDelta).coerceIn(0f, 120f)
         val newPos = currentSubPosFloat.toInt()
         
         if (newPos != _currentSubPos.value) {
             _currentSubPos.value = newPos
             MPVLib.setPropertyInt("sub-pos", newPos)
+            MPVLib.setOptionString("sub-pos", newPos.toString())
             _subPosOverlayText.value = "موضع الترجمة: $newPos%"
         }
     }
