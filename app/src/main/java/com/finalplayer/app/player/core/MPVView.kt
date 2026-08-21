@@ -131,9 +131,13 @@ class MPVView @JvmOverloads constructor(
                     val lib = mpvLib
                     if (lib != null && holder.surface != null && holder.surface.isValid) {
                         lib.attachSurface(holder.surface)
-                        try {
-                            lib.setPropertyString("vid", "auto")
-                        } catch (_: Exception) {}
+                        lib.setPropertyString("force-window", "yes")
+
+                        val currentVo = runCatching { lib.getPropertyString("vo") }.getOrNull()
+                        if (currentVo == "null" || currentVo.isNullOrBlank()) {
+                            lib.setPropertyString("vo", savedVoForRestore ?: "gpu")
+                        }
+                        savedVoForRestore = null
 
                         val trackCount = runCatching { lib.getPropertyInt("track-list/count") ?: 0 }.getOrDefault(0)
                         val albumArtTrackId = (0 until trackCount).firstNotNullOfOrNull { index ->
@@ -147,6 +151,8 @@ class MPVView @JvmOverloads constructor(
                         if (albumArtTrackId != null) {
                             runCatching { lib.setPropertyInt("vid", albumArtTrackId) }
                             runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
+                        } else {
+                            triggerVideoRenderRefresh()
                         }
                     }
                 } catch (e: Throwable) {
@@ -170,15 +176,39 @@ class MPVView @JvmOverloads constructor(
         }
     }
 
+    private fun triggerVideoRenderRefresh() {
+        val lib = mpvLib ?: return
+        try {
+            val isIdle = runCatching { lib.getPropertyBoolean("idle-active") }.getOrNull() ?: false
+            if (!isIdle) {
+                val currentVid = runCatching { lib.getPropertyString("vid") }.getOrNull() ?: "auto"
+                if (currentVid != "no" && currentVid.isNotBlank()) {
+                    runCatching { lib.setPropertyString("vid", "no") }
+                    runCatching { lib.setPropertyString("vid", currentVid) }
+                }
+                runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error triggering video render refresh", e)
+        }
+        val vidAfter = runCatching { mpvLib?.getPropertyString("vid") }.getOrNull()
+        val pauseAfter = runCatching { mpvLib?.getPropertyBoolean("pause") }.getOrNull()
+        appendDebugLog("renderRefresh done: vid=$vidAfter pause=$pauseAfter")
+    }
+
     fun refreshVideoSurface() {
         synchronized(this) {
             val lib = getActiveLib() ?: return
             try {
                 if (holder.surface != null && holder.surface.isValid) {
                     lib.attachSurface(holder.surface)
-                    try {
-                        lib.setPropertyString("vid", "auto")
-                    } catch (_: Exception) {}
+                    lib.setPropertyString("force-window", "yes")
+                    val currentVo = runCatching { lib.getPropertyString("vo") }.getOrNull()
+                    if (currentVo == "null" || currentVo.isNullOrBlank()) {
+                        lib.setPropertyString("vo", savedVoForRestore ?: "gpu")
+                    }
+                    savedVoForRestore = null
+                    triggerVideoRenderRefresh()
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "Error refreshing video surface", e)
@@ -195,6 +225,14 @@ class MPVView @JvmOverloads constructor(
             if (isInitialized) {
                 try {
                     mpvLib?.detachSurface()
+                    val isEof = isEofReached
+                    val idle = runCatching { mpvLib?.getPropertyBoolean("idle-active") }.getOrNull() ?: false
+                    if (!isEof && !idle) {
+                        savedVoForRestore = runCatching { mpvLib?.getPropertyString("vo") }
+                            .getOrNull()?.takeIf { it.isNotBlank() && it != "null" }
+                        mpvLib?.setPropertyString("vo", "null")
+                        mpvLib?.setPropertyString("force-window", "no")
+                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error detaching surface", e)
                 }
