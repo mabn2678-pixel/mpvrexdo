@@ -88,8 +88,8 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("config", "yes")
             lib.setOptionString("config-dir", configDir.absolutePath)
 
-            // Hardware decoding setup with mediacodec-copy
-            lib.setOptionString("hwdec", "mediacodec-copy")
+            // Hardware decoding setup with mediacodec-copy / mediacodec fallback
+            lib.setOptionString("hwdec", "mediacodec-copy,mediacodec,auto-safe")
             lib.setOptionString("hwdec-codecs", "all")
 
             // Video output setup
@@ -130,16 +130,10 @@ class MPVView @JvmOverloads constructor(
                 try {
                     val lib = mpvLib
                     if (lib != null && holder.surface != null && holder.surface.isValid) {
-                        // Restore the VO that was active before the surface was destroyed
-                        // (or "gpu" as a safe fallback), BEFORE attaching the new surface,
-                        // to force libmpv to fully reconfigure against the new window.
-                        val currentVo = runCatching { lib.getPropertyString("vo") }.getOrNull()
-                        if (currentVo == "null" || currentVo.isNullOrBlank()) {
-                            lib.setPropertyString("vo", savedVoForRestore ?: "gpu")
-                        }
-                        savedVoForRestore = null
-
                         lib.attachSurface(holder.surface)
+                        try {
+                            lib.setPropertyString("vid", "auto")
+                        } catch (_: Exception) {}
 
                         val trackCount = runCatching { lib.getPropertyInt("track-list/count") ?: 0 }.getOrDefault(0)
                         val albumArtTrackId = (0 until trackCount).firstNotNullOfOrNull { index ->
@@ -153,8 +147,6 @@ class MPVView @JvmOverloads constructor(
                         if (albumArtTrackId != null) {
                             runCatching { lib.setPropertyInt("vid", albumArtTrackId) }
                             runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
-                        } else {
-                            triggerVideoRenderRefresh()
                         }
                     }
                 } catch (e: Throwable) {
@@ -171,11 +163,6 @@ class MPVView @JvmOverloads constructor(
                 try {
                     val lib = mpvLib
                     lib?.setPropertyString("android-surface-size", "${width}x${height}")
-                    // When paused, force repaint at new geometry to avoid stretch or blank buffer
-                    val paused = runCatching { lib?.getPropertyBoolean("pause") }.getOrNull() ?: isPaused
-                    if (paused) {
-                        runCatching { lib?.command(arrayOf("seek", "0", "relative+exact")) }
-                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error updating surface size", e)
                 }
@@ -183,41 +170,15 @@ class MPVView @JvmOverloads constructor(
         }
     }
 
-    private fun triggerVideoRenderRefresh() {
-        val lib = mpvLib ?: return
-        try {
-            val isIdle = runCatching { lib.getPropertyBoolean("idle-active") }.getOrNull() ?: false
-            if (!isIdle) {
-                val currentVid = runCatching { lib.getPropertyString("vid") }.getOrNull() ?: "auto"
-                if (currentVid != "no" && currentVid.isNotBlank()) {
-                    // Force a real decoder re-init: fully disable the video track,
-                    // then re-enable it with the same id, instead of re-assigning
-                    // the same value (which mpv treats as a no-op).
-                    runCatching { lib.setPropertyString("vid", "no") }
-                    runCatching { lib.setPropertyString("vid", currentVid) }
-                }
-                runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
-            }
-        } catch (e: Throwable) {
-            Log.e(TAG, "Error triggering video render refresh", e)
-        }
-        val vidAfter = runCatching { mpvLib?.getPropertyString("vid") }.getOrNull()
-        val pauseAfter = runCatching { mpvLib?.getPropertyBoolean("pause") }.getOrNull()
-        appendDebugLog("renderRefresh done: vid=$vidAfter pause=$pauseAfter")
-    }
-
     fun refreshVideoSurface() {
         synchronized(this) {
             val lib = getActiveLib() ?: return
             try {
                 if (holder.surface != null && holder.surface.isValid) {
-                    val currentVo = runCatching { lib.getPropertyString("vo") }.getOrNull()
-                    if (currentVo == "null" || currentVo.isNullOrBlank()) {
-                        lib.setPropertyString("vo", savedVoForRestore ?: "gpu")
-                    }
-                    savedVoForRestore = null
                     lib.attachSurface(holder.surface)
-                    triggerVideoRenderRefresh()
+                    try {
+                        lib.setPropertyString("vid", "auto")
+                    } catch (_: Exception) {}
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "Error refreshing video surface", e)
@@ -234,15 +195,6 @@ class MPVView @JvmOverloads constructor(
             if (isInitialized) {
                 try {
                     mpvLib?.detachSurface()
-                    val isEof = isEofReached
-                    val idle = runCatching { mpvLib?.getPropertyBoolean("idle-active") }.getOrNull() ?: false
-                    if (!isEof && !idle) {
-                        // Remember the current VO so surfaceCreated() can restore it exactly,
-                        // then switch to audio-only mode so mpv stops targeting a dead surface.
-                        savedVoForRestore = runCatching { mpvLib?.getPropertyString("vo") }
-                            .getOrNull()?.takeIf { it.isNotBlank() && it != "null" }
-                        mpvLib?.setPropertyString("vo", "null")
-                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error detaching surface", e)
                 }
