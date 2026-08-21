@@ -56,21 +56,38 @@ fun PlayerScreen(
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP || event == Lifecycle.Event.ON_DESTROY) {
-                val hasSleepTimer = viewModel.remainingTime.value > 0
-                val isBackgroundPlay = viewModel.isBackgroundPlay.value
-                if (activity?.isFinishing == true) {
-                    try {
-                        viewModel.pause()
-                        viewModel.stopPlayback()
-                        mpvView.stop()
-                        mpvView.destroy()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    val hasSleepTimer = viewModel.remainingTime.value > 0
+                    val isBackgroundPlay = viewModel.isBackgroundPlay.value
+                    if (activity?.isFinishing == false && !hasSleepTimer && !isBackgroundPlay) {
+                        try {
+                            viewModel.pause()
+                        } catch (_: Exception) {}
                     }
-                } else if (!hasSleepTimer && !isBackgroundPlay) {
-                    viewModel.pause()
                 }
+                Lifecycle.Event.ON_RESUME -> {
+                    try {
+                        viewModel.onAppResumed(context)
+                    } catch (_: Exception) {}
+                }
+                Lifecycle.Event.ON_STOP, Lifecycle.Event.ON_DESTROY -> {
+                    val hasSleepTimer = viewModel.remainingTime.value > 0
+                    val isBackgroundPlay = viewModel.isBackgroundPlay.value
+                    if (activity?.isFinishing == true) {
+                        try {
+                            viewModel.pause()
+                            viewModel.stopPlayback()
+                            mpvView.stop()
+                            mpvView.destroy()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    } else if (!hasSleepTimer && !isBackgroundPlay) {
+                        viewModel.pause()
+                    }
+                }
+                else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
