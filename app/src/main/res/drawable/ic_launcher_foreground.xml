@@ -5,36 +5,22 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Soft Drop Shadow for Elevation & Clear Definition -->
-    <!-- Stem & Top Bar Shadow -->
+    <!-- Outer Circular White Border Ring matching the screenshot -->
     <path
-        android:fillColor="#26000000"
-        android:pathData="M29,27 C29,24.8 30.8,23 33,23 L75,23 C77.2,23 79,24.8 79,27 L79,37 C79,39.2 77.2,41 75,41 L45,41 L45,83 C45,85.2 43.2,87 41,87 L33,87 C30.8,87 29,85.2 29,83 Z" />
+        android:strokeWidth="4.5"
+        android:strokeColor="#FFFFFFFF"
+        android:fillColor="#00000000"
+        android:pathData="M54,23 A31,31 0 1,0 54,85 A31,31 0 1,0 54,23 Z" />
 
-    <!-- Play Button Shadow -->
-    <path
-        android:fillColor="#26000000"
-        android:pathData="M44,48.5 C44,46.5 46.2,45.2 48,46.2 L77,60.2 C78.8,61.2 78.8,63.8 77,64.8 L48,78.8 C46.2,79.8 44,78.5 44,76.5 Z" />
-
-    <!-- 1. The 'F' Letter Base (Vertical Stem and Top Bar) in Solid Pure White -->
-    <!-- Vertical Stem -->
+    <!-- Stylized 'F' Logo with Integrated Play Button Arrow -->
+    <!-- 1. Vertical Stem & Top Bar of 'F' -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M28,26 C28,23.8 29.8,22 32,22 L44,22 C46.2,22 48,23.8 48,26 L48,82 C48,84.2 46.2,86 44,86 L32,86 C29.8,86 28,84.2 28,82 Z" />
+        android:pathData="M35,34 L62,34 L62,42.5 L43.5,42.5 L43.5,74 L35,74 Z" />
 
-    <!-- Top Horizontal Bar of 'F' -->
+    <!-- 2. Middle Arm extending and integrating directly into the Play Triangle Button -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M46,22 L74,22 C76.2,22 78,23.8 78,26 L78,36 C78,38.2 76.2,40 74,40 L46,40 Z" />
-
-    <!-- 2. Integrated Bold Play Button (Middle Bar of 'F' + Clear Triangular Media Arrow) -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M43,47.5 C43,45.5 45.2,44.2 47,45.2 L76,59.2 C77.8,60.2 77.8,62.8 76,63.8 L47,77.8 C45.2,78.8 43,77.5 43,75.5 Z" />
-
-    <!-- 3. Distinct Inner Lavender Accent Triangle to clearly highlight and sculpt the Play Button inside the 'F' -->
-    <path
-        android:fillColor="#FF7E57C2"
-        android:pathData="M47,52 L67,61.5 L47,71 Z" />
+        android:pathData="M43.5,50 L51,50 L51,48.5 L69,61.5 L51,74.5 L51,57 L43.5,57 Z" />
 
 </vector>
