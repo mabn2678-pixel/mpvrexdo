@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -460,6 +461,8 @@ fun HomeScreen(
                                             state = lazyGridState,
                                             columns = GridCells.Fixed(2),
                                             modifier = Modifier.fillMaxSize(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
                                             contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp, start = 8.dp, end = 8.dp)
                                         ) {
                                             itemsIndexed(
@@ -547,6 +550,8 @@ fun HomeScreen(
                                             state = lazyGridState,
                                             columns = GridCells.Fixed(2),
                                             modifier = Modifier.fillMaxSize(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
                                             contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp, start = 8.dp, end = 8.dp)
                                         ) {
                                             itemsIndexed(

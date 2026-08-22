@@ -76,7 +76,8 @@ fun List<VideoEntity>.toVideoFolders(): List<VideoFolder> {
                 totalDuration = totalDuration,
                 totalSizeBytes = totalSizeBytes,
                 lastModified = folderDate,
-                coverThumbnail = videos.firstOrNull { it.thumbnailPath != null }?.thumbnailPath
+                coverThumbnail = videos.firstOrNull { it.thumbnailPath != null }?.thumbnailPath,
+                previewThumbnails = videos.take(3).map { it.thumbnailPath ?: it.uri }
             )
         }
         .sortedBy { it.name }

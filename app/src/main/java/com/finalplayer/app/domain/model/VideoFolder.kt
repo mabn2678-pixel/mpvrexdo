@@ -7,5 +7,6 @@ data class VideoFolder(
     val totalDuration: Long,
     val totalSizeBytes: Long,
     val lastModified: Long,
-    val coverThumbnail: String? = null
+    val coverThumbnail: String? = null,
+    val previewThumbnails: List<String> = emptyList()
 )

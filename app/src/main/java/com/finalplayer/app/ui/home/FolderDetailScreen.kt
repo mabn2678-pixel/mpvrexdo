@@ -328,6 +328,8 @@ fun FolderDetailScreen(
                 columns = GridCells.Fixed(2),
                 state = gridState,
                 modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
                 contentPadding = padding
             ) {
                 itemsIndexed(sortedVideos, key = { index, video -> "${video.id}_$index" }) { index, video ->
@@ -574,10 +576,11 @@ fun VideoListItem(
     } else 0f
     val hasProgress = showProgressBar && progressRatio > 0.005f
 
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(12.dp))
             .then(
                 if (isSelectionMode) {
                     Modifier.clickable { onClick() }
@@ -589,25 +592,10 @@ fun VideoListItem(
                 } else {
                     Modifier.clickable { onClick() }
                 }
-            ),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
-            else
-                MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        border = if (isSelected)
-            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        else
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f))
+            )
+            .padding(start = 6.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             // Text Details Column (Title + Optional Path + Chips + Subtitle languages)
             Column(
                 modifier = Modifier.weight(1f)
@@ -795,23 +783,22 @@ fun VideoListItem(
             Spacer(modifier = Modifier.width(2.dp))
 
             // 3-dots button placed right next to the thumbnail
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .combinedClickable(
-                        onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
-                        onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "خيارات الفيديو",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .combinedClickable(
+                    onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
+                    onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "خيارات الفيديو",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -839,10 +826,11 @@ fun VideoGridItem(
     } else 0f
     val hasProgress = showProgressBar && progressRatio > 0.005f
 
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(6.dp)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(12.dp))
             .then(
                 if (isSelectionMode) {
                     Modifier.clickable { onClick() }
@@ -854,22 +842,8 @@ fun VideoGridItem(
                 } else {
                     Modifier.clickable { onClick() }
                 }
-            ),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.85f)
-            else
-                MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        border = if (isSelected)
-            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        else
-            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+            )
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1056,7 +1030,6 @@ fun VideoGridItem(
             }
         }
     }
-}
 
 @Composable
 private fun MetaChip(text: String) {
