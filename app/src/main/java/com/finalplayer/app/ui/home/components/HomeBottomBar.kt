@@ -2,10 +2,10 @@ package com.finalplayer.app.ui.home.components
 
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.OndemandVideo
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -28,11 +28,11 @@ fun HomeBottomBar(
     selectedTab: HomeTab,
     onTabSelected: (HomeTab) -> Unit,
     onMusicClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
     appearancePrefs: AppearancePreferences = koinInject()
 ) {
     val showHomeTab by appearancePrefs.showHomeTab.asFlow().collectAsState(initial = true)
     val showShortsTab by appearancePrefs.showShortsTab.asFlow().collectAsState(initial = true)
-    val showRecentsTab by appearancePrefs.showRecentsTab.asFlow().collectAsState(initial = true)
 
     NavigationBar(
         modifier = Modifier.height(56.dp),
@@ -64,33 +64,31 @@ fun HomeBottomBar(
             )
         )
 
-        // 1. الأخيرة (Recents)
-        if (showRecentsTab) {
-            NavigationBarItem(
-                selected = selectedTab == HomeTab.RECENTS,
-                onClick = { onTabSelected(HomeTab.RECENTS) },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.History,
-                        contentDescription = "الأخيرة"
-                    )
-                },
-                label = {
-                    Text(
-                        text = "الأخيرة",
-                        fontSize = 12.sp,
-                        fontWeight = if (selectedTab == HomeTab.RECENTS) FontWeight.Bold else FontWeight.Normal
-                    )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+        // 1. الإعدادات (Settings)
+        NavigationBarItem(
+            selected = false,
+            onClick = { onSettingsClick() },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "الإعدادات"
                 )
+            },
+            label = {
+                Text(
+                    text = "الإعدادات",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            },
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = MaterialTheme.colorScheme.primary,
+                selectedTextColor = MaterialTheme.colorScheme.primary,
+                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
+        )
 
         // 2. القصيرة (Shorts)
         if (showShortsTab) {

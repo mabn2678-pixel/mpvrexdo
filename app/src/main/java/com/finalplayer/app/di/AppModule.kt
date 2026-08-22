@@ -8,7 +8,6 @@ import com.finalplayer.app.data.repository.PlaybackRepositoryImpl
 import com.finalplayer.app.data.repository.VideoRepositoryImpl
 import com.finalplayer.app.domain.repository.PlaybackRepository
 import com.finalplayer.app.domain.repository.VideoRepository
-import com.finalplayer.app.domain.usecase.GetRecentlyPlayedUseCase
 import com.finalplayer.app.domain.usecase.GetVideoLibraryUseCase
 import com.finalplayer.app.domain.usecase.GetVideosByFolderUseCase
 import com.finalplayer.app.domain.usecase.SavePlaybackProgressUseCase
@@ -17,7 +16,6 @@ import com.finalplayer.app.player.PlayerViewModel
 import com.finalplayer.app.player.core.MPVController
 import com.finalplayer.app.ui.home.HomeViewModel
 import com.finalplayer.app.ui.onboarding.OnboardingViewModel
-import com.finalplayer.app.ui.recents.RecentsViewModel
 import com.finalplayer.app.ui.search.SearchViewModel
 import com.finalplayer.app.ui.securefolder.SecureFolderViewModel
 import com.finalplayer.app.ui.settings.SettingsViewModel
@@ -53,7 +51,6 @@ val appModule = module {
     factory { GetVideosByFolderUseCase(get()) }
     factory { ScanForVideosUseCase(get()) }
     factory { SavePlaybackProgressUseCase(get()) }
-    factory { GetRecentlyPlayedUseCase(get()) }
 
     // Music Player
     single { com.finalplayer.app.music.data.local.MediaStoreScanner(androidContext()) }
@@ -70,7 +67,6 @@ val appModule = module {
     viewModel { PlayerViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
     viewModel { SearchViewModel(get()) }
-    viewModel { RecentsViewModel(get(), get(), get()) }
     viewModel { SecureFolderViewModel(get(), get(), get()) }
 }
 

@@ -70,7 +70,6 @@ import com.finalplayer.app.ui.home.components.FolderGridCard
 import com.finalplayer.app.ui.home.components.HomeBottomBar
 import com.finalplayer.app.ui.home.components.HomeTopBar
 import com.finalplayer.app.ui.home.components.SortBottomSheet
-import com.finalplayer.app.ui.recents.RecentsScreen
 import com.finalplayer.app.ui.securefolder.SecureFolderViewModel
 import com.finalplayer.app.ui.shorts.ShortsScreen
 import com.finalplayer.app.utils.FileInfo
@@ -272,7 +271,6 @@ fun HomeScreen(
                 }
             } else if (uiState.selectedTab == HomeTab.HOME) {
                 HomeTopBar(
-                    onSettingsClick = onSettingsClick,
                     onSortClick = { showSortSheet = true },
                     onSearchClick = onSearchClick,
                     onSecureFolderClick = onSecureFolderClick
@@ -393,7 +391,8 @@ fun HomeScreen(
                         selectedFolders = emptySet()
                         viewModel.selectTab(tab)
                     },
-                    onMusicClick = onMusicClick
+                    onMusicClick = onMusicClick,
+                    onSettingsClick = onSettingsClick
                 )
             }
         }
@@ -404,13 +403,6 @@ fun HomeScreen(
                 .padding(paddingValues)
         ) {
             when (uiState.selectedTab) {
-                HomeTab.RECENTS -> {
-                    RecentsScreen(
-                        onVideoClick = { video, list, idx ->
-                            onVideoClick(video, list, idx)
-                        }
-                    )
-                }
                 HomeTab.SHORTS -> {
                     ShortsScreen(
                         viewModel = viewModel,
@@ -420,6 +412,7 @@ fun HomeScreen(
                         }
                     )
                 }
+                HomeTab.RECENTS,
                 HomeTab.HOME -> {
                     val isLibraryView = uiState.viewMode == "library"
                     val isGridView = uiState.layoutMode == "grid"

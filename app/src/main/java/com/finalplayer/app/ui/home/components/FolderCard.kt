@@ -2,6 +2,7 @@ package com.finalplayer.app.ui.home.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -326,15 +327,22 @@ private fun FolderStackedPreview(
             }
         } else {
             val count = nonBlankThumbnails.size
-            // Render back layer first (index 2 down to 0)
+            // Render back layers first, front layer last
             for (i in (count - 1) downTo 0) {
                 val offsetVal = (i * 4).dp
+                val xOffset = offsetVal - ((count - 1) * 2).dp
+                val yOffset = offsetVal - ((count - 1) * 2).dp
                 Box(
                     modifier = Modifier
-                        .offset(x = offsetVal - ((count - 1) * 2).dp, y = offsetVal - ((count - 1) * 2).dp)
+                        .offset(x = xOffset, y = yOffset)
                         .size(size)
                         .clip(RoundedCornerShape(10.dp))
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
                 ) {
                     VideoThumbnailImage(
                         videoUri = nonBlankThumbnails[i],

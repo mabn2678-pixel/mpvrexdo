@@ -127,7 +127,8 @@ class VideoRepositoryImpl(
                     totalDuration = folderVideos.sumOf { it.duration },
                     totalSizeBytes = folderVideos.sumOf { it.sizeBytes },
                     lastModified = folderDate,
-                    coverThumbnail = null
+                    coverThumbnail = folderVideos.firstOrNull { it.thumbnailPath != null }?.thumbnailPath ?: folderVideos.firstOrNull()?.uri,
+                    previewThumbnails = folderVideos.take(3).map { it.thumbnailPath ?: it.uri }
                 )
             }.sortedByDescending { it.lastModified }
         }
