@@ -130,6 +130,7 @@ class MPVView @JvmOverloads constructor(
                 try {
                     val lib = mpvLib
                     if (lib != null && holder.surface != null && holder.surface.isValid) {
+                        // الترتيب الرسمي: attachSurface أولاً قبل أي خاصية أخرى
                         lib.attachSurface(holder.surface)
                         lib.setPropertyString("force-window", "yes")
 
@@ -147,12 +148,8 @@ class MPVView @JvmOverloads constructor(
                                 runCatching { lib.getPropertyInt("track-list/$index/id") }.getOrNull()
                             } else null
                         }
-
                         if (albumArtTrackId != null) {
                             runCatching { lib.setPropertyInt("vid", albumArtTrackId) }
-                            runCatching { lib.command(arrayOf("seek", "0", "relative+exact")) }
-                        } else {
-                            triggerVideoRenderRefresh()
                         }
                     }
                 } catch (e: Throwable) {
@@ -224,15 +221,16 @@ class MPVView @JvmOverloads constructor(
         synchronized(this) {
             if (isInitialized) {
                 try {
-                    mpvLib?.detachSurface()
                     val isEof = isEofReached
                     val idle = runCatching { mpvLib?.getPropertyBoolean("idle-active") }.getOrNull() ?: false
                     if (!isEof && !idle) {
+                        // الترتيب الرسمي: اضبط vo و force-window أولاً، ثم detachSurface في النهاية فقط
                         savedVoForRestore = runCatching { mpvLib?.getPropertyString("vo") }
                             .getOrNull()?.takeIf { it.isNotBlank() && it != "null" }
                         mpvLib?.setPropertyString("vo", "null")
                         mpvLib?.setPropertyString("force-window", "no")
                     }
+                    mpvLib?.detachSurface()
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error detaching surface", e)
                 }
