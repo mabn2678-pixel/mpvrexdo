@@ -72,7 +72,6 @@ fun SecureFolderScreen(
     val isUnlocked by viewModel.isUnlocked.collectAsState()
     val isPinSet by viewModel.isPinSet.collectAsState()
     val secureVideos by viewModel.secureVideos.collectAsState()
-    val secureCount by viewModel.secureVideoCount.collectAsState()
     val sortBy by viewModel.sortBy.collectAsState()
     val sortAscending by viewModel.sortAscending.collectAsState()
     val layoutMode by viewModel.layoutMode.collectAsState()
@@ -247,7 +246,7 @@ fun SecureFolderScreen(
                         style = MaterialTheme.typography.headlineMedium
                     )
                     Text(
-                        "$secureCount ${if (secureCount == 1) "فيديو" else "فيديوهات"} محمية",
+                        "محتوى محمي ومشفر",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 

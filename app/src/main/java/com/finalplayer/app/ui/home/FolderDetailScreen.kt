@@ -113,6 +113,7 @@ fun FolderDetailScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val transferProgress by viewModel.transferProgress.collectAsState()
 
     val videos by viewModel.getVideosInFolder(folderPath)
         .collectAsState(initial = emptyList())
@@ -551,6 +552,12 @@ fun FolderDetailScreen(
             }
         )
     }
+
+    com.finalplayer.app.ui.components.FileTransferProgressDialog(
+        progress = transferProgress,
+        onCancel = { viewModel.cancelTransfer() },
+        onMoveToBackground = { viewModel.moveTransferToBackground() }
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
@@ -596,193 +603,99 @@ fun VideoListItem(
             .padding(start = 6.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-            // Text Details Column (Title + Optional Path + Chips + Subtitle languages)
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                // Dynamic font sizing based on title length so long titles fit completely
-                val titleLength = video.title.length
-                val titleFontSize = when {
-                    titleLength > 55 -> 11.5.sp
-                    titleLength > 40 -> 12.5.sp
-                    titleLength > 25 -> 13.5.sp
-                    else -> 15.sp
-                }
-                val titleLineHeight = when {
-                    titleLength > 55 -> 15.sp
-                    titleLength > 40 -> 16.5.sp
-                    titleLength > 25 -> 18.sp
-                    else -> 20.sp
-                }
+        // 1. Thumbnail with Duration Overlay, Progress Bar, Status Badge & Selection Overlay
+        Box(
+            modifier = Modifier
+                .width(108.dp)
+                .height(66.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            VideoThumbnailImage(
+                videoUri = video.uri,
+                thumbnailUrl = video.thumbnailPath,
+                videoDurationMs = video.duration,
+                modifier = Modifier.fillMaxSize(),
+                contentDescription = video.title
+            )
 
-                Text(
-                    text = video.title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = titleFontSize,
-                        lineHeight = titleLineHeight
+            // Duration Overlay (Bottom-Start)
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(
+                        start = 4.dp,
+                        bottom = if (hasProgress) 7.dp else 4.dp,
+                        end = 4.dp,
+                        top = 4.dp
                     ),
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = if (showFullName) 6 else 3,
-                    overflow = TextOverflow.Ellipsis
+                shape = RoundedCornerShape(4.dp),
+                color = Color.Black.copy(alpha = 0.75f),
+                contentColor = Color.White
+            ) {
+                Text(
+                    text = formatDuration(video.duration),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                 )
-
-                if (showPath) {
-                    val cleanVideoPath = video.folderPath.ifEmpty { video.uri.substringBeforeLast("/") }
-                    if (cleanVideoPath.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = cleanVideoPath,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                            fontSize = 10.5.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                val showResolution = visibleFields.isEmpty() || visibleFields.contains("Resolution")
-                val showFileSize = visibleFields.isEmpty() || visibleFields.contains("File Size")
-                val showDate = visibleFields.isEmpty() || visibleFields.contains("Date")
-                val showTotalDuration = visibleFields.contains("Total Duration")
-
-                if (showResolution || showFileSize || showDate || showTotalDuration || subtitleLangs.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    AppFlowRow(
-                        horizontalSpacing = 4.dp,
-                        verticalSpacing = 4.dp
-                    ) {
-                        if (showResolution) {
-                            val resText = when {
-                                video.resolution != null && video.resolution.contains("x") -> {
-                                    val h = video.resolution.substringAfter("x").toIntOrNull() ?: 0
-                                    if (h > 0) "${h}p" else video.resolution
-                                }
-                                else -> "1080p"
-                            }
-                            MetaChip(text = resText)
-                        }
-
-                        if (showFileSize) {
-                            val sizeText = formatFileSize(video.sizeBytes)
-                            if (sizeText.isNotEmpty()) {
-                                MetaChip(text = sizeText)
-                            }
-                        }
-
-                        if (showDate && video.dateAdded > 0) {
-                            MetaChip(text = formatDateShort(video.dateAdded))
-                        }
-
-                        if (showTotalDuration && video.duration > 0) {
-                            MetaChip(text = formatDuration(video.duration))
-                        }
-
-                        // Subtitle Language Tags
-                        subtitleLangs.forEach { lang ->
-                            SubtitleChip(language = lang)
-                        }
-                    }
-                }
             }
 
-            Spacer(modifier = Modifier.width(6.dp))
-
-            // Thumbnail with Duration Overlay, Progress Bar, Status Badge & Selection Overlay
-            Box(
-                modifier = Modifier
-                    .width(108.dp)
-                    .height(66.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            ) {
-                VideoThumbnailImage(
-                    videoUri = video.uri,
-                    thumbnailUrl = video.thumbnailPath,
-                    videoDurationMs = video.duration,
-                    modifier = Modifier.fillMaxSize(),
-                    contentDescription = video.title
-                )
-
-                // Duration Overlay (Bottom-Start)
-                Surface(
+            // Progress Bar at bottom of thumbnail
+            if (hasProgress) {
+                Box(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(
-                            start = 4.dp,
-                            bottom = if (hasProgress) 7.dp else 4.dp,
-                            end = 4.dp,
-                            top = 4.dp
-                        ),
-                    shape = RoundedCornerShape(4.dp),
-                    color = Color.Black.copy(alpha = 0.75f),
-                    contentColor = Color.White
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(3.5.dp)
+                        .background(Color.Black.copy(alpha = 0.6f))
                 ) {
-                    Text(
-                        text = formatDuration(video.duration),
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                    )
-                }
-
-                // Progress Bar at bottom of thumbnail
-                if (hasProgress) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(3.5.dp)
-                            .background(Color.Black.copy(alpha = 0.6f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(progressRatio)
-                                .background(MaterialTheme.colorScheme.primary)
-                        )
-                    }
+                            .fillMaxHeight()
+                            .fillMaxWidth(progressRatio)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
                 }
+            }
 
-                // New / Running Status Badge (Top-End)
-                VideoStatusBadge(
-                    isOpened = isOpened,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(3.dp)
-                )
+            // New / Running Status Badge (Top-End)
+            VideoStatusBadge(
+                isOpened = isOpened,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(3.dp)
+            )
 
-                // Selection checkmark overlay
-                if (isSelected) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "محدد",
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.padding(4.dp)
-                                )
-                            }
+            // Selection checkmark overlay
+            if (isSelected) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "محدد",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(4.dp)
+                            )
                         }
                     }
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.width(2.dp))
+        Spacer(modifier = Modifier.width(2.dp))
 
-            // 3-dots button placed right next to the thumbnail
+        // 2. 3-dots button placed right next to the thumbnail
         Box(
             modifier = Modifier
                 .size(32.dp)
@@ -799,6 +712,100 @@ fun VideoListItem(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
+        }
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        // 3. Text Details Column (Title + Optional Path + Chips + Subtitle languages)
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            // Dynamic font sizing based on title length so long titles fit completely
+            val titleLength = video.title.length
+            val titleFontSize = when {
+                titleLength > 55 -> 11.5.sp
+                titleLength > 40 -> 12.5.sp
+                titleLength > 25 -> 13.5.sp
+                else -> 15.sp
+            }
+            val titleLineHeight = when {
+                titleLength > 55 -> 15.sp
+                titleLength > 40 -> 16.5.sp
+                titleLength > 25 -> 18.sp
+                else -> 20.sp
+            }
+
+            Text(
+                text = video.title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = titleFontSize,
+                    lineHeight = titleLineHeight
+                ),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = if (showFullName) 6 else 3,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (showPath) {
+                val cleanVideoPath = video.folderPath.ifEmpty { video.uri.substringBeforeLast("/") }
+                if (cleanVideoPath.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = cleanVideoPath,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        fontSize = 10.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            val showResolution = visibleFields.isEmpty() || visibleFields.contains("Resolution")
+            val showFileSize = visibleFields.isEmpty() || visibleFields.contains("File Size")
+            val showDate = visibleFields.isEmpty() || visibleFields.contains("Date")
+            val showTotalDuration = visibleFields.contains("Total Duration")
+
+            if (showResolution || showFileSize || showDate || showTotalDuration || subtitleLangs.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+
+                AppFlowRow(
+                    horizontalSpacing = 4.dp,
+                    verticalSpacing = 4.dp
+                ) {
+                    if (showResolution) {
+                        val resText = when {
+                            video.resolution != null && video.resolution.contains("x") -> {
+                                val h = video.resolution.substringAfter("x").toIntOrNull() ?: 0
+                                if (h > 0) "${h}p" else video.resolution
+                            }
+                            else -> "1080p"
+                        }
+                        MetaChip(text = resText)
+                    }
+
+                    if (showFileSize) {
+                        val sizeText = formatFileSize(video.sizeBytes)
+                        if (sizeText.isNotEmpty()) {
+                            MetaChip(text = sizeText)
+                        }
+                    }
+
+                    if (showDate && video.dateAdded > 0) {
+                        MetaChip(text = formatDateShort(video.dateAdded))
+                    }
+
+                    if (showTotalDuration && video.duration > 0) {
+                        MetaChip(text = formatDuration(video.duration))
+                    }
+
+                    // Subtitle Language Tags
+                    subtitleLangs.forEach { lang ->
+                        SubtitleChip(language = lang)
+                    }
+                }
+            }
         }
     }
 }
@@ -1035,8 +1042,8 @@ fun VideoGridItem(
 private fun MetaChip(text: String) {
     Surface(
         shape = RoundedCornerShape(6.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+        contentColor = MaterialTheme.colorScheme.primary
     ) {
         Text(
             text = text,

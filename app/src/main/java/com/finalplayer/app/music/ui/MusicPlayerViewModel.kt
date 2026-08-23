@@ -72,4 +72,17 @@ class MusicPlayerViewModel(
     fun toggleLyricsExpanded() {
         _isLyricsExpanded.value = !_isLyricsExpanded.value
     }
+
+    private val speedCycle = listOf(1.0f, 0.5f, 0.75f, 1.0f, 1.25f, 1.50f, 1.75f, 2.0f)
+    private var speedCycleIndex = 0
+
+    fun cyclePlaybackSpeed() {
+        speedCycleIndex = (speedCycleIndex + 1) % speedCycle.size
+        val targetSpeed = speedCycle[speedCycleIndex]
+        controller.setPlaybackSpeed(targetSpeed)
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        controller.setPlaybackSpeed(speed)
+    }
 }

@@ -50,7 +50,6 @@ import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.CropOriginal
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -60,7 +59,6 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.ZoomIn
@@ -463,7 +461,7 @@ fun PlayerControls(
                                 shape = CircleShape,
                                 color = Color.Black.copy(alpha = 0.45f),
                                 border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                     IconButton(
@@ -474,70 +472,26 @@ fun PlayerControls(
                                             imageVector = Icons.Default.SkipPrevious,
                                             contentDescription = "الفيديو السابق",
                                             tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(28.dp)
                                         )
                                     }
                                 }
                             }
                         }
 
-                        // 2. Rewind 10s
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.45f),
-                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                IconButton(
-                                    onClick = { onSeekBy(-10) },
-                                    modifier = Modifier.fillMaxSize().testTag("player_rewind_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Replay10,
-                                        contentDescription = "تأخير 10 ثواني",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // 3. Play/Pause
+                        // 2. Play/Pause (Center)
                         WaterRipplePlayPauseButton(
                             isPaused = isPaused,
                             onPlayPause = onPlayPause
                         )
 
-                        // 4. Fast Forward 10s
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.45f),
-                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                IconButton(
-                                    onClick = { onSeekBy(10) },
-                                    modifier = Modifier.fillMaxSize().testTag("player_fast_forward_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Forward10,
-                                        contentDescription = "تقديم 10 ثواني",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // 5. Next Video
+                        // 3. Next Video
                         if (enablePrevNext) {
                             Surface(
                                 shape = CircleShape,
                                 color = Color.Black.copy(alpha = 0.45f),
                                 border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                     IconButton(
@@ -548,7 +502,7 @@ fun PlayerControls(
                                             imageVector = Icons.Default.SkipNext,
                                             contentDescription = "الفيديو التالي",
                                             tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
+                                            modifier = Modifier.size(28.dp)
                                         )
                                     }
                                 }
@@ -1222,10 +1176,8 @@ private fun RenderControlToolItem(
                     .clip(RoundedCornerShape(6.dp))
                     .combinedClickable(
                         onClick = {
-                            val speedCycle = listOf(1.00f, 1.25f, 1.50f, 1.75f, 2.00f, 0.25f, 0.50f, 0.75f)
-                            val currIndex = speedCycle.indexOfFirst { kotlin.math.abs(it - playbackSpeed) < 0.05f }
-                            val nextIndex = if (currIndex != -1) (currIndex + 1) % speedCycle.size else 1
-                            onSpeedChange(speedCycle[nextIndex])
+                            val nextSpeed = getNextVideoPlaybackSpeed(playbackSpeed)
+                            onSpeedChange(nextSpeed)
                         },
                         onLongClick = {
                             onOpenSheet(Sheets.PlaybackSpeed)
@@ -1789,6 +1741,78 @@ fun FrameNavSheet(
                     Text("إطار للأمام")
                 }
             }
+        }
+    }
+}
+
+private var wasInAscendingSpeedCycle = false
+
+fun getNextVideoPlaybackSpeed(currentSpeed: Float): Float {
+    return when {
+        kotlin.math.abs(currentSpeed - 0.50f) < 0.05f -> {
+            wasInAscendingSpeedCycle = true
+            0.75f
+        }
+        kotlin.math.abs(currentSpeed - 0.75f) < 0.05f -> {
+            wasInAscendingSpeedCycle = true
+            1.00f
+        }
+        kotlin.math.abs(currentSpeed - 1.00f) < 0.05f -> {
+            if (wasInAscendingSpeedCycle) {
+                wasInAscendingSpeedCycle = false
+                1.25f
+            } else {
+                wasInAscendingSpeedCycle = true
+                0.50f
+            }
+        }
+        kotlin.math.abs(currentSpeed - 1.25f) < 0.05f -> {
+            wasInAscendingSpeedCycle = false
+            1.50f
+        }
+        kotlin.math.abs(currentSpeed - 1.50f) < 0.05f -> {
+            wasInAscendingSpeedCycle = false
+            1.75f
+        }
+        kotlin.math.abs(currentSpeed - 1.75f) < 0.05f -> {
+            wasInAscendingSpeedCycle = false
+            2.00f
+        }
+        kotlin.math.abs(currentSpeed - 2.00f) < 0.05f -> {
+            wasInAscendingSpeedCycle = false
+            1.00f
+        }
+        currentSpeed < 0.5f -> {
+            wasInAscendingSpeedCycle = true
+            0.50f
+        }
+        currentSpeed in 0.5f..0.75f -> {
+            wasInAscendingSpeedCycle = true
+            0.75f
+        }
+        currentSpeed in 0.75f..1.0f -> {
+            wasInAscendingSpeedCycle = true
+            1.00f
+        }
+        currentSpeed in 1.0f..1.25f -> {
+            wasInAscendingSpeedCycle = false
+            1.25f
+        }
+        currentSpeed in 1.25f..1.5f -> {
+            wasInAscendingSpeedCycle = false
+            1.50f
+        }
+        currentSpeed in 1.5f..1.75f -> {
+            wasInAscendingSpeedCycle = false
+            1.75f
+        }
+        currentSpeed in 1.75f..2.0f -> {
+            wasInAscendingSpeedCycle = false
+            2.00f
+        }
+        else -> {
+            wasInAscendingSpeedCycle = false
+            1.00f
         }
     }
 }

@@ -2,7 +2,6 @@ package com.finalplayer.app.ui.shorts
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,26 +20,24 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,10 +59,12 @@ import com.finalplayer.app.domain.model.VideoItem
 import com.finalplayer.app.ui.components.VideoStatusBadge
 import com.finalplayer.app.ui.components.VideoThumbnailImage
 import com.finalplayer.app.ui.home.HomeViewModel
+import com.finalplayer.app.ui.home.components.SortBottomSheet
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShortsScreen(
     viewModel: HomeViewModel,
@@ -73,37 +72,23 @@ fun ShortsScreen(
     modifier: Modifier = Modifier
 ) {
     val allShorts by viewModel.shortsVideos.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val playedIds by viewModel.playedVideoIds.collectAsState(initial = emptySet())
 
-    var isGridView by remember { mutableStateOf(true) }
-    var selectedCategory by remember { mutableStateOf("all") } // "all", "tiktok", "instagram", "shorts"
+    var isGridView by remember(uiState.layoutMode) { mutableStateOf(uiState.layoutMode == "grid") }
+    var showSortSheet by remember { mutableStateOf(false) }
+    val sortSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val filteredShorts = remember(allShorts, selectedCategory) {
+    val sortedShorts = remember(allShorts, uiState.sortBy, uiState.sortAscending) {
         val shortsOnly = allShorts.filter { it.isShortPlatformVideo }
-        when (selectedCategory) {
-            "tiktok" -> {
-                val matches = shortsOnly.filter { video ->
-                    val path = "${video.folderPath}/${video.uri} ${video.title}".lowercase(Locale.ROOT)
-                    path.contains("tiktok")
-                }
-                matches.ifEmpty { shortsOnly }
-            }
-            "instagram" -> {
-                val matches = shortsOnly.filter { video ->
-                    val path = "${video.folderPath}/${video.uri} ${video.title}".lowercase(Locale.ROOT)
-                    path.contains("instagram") || path.contains("reel")
-                }
-                matches.ifEmpty { shortsOnly }
-            }
-            "shorts" -> {
-                val matches = shortsOnly.filter { video ->
-                    val path = "${video.folderPath}/${video.uri} ${video.title}".lowercase(Locale.ROOT)
-                    path.contains("shorts") || path.contains("ytshort")
-                }
-                matches.ifEmpty { shortsOnly }
-            }
-            else -> shortsOnly
+        val sorted = when (uiState.sortBy) {
+            "title" -> shortsOnly.sortedBy { it.title.lowercase(Locale.ROOT) }
+            "date" -> shortsOnly.sortedBy { it.dateAdded }
+            "size" -> shortsOnly.sortedBy { it.sizeBytes }
+            "duration" -> shortsOnly.sortedBy { it.duration }
+            else -> shortsOnly.sortedBy { it.dateAdded }
         }
+        if (uiState.sortAscending) sorted else sorted.reversed()
     }
 
     Column(
@@ -117,70 +102,48 @@ fun ShortsScreen(
             tonalElevation = 2.dp,
             shadowElevation = 1.dp
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Videocam,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
+                // Title "Shorts" styled with the theme's primary color
+                Text(
+                    text = "Shorts",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 22.sp
+                )
 
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "المقاطع القصيرة",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.tertiaryContainer
-                                ) {
-                                    Text(
-                                        text = "${filteredShorts.size}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "TikTok, YouTube Shorts, Reels",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                // Actions: Sort & View icon + Grid/List toggle icon
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Sort & View Icon Button
+                    IconButton(
+                        onClick = { showSortSheet = true },
+                        modifier = Modifier
+                            .size(38.dp)
+                            .testTag("shorts_sort_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = "العرض والفرز",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
 
-                    // Layout toggle button
+                    // Layout toggle button (Grid / List)
                     IconButton(
-                        onClick = { isGridView = !isGridView },
+                        onClick = {
+                            isGridView = !isGridView
+                            viewModel.setLayoutMode(if (isGridView) "grid" else "list")
+                        },
                         modifier = Modifier
                             .size(38.dp)
                             .testTag("shorts_layout_toggle")
@@ -188,91 +151,16 @@ fun ShortsScreen(
                         Icon(
                             imageVector = if (isGridView) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
                             contentDescription = "تغيير العرض",
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Sorting Notice Banner (Oldest to Newest)
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "مرتبة تلقائياً: من الفيديوهات الأقدم إلى الأحدث",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Category Chips Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilterChip(
-                        selected = selectedCategory == "all",
-                        onClick = { selectedCategory = "all" },
-                        label = { Text("الكل", fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
-                    FilterChip(
-                        selected = selectedCategory == "tiktok",
-                        onClick = { selectedCategory = "tiktok" },
-                        label = { Text("TikTok", fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
-                    FilterChip(
-                        selected = selectedCategory == "instagram",
-                        onClick = { selectedCategory = "instagram" },
-                        label = { Text("Instagram / Reels", fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
-                    FilterChip(
-                        selected = selectedCategory == "shorts",
-                        onClick = { selectedCategory = "shorts" },
-                        label = { Text("YouTube Shorts", fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    )
                 }
             }
         }
 
         // Shorts List Content
-        if (filteredShorts.isEmpty()) {
+        if (sortedShorts.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -290,7 +178,7 @@ fun ShortsScreen(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                     Text(
-                        text = "لا توجد مقاطع قصيرة في هذه الفئة",
+                        text = "لا توجد مقاطع قصيرة",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -311,11 +199,11 @@ fun ShortsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(filteredShorts, key = { it.id }) { video ->
+                    items(sortedShorts, key = { it.id }) { video ->
                         ShortsGridCard(
                             video = video,
                             isPlayed = playedIds.contains(video.id),
-                            onClick = { onVideoClick(video, filteredShorts) }
+                            onClick = { onVideoClick(video, sortedShorts) }
                         )
                     }
                 }
@@ -325,16 +213,40 @@ fun ShortsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(filteredShorts, key = { it.id }) { video ->
+                    items(sortedShorts, key = { it.id }) { video ->
                         ShortsListCard(
                             video = video,
                             isPlayed = playedIds.contains(video.id),
-                            onClick = { onVideoClick(video, filteredShorts) }
+                            onClick = { onVideoClick(video, sortedShorts) }
                         )
                     }
                 }
             }
         }
+    }
+
+    if (showSortSheet) {
+        SortBottomSheet(
+            sheetState = sortSheetState,
+            sortBy = uiState.sortBy,
+            sortAscending = uiState.sortAscending,
+            viewMode = uiState.viewMode,
+            layoutMode = if (isGridView) "grid" else "list",
+            visibleFields = uiState.visibleFields,
+            onlyForFolderList = uiState.onlyForFolderList,
+            showAudioFiles = uiState.showAudioFiles,
+            onDismiss = { showSortSheet = false },
+            onSortByChanged = { viewModel.setSortBy(it) },
+            onSortAscendingChanged = { viewModel.setSortAscending(it) },
+            onViewModeChanged = { viewModel.setViewMode(it) },
+            onLayoutModeChanged = { mode ->
+                viewModel.setLayoutMode(mode)
+                isGridView = (mode == "grid")
+            },
+            onVisibleFieldsChanged = { viewModel.setVisibleFields(it) },
+            onOnlyForFolderListChanged = { viewModel.setOnlyForFolderList(it) },
+            onShowAudioFilesChanged = { viewModel.setShowAudioFiles(it) }
+        )
     }
 }
 

@@ -239,10 +239,10 @@ class PlayerActivity : ComponentActivity() {
                     folderPath = ""
                 )
             }
-            viewModel.setCurrentVideoDetails(videoId, videoTitle)
+            viewModel.setCurrentVideoDetails(videoId, videoTitle, videoPath)
             viewModel.setPlaylist(items, playlistIndex)
         } else {
-            viewModel.setCurrentVideoDetails(videoId, videoTitle)
+            viewModel.setCurrentVideoDetails(videoId, videoTitle, videoPath)
             viewModel.autoDiscoverPlaylistForVideo(videoPath, videoId)
         }
 

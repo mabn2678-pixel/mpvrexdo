@@ -36,7 +36,7 @@ class SubtitlesPreferences(private val dataStore: DataStore<Preferences>) {
 
     val preferredLanguages   = pref(PREFERRED_LANGS, "eng,en")
     val autoEnableSubtitles  = pref(AUTO_ENABLE, true)
-    val fontSize             = pref(FONT_SIZE, 60)
+    val fontSize             = pref(FONT_SIZE, 21)
     val bold                 = pref(BOLD, false)
     val italic               = pref(ITALIC, false)
     val subScale             = pref(SUB_SCALE, 1.1f)

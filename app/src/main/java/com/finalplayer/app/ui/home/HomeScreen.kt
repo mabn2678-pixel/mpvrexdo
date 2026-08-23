@@ -97,6 +97,7 @@ fun HomeScreen(
     onMusicClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val transferProgress by viewModel.transferProgress.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -958,4 +959,10 @@ fun HomeScreen(
             }
         )
     }
+
+    com.finalplayer.app.ui.components.FileTransferProgressDialog(
+        progress = transferProgress,
+        onCancel = { viewModel.cancelTransfer() },
+        onMoveToBackground = { viewModel.moveTransferToBackground() }
+    )
 }

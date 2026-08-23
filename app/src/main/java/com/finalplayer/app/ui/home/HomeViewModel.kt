@@ -38,8 +38,12 @@ class HomeViewModel(
     private val getVideosByFolderUseCase: GetVideosByFolderUseCase,
     private val videoRepository: VideoRepository,
     private val sortPreferences: SortPreferences,
-    private val playbackRepository: PlaybackRepository
+    private val playbackRepository: PlaybackRepository,
+    private val fileTransferManager: com.finalplayer.app.data.transfer.FileTransferManager
 ) : ViewModel() {
+
+    val transferProgress = fileTransferManager.transferState
+    val transferCompletionEvents = fileTransferManager.transferCompletionEvents
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -302,15 +306,18 @@ private data class SortConfig(
         context: android.content.Context,
         onComplete: (Boolean, String) -> Unit
     ) {
-        viewModelScope.launch {
-            val result = videoRepository.moveVideos(videos, destination, context)
-            if (result.isSuccess) {
-                onComplete(true, "تم نقل ${videos.size} ملف بنجاح")
-            } else {
-                val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء النقل"
-                onComplete(false, "فشلت العملية: $msg")
+        fileTransferManager.startTransfer(
+            videos = videos,
+            destination = destination,
+            type = com.finalplayer.app.data.transfer.TransferType.MOVE,
+            runInBackground = false,
+            onComplete = { success, msg ->
+                if (success) {
+                    refreshVideos()
+                }
+                onComplete(success, msg)
             }
-        }
+        )
     }
 
     fun copyVideos(
@@ -319,15 +326,26 @@ private data class SortConfig(
         context: android.content.Context,
         onComplete: (Boolean, String) -> Unit
     ) {
-        viewModelScope.launch {
-            val result = videoRepository.copyVideos(videos, destination, context)
-            if (result.isSuccess) {
-                onComplete(true, "تم نسخ ${videos.size} ملف بنجاح")
-            } else {
-                val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء النسخ"
-                onComplete(false, "فشلت العملية: $msg")
+        fileTransferManager.startTransfer(
+            videos = videos,
+            destination = destination,
+            type = com.finalplayer.app.data.transfer.TransferType.COPY,
+            runInBackground = false,
+            onComplete = { success, msg ->
+                if (success) {
+                    refreshVideos()
+                }
+                onComplete(success, msg)
             }
-        }
+        )
+    }
+
+    fun cancelTransfer() {
+        fileTransferManager.cancelTransfer()
+    }
+
+    fun moveTransferToBackground() {
+        fileTransferManager.moveToBackground()
     }
 
     fun deleteVideos(

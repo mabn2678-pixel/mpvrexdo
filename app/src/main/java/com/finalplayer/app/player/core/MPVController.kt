@@ -71,8 +71,8 @@ class MPVController(private val context: Context) {
 
     fun isIdle(): Boolean = mpvView?.isIdle() ?: true
 
-    fun play(path: String) {
-        mpvView?.playFile(path)
+    fun play(path: String, startPositionSec: Double? = null) {
+        mpvView?.playFile(path, startPositionSec)
         _playerState.update {
             it.copy(
                 isPlaying = true,

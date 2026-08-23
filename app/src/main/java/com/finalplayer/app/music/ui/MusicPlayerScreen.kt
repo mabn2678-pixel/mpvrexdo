@@ -19,6 +19,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -41,6 +42,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
@@ -49,6 +51,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -57,6 +60,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -581,71 +585,127 @@ fun MusicPlayerScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Play / Pause / Skip Control Buttons (Matching screenshot)
-                    Row(
+                    // Play / Pause / Skip Control Buttons + Music Speed Accelerator
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Previous Button
-                        IconButton(
-                            onClick = {
-                                userInteracted()
-                                viewModel.skipToPrevious()
-                            },
-                            modifier = Modifier.size(52.dp)
+                        // Play / Pause / Skip Control Buttons (Centered)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(28.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipPrevious,
-                                contentDescription = "السابق",
-                                tint = Color.White,
-                                modifier = Modifier.size(36.dp)
-                            )
+                            // Previous Button
+                            IconButton(
+                                onClick = {
+                                    userInteracted()
+                                    viewModel.skipToPrevious()
+                                },
+                                modifier = Modifier.size(52.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SkipPrevious,
+                                    contentDescription = "السابق",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+
+                            // Play / Pause Large White Circle Button
+                            FilledIconButton(
+                                onClick = {
+                                    userInteracted()
+                                    viewModel.togglePlayPause()
+                                },
+                                modifier = Modifier
+                                    .size(68.dp)
+                                    .scale(playButtonScale),
+                                shape = CircleShape,
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = Color.White
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (state.isPlaying) "إيقاف مؤقت" else "تشغيل",
+                                    modifier = Modifier.size(40.dp),
+                                    tint = Color.Black
+                                )
+                            }
+
+                            // Next Button
+                            IconButton(
+                                onClick = {
+                                    userInteracted()
+                                    viewModel.skipToNext()
+                                },
+                                modifier = Modifier.size(52.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SkipNext,
+                                    contentDescription = "التالي",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
                         }
 
-                        // Play / Pause Large White Circle Button
-                        FilledIconButton(
+                        // Music Speed Accelerator Button (Bottom Right)
+                        Surface(
                             onClick = {
                                 userInteracted()
-                                viewModel.togglePlayPause()
+                                viewModel.cyclePlaybackSpeed()
                             },
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.White.copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
                             modifier = Modifier
-                                .size(68.dp)
-                                .scale(playButtonScale),
-                            shape = CircleShape,
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = Color.White
-                            )
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 4.dp)
                         ) {
-                            Icon(
-                                imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (state.isPlaying) "إيقاف مؤقت" else "تشغيل",
-                                modifier = Modifier.size(40.dp),
-                                tint = Color.Black
-                            )
-                        }
-
-                        // Next Button
-                        IconButton(
-                            onClick = {
-                                userInteracted()
-                                viewModel.skipToNext()
-                            },
-                            modifier = Modifier.size(52.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "التالي",
-                                tint = Color.White,
-                                modifier = Modifier.size(36.dp)
-                            )
+                            val speedText = formatSpeed(state.playbackSpeed)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = "مسرع الأغاني",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = speedText,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+private fun formatSpeed(speed: Float): String {
+    return when {
+        Math.abs(speed - 1.0f) < 0.01f -> "1x"
+        Math.abs(speed - 2.0f) < 0.01f -> "2x"
+        Math.abs(speed - 0.5f) < 0.01f -> "0.5x"
+        Math.abs(speed - 0.75f) < 0.01f -> "0.75x"
+        Math.abs(speed - 1.25f) < 0.01f -> "1.25x"
+        Math.abs(speed - 1.5f) < 0.01f -> "1.5x"
+        Math.abs(speed - 1.75f) < 0.01f -> "1.75x"
+        speed % 1f == 0f -> "${speed.toInt()}x"
+        else -> "${speed}x"
     }
 }
 

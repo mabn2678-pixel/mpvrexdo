@@ -129,6 +129,9 @@ class MusicController(private val context: Context) {
             _state.value.currentSong
         }
 
+        val currentSpeed = controller.playbackParameters.speed
+        val validSpeed = if (currentSpeed > 0.05f) currentSpeed else 1.0f
+
         _state.value = _state.value.copy(
             currentSong = currentSong,
             isPlaying = controller.isPlaying,
@@ -136,7 +139,8 @@ class MusicController(private val context: Context) {
             durationMs = controller.duration.coerceAtLeast(0L),
             repeatMode = controller.repeatMode,
             shuffleEnabled = controller.shuffleModeEnabled,
-            currentQueueIndex = currentIndex
+            currentQueueIndex = currentIndex,
+            playbackSpeed = validSpeed
         )
     }
 
@@ -256,6 +260,14 @@ class MusicController(private val context: Context) {
         withController { controller ->
             controller.stop()
             controller.clearMediaItems()
+        }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        val validSpeed = speed.coerceIn(0.25f, 3.0f)
+        _state.value = _state.value.copy(playbackSpeed = validSpeed)
+        withController { controller ->
+            controller.setPlaybackSpeed(validSpeed)
         }
     }
 

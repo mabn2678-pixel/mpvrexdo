@@ -96,7 +96,7 @@ fun SubtitlesSettingsTab() {
     val preferredFormats by prefs.preferredFormats.asFlow().collectAsState(initial = "ASS, SSA, SRT, VTT")
     val preferredEncodings by prefs.preferredEncodings.asFlow().collectAsState(initial = "Unicode (UTF-8)")
     val wyzieApiKey by prefs.wyzieApiKey.asFlow().collectAsState(initial = "")
-    val fontSize by prefs.fontSize.asFlow().collectAsState(initial = 55)
+    val fontSize by prefs.fontSize.asFlow().collectAsState(initial = 21)
 
     // UI Dialog States
     var showLangsDialog by remember { mutableStateOf(false) }

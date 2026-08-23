@@ -58,6 +58,7 @@ fun PlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.saveCurrentProgressNow()
                     val hasSleepTimer = viewModel.remainingTime.value > 0
                     val isBackgroundPlay = viewModel.isBackgroundPlay.value
                     if (activity?.isFinishing == false && !hasSleepTimer && !isBackgroundPlay) {
@@ -72,6 +73,7 @@ fun PlayerScreen(
                     } catch (_: Exception) {}
                 }
                 Lifecycle.Event.ON_STOP, Lifecycle.Event.ON_DESTROY -> {
+                    viewModel.saveCurrentProgressNow()
                     val hasSleepTimer = viewModel.remainingTime.value > 0
                     val isBackgroundPlay = viewModel.isBackgroundPlay.value
                     if (activity?.isFinishing == true) {
@@ -92,6 +94,7 @@ fun PlayerScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            viewModel.saveCurrentProgressNow()
             lifecycleOwner.lifecycle.removeObserver(observer)
             if (activity?.isFinishing == true) {
                 try {
@@ -194,7 +197,8 @@ fun PlayerScreen(
             if (target != null) {
                 val isAlreadyPlaying = viewModel.mpvController.playerState.value.currentFilePath == target && !viewModel.mpvController.isIdle()
                 if (!isAlreadyPlaying) {
-                    viewModel.mpvController.play(target)
+                    val resumeSec = viewModel.resumePositionSec.value
+                    viewModel.mpvController.play(target, resumeSec)
                 }
                 viewModel.autoLoadSubtitlesFromVideoFolder(android.net.Uri.parse(target))
                 viewModel.applyAllSubtitlePreferences()

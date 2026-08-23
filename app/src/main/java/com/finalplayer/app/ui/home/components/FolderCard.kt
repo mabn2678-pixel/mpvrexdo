@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -83,7 +84,57 @@ fun FolderCard(
             .padding(vertical = 4.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Details Column
+        // 1. Stacked Folder Preview with optional Unwatched Badge & Selection Checkmark
+        Box(
+            contentAlignment = Alignment.TopEnd
+        ) {
+            FolderStackedPreview(
+                previewThumbnails = folder.previewThumbnails,
+                size = 56.dp,
+                isSelected = isSelected
+            )
+
+            if (!isSelected && unwatchedCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .background(Color(0xFFD32F2F), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (unwatchedCount > 99) "99+" else unwatchedCount.toString(),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(2.dp))
+
+        // 2. 3-dots button placed right next to the folder preview
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .combinedClickable(
+                    onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
+                    onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "خيارات المجلد",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        // 3. Details Column
         Column(
             modifier = Modifier.weight(1f)
         ) {
@@ -133,35 +184,6 @@ fun FolderCard(
                         val dateStr = formatDate(folder.lastModified)
                         if (dateStr.isNotEmpty()) InfoChip(text = dateStr)
                     }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.width(10.dp))
-
-        // Stacked Folder Preview with optional Unwatched Badge & Selection Checkmark
-        Box(
-            contentAlignment = Alignment.TopEnd
-        ) {
-            FolderStackedPreview(
-                previewThumbnails = folder.previewThumbnails,
-                size = 56.dp,
-                isSelected = isSelected
-            )
-
-            if (!isSelected && unwatchedCount > 0) {
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .background(Color(0xFFD32F2F), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (unwatchedCount > 99) "99+" else unwatchedCount.toString(),
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
                 }
             }
         }
@@ -377,8 +399,8 @@ private fun FolderStackedPreview(
 private fun InfoChip(text: String) {
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+        contentColor = MaterialTheme.colorScheme.primary
     ) {
         Text(
             text = text,

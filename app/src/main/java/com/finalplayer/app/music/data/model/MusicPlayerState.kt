@@ -8,5 +8,6 @@ data class MusicPlayerState(
     val repeatMode: Int = 0,
     val shuffleEnabled: Boolean = false,
     val queue: List<Song> = emptyList(),
-    val currentQueueIndex: Int = 0
+    val currentQueueIndex: Int = 0,
+    val playbackSpeed: Float = 1.0f
 )

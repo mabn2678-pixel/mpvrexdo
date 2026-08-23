@@ -244,10 +244,15 @@ class MPVView @JvmOverloads constructor(
         }
     }
 
-    fun playFile(path: String) {
+    fun playFile(path: String, startPositionSec: Double? = null) {
         val lib = getActiveLib() ?: return
         try {
-            lib.command(arrayOf("loadfile", path))
+            if (startPositionSec != null && startPositionSec > 1.0) {
+                lib.setOptionString("start", startPositionSec.toInt().toString())
+                lib.command(arrayOf("loadfile", path, "replace", "start=${startPositionSec.toInt()}"))
+            } else {
+                lib.command(arrayOf("loadfile", path))
+            }
             isPaused = false
         } catch (e: Throwable) {
             Log.e(TAG, "Error playing file: $path", e)
@@ -317,7 +322,7 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("sub-scale-by-window", "yes")
             lib.setOptionString("sub-scale-with-window", "yes")
             lib.setOptionString("sub-ass-scale-with-window", "yes")
-            lib.setOptionString("sub-font-size", "55")
+            lib.setOptionString("sub-font-size", "21")
             lib.setOptionString("sub-scale", "1.0")
             lib.setOptionString("sub-pos", "100")
             lib.setOptionString("sub-border-size", "3.0")

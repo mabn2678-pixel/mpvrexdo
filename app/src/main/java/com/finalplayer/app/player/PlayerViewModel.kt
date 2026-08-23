@@ -99,6 +99,7 @@ class PlayerViewModel(
     val precisePosition: StateFlow<Float> = _precisePosition.asStateFlow()
 
     private var lastKnownPositionMs: Long = 0L
+    private var lastKnownDurationMs: Long = 0L
 
     private val _preciseDuration = MutableStateFlow(0f) // In seconds
     val preciseDuration: StateFlow<Float> = _preciseDuration.asStateFlow()
@@ -374,33 +375,56 @@ class PlayerViewModel(
         val videoId = _currentVideoId.value ?: return
         if (videoId.isEmpty()) return
 
-        val livePosSec = try { MPVLib.getPropertyInt("time-pos") } catch (e: Exception) { null }
+        val livePosSec = try { MPVLib.getPropertyDouble("time-pos") } catch (e: Exception) { null }
+        val liveDurSec = try { MPVLib.getPropertyDouble("duration") } catch (e: Exception) { null }
+
         val posMs = when {
-            livePosSec != null && livePosSec > 0 -> livePosSec.toLong() * 1000L
+            livePosSec != null && livePosSec > 0.0 -> (livePosSec * 1000.0).toLong()
             mpvController.playerState.value.positionMs > 0L -> mpvController.playerState.value.positionMs
             _precisePosition.value > 0f -> (_precisePosition.value * 1000f).toLong()
+            lastKnownPositionMs > 0L -> lastKnownPositionMs
             else -> 0L
         }
 
-        if (posMs > lastKnownPositionMs) {
+        if (posMs > 1000L) {
             lastKnownPositionMs = posMs
         }
-        val effectivePosMs = if (posMs > 0L) posMs else lastKnownPositionMs
-        val durMs = (_preciseDuration.value * 1000f).toLong().coerceAtLeast(0L)
 
-        if (durMs > 0 && effectivePosMs > 0) {
-            val isCompleted = (effectivePosMs.toFloat() / durMs.toFloat()) > 0.95f
-            val progress = PlaybackProgress(
+        val durMs = when {
+            liveDurSec != null && liveDurSec > 0.0 -> (liveDurSec * 1000.0).toLong()
+            _preciseDuration.value > 0f -> (_preciseDuration.value * 1000f).toLong()
+            mpvController.playerState.value.durationMs > 0L -> mpvController.playerState.value.durationMs
+            lastKnownDurationMs > 0L -> lastKnownDurationMs
+            else -> 0L
+        }
+
+        if (durMs > 0L) {
+            lastKnownDurationMs = durMs
+        }
+
+        val effectivePosMs = if (posMs > 0L) posMs else lastKnownPositionMs
+        val effectiveDurMs = if (durMs > 0L) durMs else lastKnownDurationMs
+
+        if (effectiveDurMs > 0 && effectivePosMs > 1000L) {
+            val isCompleted = (effectivePosMs.toFloat() / effectiveDurMs.toFloat()) > 0.95f
+            val finalPos = if (isCompleted) 0L else effectivePosMs
+            val currentUri = mpvController.playerState.value.currentFilePath
+
+            val progressPrimary = PlaybackProgress(
                 videoId = videoId,
-                positionMs = if (isCompleted) 0L else effectivePosMs,
-                durationMs = durMs,
+                positionMs = finalPos,
+                durationMs = effectiveDurMs,
                 lastPlayedTimestamp = System.currentTimeMillis(),
                 isCompleted = isCompleted
             )
+
             @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
             kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
                 try {
-                    playbackRepository.saveProgress(progress)
+                    playbackRepository.saveProgress(progressPrimary)
+                    if (!currentUri.isNullOrEmpty() && currentUri != videoId) {
+                        playbackRepository.saveProgress(progressPrimary.copy(videoId = currentUri))
+                    }
                 } catch (e: Exception) {
                     Log.e("PlayerViewModel", "Error saving playback progress", e)
                 }
@@ -487,8 +511,8 @@ class PlayerViewModel(
             _currentVideoId.value = item.id
             _videoTitle.value = item.title
             prefetchVideoAspect(item.uri)
-            mpvController.play(item.uri)
-            checkSavedProgress(item.id)
+            checkSavedProgress(item.id, item.uri)
+            mpvController.play(item.uri, _resumePositionSec.value)
             try {
                 autoLoadSubtitlesFromVideoFolder(Uri.parse(item.uri))
                 applyAllSubtitlePreferences()
@@ -531,17 +555,17 @@ class PlayerViewModel(
         }
     }
 
-    fun setCurrentVideoDetails(id: String, title: String) {
+    fun setCurrentVideoDetails(id: String, title: String, fallbackPath: String? = null) {
         _currentVideoId.value = id
         _videoTitle.value = title
         hasAppliedAutoResume = false
-        checkSavedProgress(id)
+        checkSavedProgress(id, fallbackPath)
         if (id.isNotEmpty()) {
             prefetchVideoAspect(id)
         }
     }
 
-    fun checkSavedProgress(videoId: String) {
+    fun checkSavedProgress(videoId: String, fallbackPath: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val saveOnExit = playerPrefs?.savePositionOnQuit?.get() ?: true
@@ -549,10 +573,14 @@ class PlayerViewModel(
                     _resumePositionSec.value = null
                     return@launch
                 }
-                val progress = playbackRepository.getProgress(videoId).first()
-                if (progress != null && !progress.isCompleted && progress.positionMs > 2000L) {
+                var progress = playbackRepository.getProgress(videoId).firstOrNull()
+                if ((progress == null || progress.positionMs <= 1000L) && !fallbackPath.isNullOrEmpty() && fallbackPath != videoId) {
+                    progress = playbackRepository.getProgress(fallbackPath).firstOrNull()
+                }
+                if (progress != null && !progress.isCompleted && progress.positionMs > 1000L) {
                     val savedTimeInSeconds = progress.positionMs / 1000.0
                     lastKnownPositionMs = progress.positionMs
+                    lastKnownDurationMs = progress.durationMs
                     hasAppliedAutoResume = false
                     withContext(Dispatchers.Main) {
                         _resumePositionSec.value = savedTimeInSeconds
@@ -914,7 +942,7 @@ class PlayerViewModel(
 
     fun adjustSubtitleScaleForOrientation(isPortrait: Boolean) {
         try {
-            val fontSize = subtitlesPrefs?.fontSize?.get() ?: 55
+            val fontSize = subtitlesPrefs?.fontSize?.get() ?: 21
             MPVLib.setPropertyString("sub-scale-by-window", "yes")
             MPVLib.setOptionString("sub-scale-by-window", "yes")
             MPVLib.setPropertyString("sub-scale-with-window", "yes")
@@ -1565,6 +1593,7 @@ class PlayerViewModel(
 
     fun stopPlayback() {
         try {
+            saveCurrentProgressNow()
             mpvController.stop()
             mpvController.getAttachedView()?.stop()
             MPVView.stopAll()
