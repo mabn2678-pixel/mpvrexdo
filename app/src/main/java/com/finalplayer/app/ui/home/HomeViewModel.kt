@@ -22,13 +22,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.finalplayer.app.data.preferences.DEFAULT_VISIBLE_FIELDS
 import java.util.Locale
 
 data class FolderSortConfig(
     val sortBy: String = "title",
     val sortAscending: Boolean = true,
     val layoutMode: String = "list",
-    val visibleFields: Set<String> = setOf("Path", "Folder Size", "Total Media", "Progress Bar")
+    val visibleFields: Set<String> = DEFAULT_VISIBLE_FIELDS
 )
 
 class HomeViewModel(
@@ -48,15 +49,62 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    private val _folderConfigs = MutableStateFlow<Map<String, FolderSortConfig>>(emptyMap())
+    private val folderPrefs = context.getSharedPreferences("folder_view_preferences", android.content.Context.MODE_PRIVATE)
+
+    private val _folderConfigs = MutableStateFlow<Map<String, FolderSortConfig>>(loadInitialFolderConfigs())
     val folderConfigs: StateFlow<Map<String, FolderSortConfig>> = _folderConfigs.asStateFlow()
 
+    private fun loadInitialFolderConfigs(): Map<String, FolderSortConfig> {
+        val map = mutableMapOf<String, FolderSortConfig>()
+        try {
+            val allEntries = folderPrefs.all
+            val folderPaths = allEntries.keys
+                .filter { it.startsWith("folder_path_") }
+                .mapNotNull { folderPrefs.getString(it, null) }
+                .toSet()
+
+            for (path in folderPaths) {
+                val keyPrefix = "folder_${path.hashCode()}"
+                val sortBy = folderPrefs.getString("${keyPrefix}_sort_by", null) ?: "title"
+                val sortAsc = folderPrefs.getBoolean("${keyPrefix}_sort_asc", true)
+                val layout = folderPrefs.getString("${keyPrefix}_layout", null) ?: "list"
+                val fields = folderPrefs.getStringSet("${keyPrefix}_fields", null) ?: DEFAULT_VISIBLE_FIELDS
+                map[path] = FolderSortConfig(
+                    sortBy = sortBy,
+                    sortAscending = sortAsc,
+                    layoutMode = layout,
+                    visibleFields = fields
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return map
+    }
+
     fun getFolderConfig(folderPath: String): FolderSortConfig {
-        return _folderConfigs.value[folderPath] ?: FolderSortConfig()
+        return _folderConfigs.value[folderPath] ?: FolderSortConfig(
+            sortBy = _uiState.value.sortBy,
+            sortAscending = _uiState.value.sortAscending,
+            layoutMode = _uiState.value.layoutMode,
+            visibleFields = _uiState.value.visibleFields
+        )
     }
 
     fun updateFolderConfig(folderPath: String, config: FolderSortConfig) {
         _folderConfigs.update { it + (folderPath to config) }
+        try {
+            val keyPrefix = "folder_${folderPath.hashCode()}"
+            folderPrefs.edit()
+                .putString("folder_path_${folderPath.hashCode()}", folderPath)
+                .putString("${keyPrefix}_sort_by", config.sortBy)
+                .putBoolean("${keyPrefix}_sort_asc", config.sortAscending)
+                .putString("${keyPrefix}_layout", config.layoutMode)
+                .putStringSet("${keyPrefix}_fields", config.visibleFields)
+                .apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private var hasAutoScanned = false
@@ -244,6 +292,34 @@ private data class SortConfig(
 
     fun setShowAudioFiles(show: Boolean) {
         viewModelScope.launch { sortPreferences.showAudioFiles.set(show) }
+    }
+
+    val shortsSortBy: StateFlow<String> = sortPreferences.shortsSortBy.asFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "date")
+
+    val shortsSortAscending: StateFlow<Boolean> = sortPreferences.shortsSortAscending.asFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val shortsLayoutMode: StateFlow<String> = sortPreferences.shortsLayoutMode.asFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "grid")
+
+    val shortsVisibleFields: StateFlow<Set<String>> = sortPreferences.shortsVisibleFields.asFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_VISIBLE_FIELDS)
+
+    fun setShortsSortBy(sortBy: String) {
+        viewModelScope.launch { sortPreferences.shortsSortBy.set(sortBy) }
+    }
+
+    fun setShortsSortAscending(ascending: Boolean) {
+        viewModelScope.launch { sortPreferences.shortsSortAscending.set(ascending) }
+    }
+
+    fun setShortsLayoutMode(layoutMode: String) {
+        viewModelScope.launch { sortPreferences.shortsLayoutMode.set(layoutMode) }
+    }
+
+    fun setShortsVisibleFields(fields: Set<String>) {
+        viewModelScope.launch { sortPreferences.shortsVisibleFields.set(fields) }
     }
 
     fun refreshVideos() {

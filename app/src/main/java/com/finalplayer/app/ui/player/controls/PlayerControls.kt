@@ -404,36 +404,58 @@ fun PlayerControls(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            topRightControlIds.forEach { id ->
-                                RenderControlToolItem(
-                                    id = id,
-                                    currentDecoder = currentDecoder,
-                                    playbackSpeed = playbackSpeed,
-                                    chapters = chapters,
-                                    currentChapterIndex = currentChapterIndex,
-                                    selectedSubId = selectedSubId,
-                                    selectedSecondarySubId = selectedSecondarySubId,
-                                    remainingSleepTimerSeconds = remainingSleepTimerSeconds,
-                                    repeatMode = repeatMode,
-                                    isShuffle = isShuffle,
-                                    currentAspectRatio = currentAspectRatio,
-                                    onOpenSheet = onOpenSheet,
-                                    onSpeedChange = onSpeedChange,
-                                    onToggleRotate = onToggleRotate,
-                                    onToggleLock = onToggleLock,
-                                    onEnterPiP = onEnterPiP,
-                                    onToggleRepeat = onToggleRepeat,
-                                    onToggleShuffle = onToggleShuffle,
-                                    onFrameStep = onFrameStep,
-                                    onFlipVideo = onFlipVideo,
-                                    onToggleAbRepeat = onToggleAbRepeat,
-                                    onCustomSkip = onCustomSkip,
-                                    onToggleCinema = onToggleCinema,
-                                    onToggleBackgroundPlay = onToggleBackgroundPlay,
-                                    onCycleAspectRatio = onCycleAspectRatio,
-                                    onTakeScreenshot = onTakeScreenshot,
-                                    isLocked = isLocked
-                                )
+                            if (isShortsMode) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.45f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        IconButton(
+                                            onClick = { onOpenSheet(Sheets.More) },
+                                            modifier = Modifier.fillMaxSize().testTag("player_more_options_button")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.MoreVert,
+                                                contentDescription = "المزيد",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                topRightControlIds.forEach { id ->
+                                    RenderControlToolItem(
+                                        id = id,
+                                        currentDecoder = currentDecoder,
+                                        playbackSpeed = playbackSpeed,
+                                        chapters = chapters,
+                                        currentChapterIndex = currentChapterIndex,
+                                        selectedSubId = selectedSubId,
+                                        selectedSecondarySubId = selectedSecondarySubId,
+                                        remainingSleepTimerSeconds = remainingSleepTimerSeconds,
+                                        repeatMode = repeatMode,
+                                        isShuffle = isShuffle,
+                                        currentAspectRatio = currentAspectRatio,
+                                        onOpenSheet = onOpenSheet,
+                                        onSpeedChange = onSpeedChange,
+                                        onToggleRotate = onToggleRotate,
+                                        onToggleLock = onToggleLock,
+                                        onEnterPiP = onEnterPiP,
+                                        onToggleRepeat = onToggleRepeat,
+                                        onToggleShuffle = onToggleShuffle,
+                                        onFrameStep = onFrameStep,
+                                        onFlipVideo = onFlipVideo,
+                                        onToggleAbRepeat = onToggleAbRepeat,
+                                        onCustomSkip = onCustomSkip,
+                                        onToggleCinema = onToggleCinema,
+                                        onToggleBackgroundPlay = onToggleBackgroundPlay,
+                                        onCycleAspectRatio = onCycleAspectRatio,
+                                        onTakeScreenshot = onTakeScreenshot,
+                                        isLocked = isLocked
+                                    )
+                                }
                             }
                         }
                     }
@@ -456,7 +478,7 @@ fun PlayerControls(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         // 1. Previous Video
-                        if (enablePrevNext) {
+                        if (!isShortsMode && enablePrevNext) {
                             Surface(
                                 shape = CircleShape,
                                 color = Color.Black.copy(alpha = 0.45f),
@@ -486,7 +508,7 @@ fun PlayerControls(
                         )
 
                         // 3. Next Video
-                        if (enablePrevNext) {
+                        if (!isShortsMode && enablePrevNext) {
                             Surface(
                                 shape = CircleShape,
                                 color = Color.Black.copy(alpha = 0.45f),
@@ -588,146 +610,148 @@ fun PlayerControls(
                             }
                         }
 
-                        // 2. Control toolbar row below seekbar
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        // 2. Control toolbar row below seekbar (hidden in Shorts mode for clean UI)
+                        if (!isShortsMode) {
                             Row(
-                                modifier = Modifier.weight(1f, fill = false),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                if (bottomLeftControlIds.isNotEmpty()) {
-                                    Row(
-                                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        bottomLeftControlIds.forEach { id ->
-                                            RenderControlToolItem(
-                                                id = id,
-                                                currentDecoder = currentDecoder,
-                                                playbackSpeed = playbackSpeed,
-                                                chapters = chapters,
-                                                currentChapterIndex = currentChapterIndex,
-                                                selectedSubId = selectedSubId,
-                                                selectedSecondarySubId = selectedSecondarySubId,
-                                                remainingSleepTimerSeconds = remainingSleepTimerSeconds,
-                                                repeatMode = repeatMode,
-                                                isShuffle = isShuffle,
-                                                currentAspectRatio = currentAspectRatio,
-                                                onOpenSheet = onOpenSheet,
-                                                onSpeedChange = onSpeedChange,
-                                                onToggleRotate = onToggleRotate,
-                                                onToggleLock = onToggleLock,
-                                                onEnterPiP = onEnterPiP,
-                                                onToggleRepeat = onToggleRepeat,
-                                                onToggleShuffle = onToggleShuffle,
-                                                onFrameStep = onFrameStep,
-                                                onFlipVideo = onFlipVideo,
-                                                onToggleAbRepeat = onToggleAbRepeat,
-                                                onCustomSkip = onCustomSkip,
-                                                onToggleCinema = onToggleCinema,
-                                                onToggleBackgroundPlay = onToggleBackgroundPlay,
-                                                onCycleAspectRatio = onCycleAspectRatio,
-                                                onTakeScreenshot = onTakeScreenshot,
-                                                isLocked = isLocked
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.weight(1f, fill = false),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                if (bottomRightControlIds.isNotEmpty()) {
-                                    Row(
-                                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                    ) {
-                                        bottomRightControlIds.forEach { id ->
-                                            RenderControlToolItem(
-                                                id = id,
-                                                currentDecoder = currentDecoder,
-                                                playbackSpeed = playbackSpeed,
-                                                chapters = chapters,
-                                                currentChapterIndex = currentChapterIndex,
-                                                selectedSubId = selectedSubId,
-                                                selectedSecondarySubId = selectedSecondarySubId,
-                                                remainingSleepTimerSeconds = remainingSleepTimerSeconds,
-                                                repeatMode = repeatMode,
-                                                isShuffle = isShuffle,
-                                                currentAspectRatio = currentAspectRatio,
-                                                onOpenSheet = onOpenSheet,
-                                                onSpeedChange = onSpeedChange,
-                                                onToggleRotate = onToggleRotate,
-                                                onToggleLock = onToggleLock,
-                                                onEnterPiP = onEnterPiP,
-                                                onToggleRepeat = onToggleRepeat,
-                                                onToggleShuffle = onToggleShuffle,
-                                                onFrameStep = onFrameStep,
-                                                onFlipVideo = onFlipVideo,
-                                                onToggleAbRepeat = onToggleAbRepeat,
-                                                onCustomSkip = onCustomSkip,
-                                                onToggleCinema = onToggleCinema,
-                                                onToggleBackgroundPlay = onToggleBackgroundPlay,
-                                                onCycleAspectRatio = onCycleAspectRatio,
-                                                onTakeScreenshot = onTakeScreenshot,
-                                                isLocked = isLocked
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-                        val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-                        if (isPortrait && portraitBottomControlIds.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                portraitBottomControlIds.forEach { id ->
-                                    RenderControlToolItem(
-                                        id = id,
-                                        currentDecoder = currentDecoder,
-                                        playbackSpeed = playbackSpeed,
-                                        chapters = chapters,
-                                        currentChapterIndex = currentChapterIndex,
-                                        selectedSubId = selectedSubId,
-                                        selectedSecondarySubId = selectedSecondarySubId,
-                                        remainingSleepTimerSeconds = remainingSleepTimerSeconds,
-                                        repeatMode = repeatMode,
-                                        isShuffle = isShuffle,
-                                        currentAspectRatio = currentAspectRatio,
-                                        onOpenSheet = onOpenSheet,
-                                        onSpeedChange = onSpeedChange,
-                                        onToggleRotate = onToggleRotate,
-                                        onToggleLock = onToggleLock,
-                                        onEnterPiP = onEnterPiP,
-                                        onToggleRepeat = onToggleRepeat,
-                                        onToggleShuffle = onToggleShuffle,
-                                        onFrameStep = onFrameStep,
-                                        onFlipVideo = onFlipVideo,
-                                        onToggleAbRepeat = onToggleAbRepeat,
-                                        onCustomSkip = onCustomSkip,
-                                        onToggleCinema = onToggleCinema,
-                                        onToggleBackgroundPlay = onToggleBackgroundPlay,
-                                        onCycleAspectRatio = onCycleAspectRatio,
-                                        onTakeScreenshot = onTakeScreenshot,
-                                        isLocked = isLocked
-                                    )
+                                Row(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    if (bottomLeftControlIds.isNotEmpty()) {
+                                        Row(
+                                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            bottomLeftControlIds.forEach { id ->
+                                                RenderControlToolItem(
+                                                    id = id,
+                                                    currentDecoder = currentDecoder,
+                                                    playbackSpeed = playbackSpeed,
+                                                    chapters = chapters,
+                                                    currentChapterIndex = currentChapterIndex,
+                                                    selectedSubId = selectedSubId,
+                                                    selectedSecondarySubId = selectedSecondarySubId,
+                                                    remainingSleepTimerSeconds = remainingSleepTimerSeconds,
+                                                    repeatMode = repeatMode,
+                                                    isShuffle = isShuffle,
+                                                    currentAspectRatio = currentAspectRatio,
+                                                    onOpenSheet = onOpenSheet,
+                                                    onSpeedChange = onSpeedChange,
+                                                    onToggleRotate = onToggleRotate,
+                                                    onToggleLock = onToggleLock,
+                                                    onEnterPiP = onEnterPiP,
+                                                    onToggleRepeat = onToggleRepeat,
+                                                    onToggleShuffle = onToggleShuffle,
+                                                    onFrameStep = onFrameStep,
+                                                    onFlipVideo = onFlipVideo,
+                                                    onToggleAbRepeat = onToggleAbRepeat,
+                                                    onCustomSkip = onCustomSkip,
+                                                    onToggleCinema = onToggleCinema,
+                                                    onToggleBackgroundPlay = onToggleBackgroundPlay,
+                                                    onCycleAspectRatio = onCycleAspectRatio,
+                                                    onTakeScreenshot = onTakeScreenshot,
+                                                    isLocked = isLocked
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    if (bottomRightControlIds.isNotEmpty()) {
+                                        Row(
+                                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            bottomRightControlIds.forEach { id ->
+                                                RenderControlToolItem(
+                                                    id = id,
+                                                    currentDecoder = currentDecoder,
+                                                    playbackSpeed = playbackSpeed,
+                                                    chapters = chapters,
+                                                    currentChapterIndex = currentChapterIndex,
+                                                    selectedSubId = selectedSubId,
+                                                    selectedSecondarySubId = selectedSecondarySubId,
+                                                    remainingSleepTimerSeconds = remainingSleepTimerSeconds,
+                                                    repeatMode = repeatMode,
+                                                    isShuffle = isShuffle,
+                                                    currentAspectRatio = currentAspectRatio,
+                                                    onOpenSheet = onOpenSheet,
+                                                    onSpeedChange = onSpeedChange,
+                                                    onToggleRotate = onToggleRotate,
+                                                    onToggleLock = onToggleLock,
+                                                    onEnterPiP = onEnterPiP,
+                                                    onToggleRepeat = onToggleRepeat,
+                                                    onToggleShuffle = onToggleShuffle,
+                                                    onFrameStep = onFrameStep,
+                                                    onFlipVideo = onFlipVideo,
+                                                    onToggleAbRepeat = onToggleAbRepeat,
+                                                    onCustomSkip = onCustomSkip,
+                                                    onToggleCinema = onToggleCinema,
+                                                    onToggleBackgroundPlay = onToggleBackgroundPlay,
+                                                    onCycleAspectRatio = onCycleAspectRatio,
+                                                    onTakeScreenshot = onTakeScreenshot,
+                                                    isLocked = isLocked
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                            val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+                            if (isPortrait && portraitBottomControlIds.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    portraitBottomControlIds.forEach { id ->
+                                        RenderControlToolItem(
+                                            id = id,
+                                            currentDecoder = currentDecoder,
+                                            playbackSpeed = playbackSpeed,
+                                            chapters = chapters,
+                                            currentChapterIndex = currentChapterIndex,
+                                            selectedSubId = selectedSubId,
+                                            selectedSecondarySubId = selectedSecondarySubId,
+                                            remainingSleepTimerSeconds = remainingSleepTimerSeconds,
+                                            repeatMode = repeatMode,
+                                            isShuffle = isShuffle,
+                                            currentAspectRatio = currentAspectRatio,
+                                            onOpenSheet = onOpenSheet,
+                                            onSpeedChange = onSpeedChange,
+                                            onToggleRotate = onToggleRotate,
+                                            onToggleLock = onToggleLock,
+                                            onEnterPiP = onEnterPiP,
+                                            onToggleRepeat = onToggleRepeat,
+                                            onToggleShuffle = onToggleShuffle,
+                                            onFrameStep = onFrameStep,
+                                            onFlipVideo = onFlipVideo,
+                                            onToggleAbRepeat = onToggleAbRepeat,
+                                            onCustomSkip = onCustomSkip,
+                                            onToggleCinema = onToggleCinema,
+                                            onToggleBackgroundPlay = onToggleBackgroundPlay,
+                                            onCycleAspectRatio = onCycleAspectRatio,
+                                            onTakeScreenshot = onTakeScreenshot,
+                                            isLocked = isLocked
+                                        )
+                                    }
                                 }
                             }
                         }

@@ -72,23 +72,27 @@ fun ShortsScreen(
     modifier: Modifier = Modifier
 ) {
     val allShorts by viewModel.shortsVideos.collectAsState()
-    val uiState by viewModel.uiState.collectAsState()
     val playedIds by viewModel.playedVideoIds.collectAsState(initial = emptySet())
 
-    var isGridView by remember(uiState.layoutMode) { mutableStateOf(uiState.layoutMode == "grid") }
+    val shortsSortBy by viewModel.shortsSortBy.collectAsState()
+    val shortsSortAscending by viewModel.shortsSortAscending.collectAsState()
+    val shortsLayoutMode by viewModel.shortsLayoutMode.collectAsState()
+    val shortsVisibleFields by viewModel.shortsVisibleFields.collectAsState()
+
+    val isGridView = shortsLayoutMode == "grid"
     var showSortSheet by remember { mutableStateOf(false) }
     val sortSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val sortedShorts = remember(allShorts, uiState.sortBy, uiState.sortAscending) {
+    val sortedShorts = remember(allShorts, shortsSortBy, shortsSortAscending) {
         val shortsOnly = allShorts.filter { it.isShortPlatformVideo }
-        val sorted = when (uiState.sortBy) {
+        val sorted = when (shortsSortBy) {
             "title" -> shortsOnly.sortedBy { it.title.lowercase(Locale.ROOT) }
             "date" -> shortsOnly.sortedBy { it.dateAdded }
             "size" -> shortsOnly.sortedBy { it.sizeBytes }
             "duration" -> shortsOnly.sortedBy { it.duration }
             else -> shortsOnly.sortedBy { it.dateAdded }
         }
-        if (uiState.sortAscending) sorted else sorted.reversed()
+        if (shortsSortAscending) sorted else sorted.reversed()
     }
 
     Column(
@@ -141,8 +145,7 @@ fun ShortsScreen(
                     // Layout toggle button (Grid / List)
                     IconButton(
                         onClick = {
-                            isGridView = !isGridView
-                            viewModel.setLayoutMode(if (isGridView) "grid" else "list")
+                            viewModel.setShortsLayoutMode(if (isGridView) "list" else "grid")
                         },
                         modifier = Modifier
                             .size(38.dp)
@@ -203,6 +206,7 @@ fun ShortsScreen(
                         ShortsGridCard(
                             video = video,
                             isPlayed = playedIds.contains(video.id),
+                            visibleFields = shortsVisibleFields,
                             onClick = { onVideoClick(video, sortedShorts) }
                         )
                     }
@@ -217,6 +221,7 @@ fun ShortsScreen(
                         ShortsListCard(
                             video = video,
                             isPlayed = playedIds.contains(video.id),
+                            visibleFields = shortsVisibleFields,
                             onClick = { onVideoClick(video, sortedShorts) }
                         )
                     }
@@ -228,24 +233,23 @@ fun ShortsScreen(
     if (showSortSheet) {
         SortBottomSheet(
             sheetState = sortSheetState,
-            sortBy = uiState.sortBy,
-            sortAscending = uiState.sortAscending,
-            viewMode = uiState.viewMode,
-            layoutMode = if (isGridView) "grid" else "list",
-            visibleFields = uiState.visibleFields,
-            onlyForFolderList = uiState.onlyForFolderList,
-            showAudioFiles = uiState.showAudioFiles,
+            sortBy = shortsSortBy,
+            sortAscending = shortsSortAscending,
+            viewMode = "video",
+            layoutMode = shortsLayoutMode,
+            visibleFields = shortsVisibleFields,
+            onlyForFolderList = false,
+            showAudioFiles = false,
             onDismiss = { showSortSheet = false },
-            onSortByChanged = { viewModel.setSortBy(it) },
-            onSortAscendingChanged = { viewModel.setSortAscending(it) },
-            onViewModeChanged = { viewModel.setViewMode(it) },
+            onSortByChanged = { viewModel.setShortsSortBy(it) },
+            onSortAscendingChanged = { viewModel.setShortsSortAscending(it) },
+            onViewModeChanged = { },
             onLayoutModeChanged = { mode ->
-                viewModel.setLayoutMode(mode)
-                isGridView = (mode == "grid")
+                viewModel.setShortsLayoutMode(mode)
             },
-            onVisibleFieldsChanged = { viewModel.setVisibleFields(it) },
-            onOnlyForFolderListChanged = { viewModel.setOnlyForFolderList(it) },
-            onShowAudioFilesChanged = { viewModel.setShowAudioFiles(it) }
+            onVisibleFieldsChanged = { viewModel.setShortsVisibleFields(it) },
+            onOnlyForFolderListChanged = { },
+            onShowAudioFilesChanged = { }
         )
     }
 }
@@ -254,9 +258,14 @@ fun ShortsScreen(
 private fun ShortsGridCard(
     video: VideoItem,
     isPlayed: Boolean,
+    visibleFields: Set<String> = emptySet(),
     onClick: () -> Unit
 ) {
     val tagLabel = remember(video) { getSourceTag(video) }
+    val showDate = visibleFields.contains("Date")
+    val showDuration = visibleFields.contains("Total Duration")
+    val showFullName = visibleFields.contains("Full Name")
+    val showPath = visibleFields.contains("Path")
 
     Card(
         modifier = Modifier
@@ -367,16 +376,28 @@ private fun ShortsGridCard(
                     text = video.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 2,
+                    maxLines = if (showFullName) Int.MAX_VALUE else 2,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = formatShortsDate(video.dateAdded),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (showPath && video.folderPath.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = video.folderPath,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (showDate) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = formatShortsDate(video.dateAdded),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
@@ -386,9 +407,13 @@ private fun ShortsGridCard(
 private fun ShortsListCard(
     video: VideoItem,
     isPlayed: Boolean,
+    visibleFields: Set<String> = emptySet(),
     onClick: () -> Unit
 ) {
     val tagLabel = remember(video) { getSourceTag(video) }
+    val showDate = visibleFields.contains("Date")
+    val showFullName = visibleFields.contains("Full Name")
+    val showPath = visibleFields.contains("Path")
 
     Card(
         modifier = Modifier
@@ -465,16 +490,28 @@ private fun ShortsListCard(
                     text = video.title,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 2,
+                    maxLines = if (showFullName) Int.MAX_VALUE else 2,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Text(
-                    text = "تاريخ الإضافة: ${formatShortsDate(video.dateAdded)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (showPath && video.folderPath.isNotBlank()) {
+                    Text(
+                        text = video.folderPath,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (showDate) {
+                    Text(
+                        text = "تاريخ الإضافة: ${formatShortsDate(video.dateAdded)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             IconButton(
@@ -485,7 +522,7 @@ private fun ShortsListCard(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "تشغيل",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }

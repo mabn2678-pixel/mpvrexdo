@@ -127,7 +127,7 @@ fun FolderDetailScreen(
         .collectAsState(initial = emptyList())
 
     val folderConfigs by viewModel.folderConfigs.collectAsState()
-    val folderConfig = folderConfigs[folderPath] ?: FolderSortConfig()
+    val folderConfig = folderConfigs[folderPath] ?: viewModel.getFolderConfig(folderPath)
 
     val sortedVideos = remember(videos, folderConfig.sortBy, folderConfig.sortAscending) {
         val sorted = when (folderConfig.sortBy) {
@@ -587,7 +587,7 @@ fun VideoListItem(
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val showFullName = visibleFields.contains("Full Name")
     val showPath = visibleFields.contains("Path")
-    val showProgressBar = (visibleFields.isEmpty() || visibleFields.contains("Progress Bar"))
+    val showProgressBar = visibleFields.contains("Progress Bar")
     val progressRatio = if (playbackProgress != null && playbackProgress.durationMs > 0 && playbackProgress.positionMs > 0) {
         (playbackProgress.positionMs.toFloat() / playbackProgress.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
@@ -773,9 +773,9 @@ fun VideoListItem(
                 }
             }
 
-            val showResolution = visibleFields.isEmpty() || visibleFields.contains("Resolution")
-            val showFileSize = visibleFields.isEmpty() || visibleFields.contains("File Size")
-            val showDate = visibleFields.isEmpty() || visibleFields.contains("Date")
+            val showResolution = visibleFields.contains("Resolution")
+            val showFileSize = visibleFields.contains("File Size")
+            val showDate = visibleFields.contains("Date")
             val showTotalDuration = visibleFields.contains("Total Duration")
 
             if (showResolution || showFileSize || showDate || showTotalDuration || subtitleLangs.isNotEmpty()) {
@@ -838,7 +838,7 @@ fun VideoGridItem(
 ) {
     val showFullName = visibleFields.contains("Full Name")
     val showPath = visibleFields.contains("Path")
-    val showProgressBar = (visibleFields.isEmpty() || visibleFields.contains("Progress Bar"))
+    val showProgressBar = visibleFields.contains("Progress Bar")
     val progressRatio = if (playbackProgress != null && playbackProgress.durationMs > 0 && playbackProgress.positionMs > 0) {
         (playbackProgress.positionMs.toFloat() / playbackProgress.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
@@ -1001,9 +1001,9 @@ fun VideoGridItem(
                     }
                 }
 
-                val showResolution = visibleFields.isEmpty() || visibleFields.contains("Resolution")
-                val showFileSize = visibleFields.isEmpty() || visibleFields.contains("File Size")
-                val showDate = visibleFields.isEmpty() || visibleFields.contains("Date")
+                val showResolution = visibleFields.contains("Resolution")
+                val showFileSize = visibleFields.contains("File Size")
+                val showDate = visibleFields.contains("Date")
                 val showTotalDuration = visibleFields.contains("Total Duration")
 
                 if (showResolution || showFileSize || showDate || showTotalDuration || subtitleLangs.isNotEmpty()) {
