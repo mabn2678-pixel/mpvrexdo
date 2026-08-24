@@ -4,6 +4,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.provider.MediaStore
 import com.finalplayer.app.data.database.entities.VideoEntity
+import com.finalplayer.app.utils.normalizeVideoKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -71,6 +72,8 @@ class MediaStoreVideoScanner(private val context: Context) {
 
                     val resolution = if (width > 0 && height > 0) "${width}x${height}" else null
                     val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id).toString()
+                    val finalPlaybackUri = if (fullPath.isNotEmpty()) fullPath else uri
+                    val videoKey = normalizeVideoKey(finalPlaybackUri)
 
                     val finalDuration = if (duration > 0L) {
                         duration
@@ -80,8 +83,8 @@ class MediaStoreVideoScanner(private val context: Context) {
 
                     videoList.add(
                         VideoEntity(
-                            id = id.toString(),
-                            uri = uri,
+                            id = videoKey,
+                            uri = finalPlaybackUri,
                             title = title,
                             duration = finalDuration,
                             sizeBytes = sizeBytes,
@@ -179,7 +182,7 @@ class MediaStoreVideoScanner(private val context: Context) {
 
                             val parentPath = file.parent ?: "/storage/emulated/0"
                             val fileDuration = extractDurationForVideo(path, "")
-                            val canonicalId = try { file.canonicalPath } catch (e: Exception) { path }
+                            val canonicalId = normalizeVideoKey(path)
                             val entity = VideoEntity(
                                 id = canonicalId,
                                 uri = file.absolutePath,

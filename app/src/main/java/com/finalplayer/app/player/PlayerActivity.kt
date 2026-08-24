@@ -29,6 +29,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.finalplayer.app.player.core.MpvTeardownCoordinator
 import com.finalplayer.app.player.service.MediaPlaybackService
+import com.finalplayer.app.utils.normalizeVideoKey
 import com.finalplayer.app.ui.player.PlayerScreen
 import com.finalplayer.app.ui.theme.FinalPlayerTheme
 import kotlinx.coroutines.flow.combine
@@ -172,25 +173,10 @@ class PlayerActivity : ComponentActivity() {
         }
 
         // Parse video/audio details from intent
-        val rawVideoPath = intent.getStringExtra(EXTRA_VIDEO_PATH)
+        videoPath = intent.getStringExtra(EXTRA_VIDEO_PATH)
             ?: intent.data?.toString()
             ?: ""
-        val cleanPath = if (rawVideoPath.startsWith("file://")) rawVideoPath.substring(7) else rawVideoPath
-        videoPath = if (cleanPath.startsWith("/")) {
-            try { java.io.File(cleanPath).canonicalPath } catch (_: Exception) { rawVideoPath }
-        } else {
-            rawVideoPath
-        }
-
-        val rawVideoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: videoPath
-        val cleanId = if (rawVideoId.startsWith("file://")) rawVideoId.substring(7) else rawVideoId
-        videoId = if (cleanId.startsWith("/")) {
-            try { java.io.File(cleanId).canonicalPath } catch (_: Exception) { rawVideoId }
-        } else {
-            rawVideoId
-        }
-        
-        Log.d("ResumeDebug", "PlayerActivity onCreate intent: videoId=$videoId, videoPath=$videoPath")
+        videoId = normalizeVideoKey(videoPath)
         
         val customTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE)
         if (!customTitle.isNullOrEmpty()) {
@@ -232,7 +218,7 @@ class PlayerActivity : ComponentActivity() {
         if (isShortsMode && !shortsUris.isNullOrEmpty()) {
             val items = shortsUris.mapIndexed { index, uri ->
                 com.finalplayer.app.domain.model.VideoItem(
-                    id = shortsIds?.getOrNull(index) ?: uri,
+                    id = normalizeVideoKey(uri),
                     uri = uri,
                     title = shortsTitles?.getOrNull(index) ?: "Short",
                     duration = 0L,
@@ -245,7 +231,7 @@ class PlayerActivity : ComponentActivity() {
         } else if (!playlistUris.isNullOrEmpty()) {
             val items = playlistUris.mapIndexed { index, uri ->
                 com.finalplayer.app.domain.model.VideoItem(
-                    id = playlistIds?.getOrNull(index) ?: uri,
+                    id = normalizeVideoKey(uri),
                     uri = uri,
                     title = playlistTitles?.getOrNull(index) ?: "Video",
                     duration = playlistDurations?.getOrNull(index) ?: 0L,
