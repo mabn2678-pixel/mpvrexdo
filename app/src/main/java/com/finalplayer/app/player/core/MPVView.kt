@@ -38,6 +38,8 @@ class MPVView @JvmOverloads constructor(
 
     var onVideoFileLoaded: (() -> Unit)? = null
 
+    var onResumeApplied: (() -> Unit)? = null
+
     // Playback state properties
     var isPaused: Boolean = true
         private set
@@ -662,6 +664,7 @@ class MPVView @JvmOverloads constructor(
                 try {
                     // نفذ الـ seek والفيديو لسه متوقف مؤقتاً
                     lib.command(arrayOf("seek", targetSec.toString(), "absolute+exact"))
+                    onResumeApplied?.invoke()
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error applying resume seek", e)
                 }

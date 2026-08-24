@@ -661,11 +661,6 @@ class PlayerViewModel(
                 _resumePositionSec.value = savedTimeInSeconds
                 _precisePosition.value = savedTimeInSeconds.toFloat()
                 hasAppliedAutoResume = false
-                try {
-                    mpvController.setPropertyDouble("start", savedTimeInSeconds)
-                    MPVLib.setPropertyDouble("start", savedTimeInSeconds)
-                    MPVLib.setOptionString("start", savedTimeInSeconds.toString())
-                } catch (_: Exception) {}
             } else {
                 _resumePositionSec.value = null
             }
@@ -686,11 +681,6 @@ class PlayerViewModel(
                             _resumePositionSec.value = savedTimeInSeconds
                             _precisePosition.value = savedTimeInSeconds.toFloat()
                             hasAppliedAutoResume = false
-                            try {
-                                mpvController.setPropertyDouble("start", savedTimeInSeconds)
-                                MPVLib.setPropertyDouble("start", savedTimeInSeconds)
-                                MPVLib.setOptionString("start", savedTimeInSeconds.toString())
-                            } catch (_: Exception) {}
                         }
                     }
                 }
@@ -2074,22 +2064,6 @@ class PlayerViewModel(
                     }
                 } else if (posSec < durSec - 2f) {
                     eofHandled = false
-                }
-
-                // Auto resume to exact saved progress automatically without showing any banner or asking
-                if (!hasAppliedAutoResume && _resumePositionSec.value != null) {
-                    val targetResume = _resumePositionSec.value!!
-                    if (targetResume > 1.0) {
-                        if (posSec < 1.5 || posSec < targetResume - 1.5) {
-                            seekTo(targetResume.toFloat())
-                            mpvController.seekTo((targetResume * 1000).toLong())
-                        }
-                        if (posSec >= targetResume - 1.5) {
-                            hasAppliedAutoResume = true
-                        }
-                    } else {
-                        hasAppliedAutoResume = true
-                    }
                 }
 
                 val timeSinceSeek = System.currentTimeMillis() - lastSeekTimeMs

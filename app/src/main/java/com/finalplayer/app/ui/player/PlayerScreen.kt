@@ -163,14 +163,6 @@ fun PlayerScreen(
     val isBuffering by viewModel.isBuffering.collectAsStateWithLifecycle()
     val resumePositionSec by viewModel.resumePositionSec.collectAsStateWithLifecycle()
 
-    LaunchedEffect(resumePositionSec) {
-        val targetSec = resumePositionSec
-        if (targetSec != null && targetSec > 1.0 && !viewModel.hasAppliedAutoResume) {
-            viewModel.seekTo(targetSec.toFloat())
-            viewModel.mpvController.seekTo((targetSec * 1000).toLong())
-        }
-    }
-
     // Initialize initial system audio & brightness
     LaunchedEffect(Unit) {
         viewModel.initBrightness(activity?.window, context)
@@ -218,6 +210,10 @@ fun PlayerScreen(
                     viewModel.mpvController.play(target, resumeSec)
                 }
             }
+        }
+
+        mpvView.onResumeApplied = {
+            viewModel.hasAppliedAutoResume = true
         }
 
         mpvView.onVideoFileLoaded = {
