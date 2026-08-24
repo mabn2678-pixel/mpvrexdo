@@ -5,6 +5,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -48,6 +49,13 @@ fun PlayerScreen(
     val configuration = LocalConfiguration.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val mpvView = remember { MPVView(context) }
+
+    BackHandler {
+        try {
+            viewModel.stopPlayback()
+        } catch (_: Exception) {}
+        onBackClick()
+    }
 
     LaunchedEffect(configuration.orientation) {
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
@@ -296,7 +304,12 @@ fun PlayerScreen(
                 viewModel.onHorizontalDrag(delta, screenWidth)
             },
             onHorizontalDragEnd = { viewModel.onHorizontalDragEnd() },
-            onBackClick = onBackClick,
+            onBackClick = {
+                try {
+                    viewModel.stopPlayback()
+                } catch (_: Exception) {}
+                onBackClick()
+            },
             onStartSleepTimer = { seconds -> viewModel.startTimer(seconds) },
             onCancelSleepTimer = { viewModel.cancelTimer() },
             subtitleTracks = subtitleTracks,

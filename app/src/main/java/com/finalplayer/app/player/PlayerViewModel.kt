@@ -378,15 +378,24 @@ class PlayerViewModel(
         val videoId = _currentVideoId.value ?: return
         if (videoId.isEmpty()) return
 
-        val livePosSec = try { MPVLib.getPropertyDouble("time-pos") } catch (e: Exception) { null }
-        val liveDurSec = try { MPVLib.getPropertyDouble("duration") } catch (e: Exception) { null }
+        val livePosSec = try { 
+            MPVLib.getPropertyDouble("time-pos") ?: mpvController.getAttachedView()?.getPropertyDouble("time-pos")
+        } catch (e: Exception) { null }
+        val liveDurSec = try { 
+            MPVLib.getPropertyDouble("duration") ?: mpvController.getAttachedView()?.getPropertyDouble("duration")
+        } catch (e: Exception) { null }
 
         val posMs = when {
-            livePosSec != null && livePosSec > 0.0 -> (livePosSec * 1000.0).toLong()
-            mpvController.playerState.value.positionMs > 0L -> mpvController.playerState.value.positionMs
-            _precisePosition.value > 0f -> (_precisePosition.value * 1000f).toLong()
-            lastKnownPositionMs > 0L -> lastKnownPositionMs
+            livePosSec != null && livePosSec > 1.0 -> (livePosSec * 1000.0).toLong()
+            mpvController.playerState.value.positionMs > 1000L -> mpvController.playerState.value.positionMs
+            _precisePosition.value > 1f -> (_precisePosition.value * 1000f).toLong()
+            lastKnownPositionMs > 1000L -> lastKnownPositionMs
             else -> 0L
+        }
+
+        // Database & cache protection: NEVER overwrite with 0 or values <= 1.0s on exit
+        if (posMs <= 1000L) {
+            return
         }
 
         val durMs = when {
@@ -407,8 +416,8 @@ class PlayerViewModel(
         val effectivePosMs = when {
             _dragSeekState.value != null -> (_dragSeekState.value!!.targetPositionSec * 1000).toLong()
             !hasAppliedAutoResume && savedResumeMs > 2500L && posMs < 2500L -> savedResumeMs
-            posMs > 0L -> posMs
-            lastKnownPositionMs > 0L -> lastKnownPositionMs
+            posMs > 1000L -> posMs
+            lastKnownPositionMs > 1000L -> lastKnownPositionMs
             savedResumeMs > 1000L -> savedResumeMs
             else -> 0L
         }
@@ -419,8 +428,8 @@ class PlayerViewModel(
 
         val effectiveDurMs = if (durMs > 0L) durMs else lastKnownDurationMs
 
-        if (effectiveDurMs > 0 && effectivePosMs > 1000L) {
-            val isCompleted = (effectivePosMs.toFloat() / effectiveDurMs.toFloat()) > 0.95f
+        if (effectivePosMs > 1000L) {
+            val isCompleted = effectiveDurMs > 5000L && (effectivePosMs.toFloat() / effectiveDurMs.toFloat()) > 0.95f
             val finalPos = if (isCompleted) 0L else effectivePosMs
             val currentUri = mpvController.playerState.value.currentFilePath
 
@@ -1687,11 +1696,28 @@ class PlayerViewModel(
 
     fun stopPlayback() {
         try {
-            saveCurrentProgressNow()
+            // 1. Read live position first before any intervention
+            val currentPos = try {
+                MPVLib.getPropertyDouble("time-pos") ?: mpvController.getAttachedView()?.getPropertyDouble("time-pos")
+            } catch (e: Exception) {
+                null
+            } ?: 0.0
+
+            // 2. Protect database: only save if position is greater than 1 second (to prevent accidental zeroing)
+            if (currentPos > 1.0) {
+                lastKnownPositionMs = (currentPos * 1000.0).toLong()
+                saveCurrentProgressNow(isSynchronous = true)
+            } else if (lastKnownPositionMs > 1000L) {
+                saveCurrentProgressNow(isSynchronous = true)
+            }
+
+            // 3. After saving safely, stop video playback
             mpvController.stop()
             mpvController.getAttachedView()?.stop()
             MPVView.stopAll()
-            MPVLib.command("stop")
+            try {
+                MPVLib.command("stop")
+            } catch (_: Exception) {}
         } catch (_: Throwable) {}
         _paused.value = true
     }

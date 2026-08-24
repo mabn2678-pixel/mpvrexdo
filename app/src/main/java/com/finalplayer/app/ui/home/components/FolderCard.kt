@@ -38,6 +38,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.util.Log
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.finalplayer.app.domain.model.VideoFolder
 import com.finalplayer.app.ui.components.AppFlowRow
 import com.finalplayer.app.ui.components.VideoThumbnailImage
@@ -59,6 +62,7 @@ fun FolderCard(
     onOptionsClick: (() -> Unit)? = null,
     onOptionsLongClick: (() -> Unit)? = null
 ) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val cleanPath = folder.path.replace("//", "/").trimEnd('/')
     val displayName = folder.name.ifEmpty { File(cleanPath).name }
     val showFullName = visibleFields.contains("Full Name")
@@ -67,7 +71,10 @@ fun FolderCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+            .onGloballyPositioned { coordinates ->
+                Log.d("FolderCard", "screenWidthDp=$screenWidthDp, cardWidthPx=${coordinates.size.width}")
+            }
+            .padding(start = 2.dp, end = 2.dp, top = 3.dp, bottom = 3.dp)
             .clip(RoundedCornerShape(12.dp))
             .then(
                 if (isSelectionMode) {
@@ -81,7 +88,7 @@ fun FolderCard(
                     Modifier.clickable { onClick() }
                 }
             )
-            .padding(start = 10.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 2.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. 3-dots button placed at the outer edge (flush against phone wall)

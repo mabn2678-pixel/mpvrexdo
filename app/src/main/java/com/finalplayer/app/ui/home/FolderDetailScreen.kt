@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.finalplayer.app.ui.components.AppFlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -45,6 +46,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import android.util.Log
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -372,7 +376,12 @@ fun FolderDetailScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .thinScrollbar(state = listState, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                contentPadding = padding
+                contentPadding = PaddingValues(
+                    top = padding.calculateTopPadding() + 4.dp,
+                    bottom = padding.calculateBottomPadding() + 80.dp,
+                    start = 0.dp,
+                    end = 0.dp
+                )
             ) {
                 itemsIndexed(sortedVideos, key = { index, video -> "${video.id}_$index" }) { index, video ->
                     val videoProgress = playbackProgresses.find { it.videoId == video.id || it.videoId == video.uri }
@@ -575,6 +584,7 @@ fun VideoListItem(
     onOptionsClick: (() -> Unit)? = null,
     onOptionsLongClick: (() -> Unit)? = null
 ) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val showFullName = visibleFields.contains("Full Name")
     val showPath = visibleFields.contains("Path")
     val showProgressBar = (visibleFields.isEmpty() || visibleFields.contains("Progress Bar"))
@@ -586,7 +596,10 @@ fun VideoListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
+            .onGloballyPositioned { coordinates ->
+                Log.d("VideoListItem", "screenWidthDp=$screenWidthDp, cardWidthPx=${coordinates.size.width}")
+            }
+            .padding(start = 2.dp, end = 2.dp, top = 3.dp, bottom = 3.dp)
             .clip(RoundedCornerShape(12.dp))
             .then(
                 if (isSelectionMode) {
@@ -600,7 +613,7 @@ fun VideoListItem(
                     Modifier.clickable { onClick() }
                 }
             )
-            .padding(start = 10.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 2.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. 3-dots button placed at the outer edge (flush against phone wall)
