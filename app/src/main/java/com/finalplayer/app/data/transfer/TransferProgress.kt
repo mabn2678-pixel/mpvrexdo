@@ -2,7 +2,9 @@ package com.finalplayer.app.data.transfer
 
 enum class TransferType {
     COPY,
-    MOVE
+    MOVE,
+    HIDE_TO_SECURE,
+    RESTORE_FROM_SECURE
 }
 
 data class TransferProgress(

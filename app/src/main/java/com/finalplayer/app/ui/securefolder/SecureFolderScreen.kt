@@ -50,6 +50,7 @@ import androidx.fragment.app.FragmentActivity
 import com.finalplayer.app.domain.model.VideoItem
 import com.finalplayer.app.ui.components.DeleteConfirmDialog
 import com.finalplayer.app.ui.components.FileInfoDialog
+import com.finalplayer.app.ui.components.FileTransferProgressDialog
 import com.finalplayer.app.ui.components.SecureSelectionBottomActionBar
 import com.finalplayer.app.ui.components.SelectionTopAppBar
 import com.finalplayer.app.ui.securefolder.components.PinInputDialog
@@ -75,6 +76,7 @@ fun SecureFolderScreen(
     val sortBy by viewModel.sortBy.collectAsState()
     val sortAscending by viewModel.sortAscending.collectAsState()
     val layoutMode by viewModel.layoutMode.collectAsState()
+    val transferProgress by viewModel.transferProgress.collectAsState()
 
     var selectedVideos by remember { mutableStateOf<Set<VideoItem>>(emptySet()) }
     val isSelectionMode = isUnlocked && selectedVideos.isNotEmpty()
@@ -430,4 +432,10 @@ fun SecureFolderScreen(
             onDismiss = { showPinDialog = false }
         )
     }
+
+    FileTransferProgressDialog(
+        progress = transferProgress,
+        onCancel = { viewModel.cancelTransfer() },
+        onMoveToBackground = { viewModel.moveToBackground() }
+    )
 }

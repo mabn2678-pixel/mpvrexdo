@@ -67,7 +67,7 @@ fun FolderCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .padding(horizontal = 2.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(12.dp))
             .then(
                 if (isSelectionMode) {
@@ -81,10 +81,31 @@ fun FolderCard(
                     Modifier.clickable { onClick() }
                 }
             )
-            .padding(vertical = 4.dp, horizontal = 4.dp),
+            .padding(vertical = 4.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Stacked Folder Preview with optional Unwatched Badge & Selection Checkmark
+        // 1. 3-dots button placed at the outer edge (flush against phone wall)
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .combinedClickable(
+                    onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
+                    onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "خيارات المجلد",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        // 2. Stacked Folder Preview with optional Unwatched Badge & Selection Checkmark
         Box(
             contentAlignment = Alignment.TopEnd
         ) {
@@ -109,27 +130,6 @@ fun FolderCard(
                     )
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.width(2.dp))
-
-        // 2. 3-dots button placed right next to the folder preview
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .combinedClickable(
-                    onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
-                    onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = "خيارات المجلد",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
         }
 
         Spacer(modifier = Modifier.width(10.dp))

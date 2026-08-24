@@ -272,15 +272,18 @@ private data class SortConfig(
         context: android.content.Context,
         onComplete: (Boolean, String) -> Unit
     ) {
-        viewModelScope.launch {
-            val result = videoRepository.hideVideosToSecureFolder(videos, context)
-            if (result.isSuccess) {
-                onComplete(true, "تم إخفاء ${videos.size} ملف ونقله إلى المجلد الآمن بنجاح")
-            } else {
-                val msg = result.exceptionOrNull()?.message ?: "حدث خطأ أثناء الإخفاء"
-                onComplete(false, "فشلت العملية: $msg")
+        fileTransferManager.startTransfer(
+            videos = videos,
+            destination = null,
+            type = com.finalplayer.app.data.transfer.TransferType.HIDE_TO_SECURE,
+            runInBackground = false,
+            onComplete = { success, msg ->
+                if (success) {
+                    refreshVideos()
+                }
+                onComplete(success, msg)
             }
-        }
+        )
     }
 
     fun renameVideo(

@@ -11,9 +11,12 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.finalplayer.app.MainActivity
 import com.finalplayer.app.R
+import com.finalplayer.app.data.database.dao.SecureMediaDao
 import com.finalplayer.app.data.database.dao.VideoDao
-import com.finalplayer.app.domain.model.VideoItem
+import com.finalplayer.app.data.database.entities.SecureMediaEntity
+import com.finalplayer.app.data.database.entities.VideoEntity
 import com.finalplayer.app.data.mapper.toEntity
+import com.finalplayer.app.domain.model.VideoItem
 import com.finalplayer.app.utils.FileOperationsUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +37,8 @@ import java.io.FileOutputStream
 
 class FileTransferManager(
     private val context: Context,
-    private val videoDao: VideoDao
+    private val videoDao: VideoDao,
+    private val secureMediaDao: SecureMediaDao
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     private var transferJob: Job? = null
@@ -47,13 +51,18 @@ class FileTransferManager(
 
     fun startTransfer(
         videos: List<VideoItem>,
-        destination: File,
+        destination: File? = null,
         type: TransferType,
         runInBackground: Boolean = false,
         onComplete: ((Boolean, String) -> Unit)? = null
     ) {
         if (_transferState.value?.isRunning == true) {
-            onComplete?.invoke(false, "توجد عملية نقل أو نسخ أخرى قيد التنفيذ حالياً")
+            onComplete?.invoke(false, "توجد عملية جارية حالياً")
+            return
+        }
+
+        if (videos.isEmpty()) {
+            onComplete?.invoke(false, "لم يتم تحديد أي ملفات")
             return
         }
 
@@ -74,7 +83,7 @@ class FileTransferManager(
             percentage = 0,
             transferredSizeFormatted = "0 B",
             totalSizeFormatted = FileOperationsUtil.formatFileSize(totalBytes),
-            destinationPath = destination.absolutePath
+            destinationPath = destination?.absolutePath ?: ""
         )
 
         if (runInBackground) {
@@ -94,72 +103,205 @@ class FileTransferManager(
                     return@launch
                 }
 
-                if (!destination.exists()) {
+                if (destination != null && !destination.exists()) {
                     destination.mkdirs()
                 }
 
                 var totalBytesProcessed = 0L
                 val successFiles = mutableListOf<VideoItem>()
 
-                for ((index, video) in videos.withIndex()) {
-                    if (!isActive) throw CancellationException("Transfer cancelled by user")
+                when (type) {
+                    TransferType.MOVE, TransferType.COPY -> {
+                        val targetDest = destination ?: throw IllegalArgumentException("Destination folder required")
+                        for ((index, video) in videos.withIndex()) {
+                            if (!isActive) throw CancellationException("Transfer cancelled by user")
 
-                    val sourceFile = FileOperationsUtil.getVideoFile(video)
-                    val targetFile = File(destination, sourceFile.name.ifBlank { video.title })
+                            val sourceFile = FileOperationsUtil.getVideoFile(video)
+                            val targetFile = File(targetDest, sourceFile.name.ifBlank { video.title })
 
-                    _transferState.value = _transferState.value?.copy(
-                        currentFileIndex = index + 1,
-                        currentFileName = video.title
-                    )
-                    updateNotification()
-
-                    val fileCopied = copyStreamWithProgress(
-                        src = sourceFile,
-                        dst = targetFile,
-                        onBytesChunk = { bytesRead ->
-                            totalBytesProcessed += bytesRead
-                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
                             _transferState.value = _transferState.value?.copy(
-                                transferredBytes = totalBytesProcessed,
-                                percentage = pct,
-                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                currentFileIndex = index + 1,
+                                currentFileName = video.title
                             )
                             updateNotification()
+
+                            val fileCopied = copyStreamWithProgress(
+                                src = sourceFile,
+                                dst = targetFile,
+                                onBytesChunk = { bytesRead ->
+                                    totalBytesProcessed += bytesRead
+                                    val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                                    _transferState.value = _transferState.value?.copy(
+                                        transferredBytes = totalBytesProcessed,
+                                        percentage = pct,
+                                        transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                    )
+                                    updateNotification()
+                                }
+                            )
+
+                            if (!fileCopied) {
+                                throw Exception("فشل نقل/نسخ الملف: ${video.title}")
+                            }
+
+                            if (type == TransferType.MOVE) {
+                                sourceFile.delete()
+                                FileOperationsUtil.scanFile(context, sourceFile)
+                            }
+
+                            FileOperationsUtil.scanFile(context, targetFile)
+                            successFiles.add(video)
+
+                            if (type == TransferType.MOVE) {
+                                val updated = video.toEntity().copy(
+                                    folderPath = targetDest.absolutePath,
+                                    uri = if (targetFile.exists()) targetFile.absolutePath else "${targetDest.absolutePath}/${video.title}"
+                                )
+                                videoDao.insertVideos(listOf(updated))
+                            } else {
+                                val copied = video.toEntity().copy(
+                                    id = "${video.id}_copy_${System.currentTimeMillis()}_$index",
+                                    folderPath = targetDest.absolutePath,
+                                    uri = if (targetFile.exists()) targetFile.absolutePath else "${targetDest.absolutePath}/${video.title}",
+                                    dateAdded = System.currentTimeMillis() / 1000L
+                                )
+                                videoDao.insertVideos(listOf(copied))
+                            }
                         }
-                    )
-
-                    if (!fileCopied) {
-                        throw Exception("فشل نقل/نسخ الملف: ${video.title}")
                     }
 
-                    if (type == TransferType.MOVE) {
-                        sourceFile.delete()
-                        FileOperationsUtil.scanFile(context, sourceFile)
+                    TransferType.HIDE_TO_SECURE -> {
+                        val vaultDir = File(context.filesDir, "secure_vault").apply { if (!exists()) mkdirs() }
+                        for ((index, video) in videos.withIndex()) {
+                            if (!isActive) throw CancellationException("Transfer cancelled by user")
+
+                            val sourceFile = FileOperationsUtil.getVideoFile(video)
+                            val originalPathStr = sourceFile.absolutePath.ifBlank { video.uri }
+                            val vaultTargetFile = File(vaultDir, ".sec_${video.id}_${System.currentTimeMillis()}_$index.dat")
+
+                            _transferState.value = _transferState.value?.copy(
+                                currentFileIndex = index + 1,
+                                currentFileName = video.title
+                            )
+                            updateNotification()
+
+                            val fileCopied = copyStreamWithProgress(
+                                src = sourceFile,
+                                dst = vaultTargetFile,
+                                onBytesChunk = { bytesRead ->
+                                    totalBytesProcessed += bytesRead
+                                    val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                                    _transferState.value = _transferState.value?.copy(
+                                        transferredBytes = totalBytesProcessed,
+                                        percentage = pct,
+                                        transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                    )
+                                    updateNotification()
+                                }
+                            )
+
+                            if (!fileCopied) {
+                                throw Exception("فشل تشفير ونقل الملف إلى المجلد الآمن: ${video.title}")
+                            }
+
+                            sourceFile.delete()
+                            FileOperationsUtil.scanFile(context, sourceFile)
+                            FileOperationsUtil.scanFile(context, vaultTargetFile)
+
+                            val actualSize = if (vaultTargetFile.exists()) vaultTargetFile.length() else video.sizeBytes
+
+                            secureMediaDao.insert(
+                                SecureMediaEntity(
+                                    videoId = video.id,
+                                    title = video.title,
+                                    vaultPath = vaultTargetFile.absolutePath,
+                                    originalPath = originalPathStr,
+                                    duration = video.duration,
+                                    sizeBytes = actualSize,
+                                    dateAdded = video.dateAdded,
+                                    resolution = video.resolution,
+                                    folderPath = video.folderPath,
+                                    addedAt = System.currentTimeMillis()
+                                )
+                            )
+                            videoDao.deleteVideo(video.id)
+                            successFiles.add(video)
+                        }
                     }
 
-                    FileOperationsUtil.scanFile(context, targetFile)
-                    successFiles.add(video)
+                    TransferType.RESTORE_FROM_SECURE -> {
+                        for ((index, video) in videos.withIndex()) {
+                            if (!isActive) throw CancellationException("Transfer cancelled by user")
 
-                    // Update DB for this item
-                    if (type == TransferType.MOVE) {
-                        val updated = video.toEntity().copy(
-                            folderPath = destination.absolutePath,
-                            uri = if (targetFile.exists()) targetFile.absolutePath else "${destination.absolutePath}/${video.title}"
-                        )
-                        videoDao.insertVideos(listOf(updated))
-                    } else {
-                        val copied = video.toEntity().copy(
-                            id = "${video.id}_copy_${System.currentTimeMillis()}_$index",
-                            folderPath = destination.absolutePath,
-                            uri = if (targetFile.exists()) targetFile.absolutePath else "${destination.absolutePath}/${video.title}",
-                            dateAdded = System.currentTimeMillis() / 1000L
-                        )
-                        videoDao.insertVideos(listOf(copied))
+                            val entity = secureMediaDao.getByVideoId(video.id)
+                            val vaultFile = if (entity != null && entity.vaultPath.isNotBlank()) {
+                                File(entity.vaultPath)
+                            } else {
+                                File(video.uri)
+                            }
+
+                            val originalPathStr = entity?.originalPath ?: video.uri
+                            val originalTargetFile = File(originalPathStr)
+                            val parent = originalTargetFile.parentFile ?: android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES)
+                            if (!parent.exists()) {
+                                parent.mkdirs()
+                            }
+                            val destinationFile = File(parent, originalTargetFile.name.removePrefix("."))
+
+                            _transferState.value = _transferState.value?.copy(
+                                currentFileIndex = index + 1,
+                                currentFileName = video.title
+                            )
+                            updateNotification()
+
+                            val fileRestored = copyStreamWithProgress(
+                                src = vaultFile,
+                                dst = destinationFile,
+                                onBytesChunk = { bytesRead ->
+                                    totalBytesProcessed += bytesRead
+                                    val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                                    _transferState.value = _transferState.value?.copy(
+                                        transferredBytes = totalBytesProcessed,
+                                        percentage = pct,
+                                        transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                    )
+                                    updateNotification()
+                                }
+                            )
+
+                            if (!fileRestored) {
+                                throw Exception("فشل استعادة الملف: ${video.title}")
+                            }
+
+                            vaultFile.delete()
+                            FileOperationsUtil.scanFile(context, destinationFile)
+                            FileOperationsUtil.scanFile(context, vaultFile)
+
+                            val videoEntity = VideoEntity(
+                                id = entity?.videoId ?: video.id,
+                                title = entity?.title?.ifBlank { destinationFile.name } ?: video.title,
+                                uri = destinationFile.absolutePath,
+                                duration = entity?.duration ?: video.duration,
+                                sizeBytes = destinationFile.length(),
+                                dateAdded = if ((entity?.dateAdded ?: 0L) > 0) entity!!.dateAdded else (System.currentTimeMillis() / 1000L),
+                                resolution = entity?.resolution ?: video.resolution,
+                                folderPath = parent.absolutePath,
+                                mimeType = "video/*"
+                            )
+                            videoDao.insertVideos(listOf(videoEntity))
+                            secureMediaDao.remove(video.id)
+                            successFiles.add(video)
+                        }
                     }
                 }
 
-                val actionName = if (type == TransferType.MOVE) "نقل" else "نسخ"
-                val successMessage = "تم $actionName ${videos.size} ملف بنجاح"
+                val successMessage = when (type) {
+                    TransferType.MOVE -> "تم نقل ${videos.size} ملف بنجاح"
+                    TransferType.COPY -> "تم نسخ ${videos.size} ملف بنجاح"
+                    TransferType.HIDE_TO_SECURE -> "تم إخفاء وتأمين ${videos.size} ملف بنجاح في المجلد الآمن"
+                    TransferType.RESTORE_FROM_SECURE -> "تمت استعادة ${videos.size} ملف بنجاح إلى هاتفك"
+                }
+
                 _transferState.value = null
                 stopForegroundService()
 
@@ -169,7 +311,12 @@ class FileTransferManager(
                 }
 
             } catch (e: CancellationException) {
-                val actionName = if (type == TransferType.MOVE) "النقل" else "النسخ"
+                val actionName = when (type) {
+                    TransferType.MOVE -> "النقل"
+                    TransferType.COPY -> "النسخ"
+                    TransferType.HIDE_TO_SECURE -> "الإخفاء والتأمين"
+                    TransferType.RESTORE_FROM_SECURE -> "الاستعادة"
+                }
                 val cancelMsg = "تم إلغاء عملية $actionName"
                 _transferState.value = null
                 stopForegroundService()
@@ -178,7 +325,12 @@ class FileTransferManager(
                     _transferCompletionEvents.emit(false to cancelMsg)
                 }
             } catch (e: Exception) {
-                val actionName = if (type == TransferType.MOVE) "النقل" else "النسخ"
+                val actionName = when (type) {
+                    TransferType.MOVE -> "النقل"
+                    TransferType.COPY -> "النسخ"
+                    TransferType.HIDE_TO_SECURE -> "الإخفاء والتأمين"
+                    TransferType.RESTORE_FROM_SECURE -> "الاستعادة"
+                }
                 val errMsg = "فشلت عملية $actionName: ${e.message ?: "خطأ غير معروف"}"
                 _transferState.value = null
                 stopForegroundService()
@@ -189,6 +341,7 @@ class FileTransferManager(
             }
         }
     }
+
 
     private suspend fun copyStreamWithProgress(
         src: File,
@@ -272,9 +425,9 @@ class FileTransferManager(
         @Volatile
         private var instance: FileTransferManager? = null
 
-        fun getInstance(context: Context, videoDao: VideoDao): FileTransferManager {
+        fun getInstance(context: Context, videoDao: VideoDao, secureMediaDao: SecureMediaDao): FileTransferManager {
             return instance ?: synchronized(this) {
-                instance ?: FileTransferManager(context.applicationContext, videoDao).also { instance = it }
+                instance ?: FileTransferManager(context.applicationContext, videoDao, secureMediaDao).also { instance = it }
             }
         }
     }
@@ -309,7 +462,7 @@ class FileTransferForegroundService : Service() {
         fun createNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val name = "نقل ونسخ الملفات"
-                val descriptionText = "إشعارات تقدم عمليات نقل ونسخ الفيديوهات في الخلفية"
+                val descriptionText = "إشعارات تقدم عمليات نقل ونسخ وتأمين الفيديوهات في الخلفية"
                 val importance = NotificationManager.IMPORTANCE_LOW
                 val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                     description = descriptionText
@@ -349,7 +502,13 @@ class FileTransferForegroundService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val title = if (progress?.type == TransferType.MOVE) "جاري نقل الملفات..." else "جاري نسخ الملفات..."
+            val title = when (progress?.type) {
+                TransferType.MOVE -> "جاري نقل الملفات..."
+                TransferType.COPY -> "جاري نسخ الملفات..."
+                TransferType.HIDE_TO_SECURE -> "جاري التأمين والنقل إلى المجلد الآمن..."
+                TransferType.RESTORE_FROM_SECURE -> "جاري استعادة الملفات إلى الهاتف..."
+                else -> "جاري معالجة الملفات..."
+            }
             val currentIdx = progress?.currentFileIndex ?: 0
             val totalCount = progress?.totalFileCount ?: 0
             val pct = progress?.percentage ?: 0

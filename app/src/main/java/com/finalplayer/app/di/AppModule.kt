@@ -40,7 +40,7 @@ val appModule = module {
 
     // Scanner & Repositories
     single { MediaStoreVideoScanner(androidContext()) }
-    single { com.finalplayer.app.data.transfer.FileTransferManager.getInstance(androidContext(), get()) }
+    single { com.finalplayer.app.data.transfer.FileTransferManager.getInstance(androidContext(), get(), get()) }
     single<VideoRepository> { VideoRepositoryImpl(get(), get(), get()) }
     single<PlaybackRepository> { PlaybackRepositoryImpl(get()) }
 
@@ -68,6 +68,6 @@ val appModule = module {
     viewModel { PlayerViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get()) }
     viewModel { SearchViewModel(get()) }
-    viewModel { SecureFolderViewModel(get(), get(), get()) }
+    viewModel { SecureFolderViewModel(get(), get(), get(), get()) }
 }
 

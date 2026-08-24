@@ -603,7 +603,28 @@ fun VideoListItem(
             .padding(start = 6.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Thumbnail with Duration Overlay, Progress Bar, Status Badge & Selection Overlay
+        // 1. 3-dots button placed at the outer edge (flush against phone wall)
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .combinedClickable(
+                    onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
+                    onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "خيارات الفيديو",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        // 2. Thumbnail with Duration Overlay, Progress Bar, Status Badge & Selection Overlay
         Box(
             modifier = Modifier
                 .width(108.dp)
@@ -691,27 +712,6 @@ fun VideoListItem(
                     }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.width(2.dp))
-
-        // 2. 3-dots button placed right next to the thumbnail
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .combinedClickable(
-                    onClick = { onOptionsClick?.invoke() ?: onLongClick?.invoke() },
-                    onLongClick = { onOptionsLongClick?.invoke() ?: onLongClick?.invoke() }
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.MoreVert,
-                contentDescription = "خيارات الفيديو",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
         }
 
         Spacer(modifier = Modifier.width(10.dp))

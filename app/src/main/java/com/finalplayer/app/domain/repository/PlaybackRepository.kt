@@ -5,7 +5,10 @@ import kotlinx.coroutines.flow.Flow
 
 interface PlaybackRepository {
     suspend fun saveProgress(progress: PlaybackProgress)
+    fun saveProgressSync(progress: PlaybackProgress)
     fun getProgress(videoId: String): Flow<PlaybackProgress?>
+    suspend fun getProgressOnce(videoId: String): PlaybackProgress?
+    fun getProgressOnceSync(videoId: String): PlaybackProgress?
     fun getAllProgress(): Flow<List<PlaybackProgress>>
     fun getRecentlyPlayed(limit: Int): Flow<List<PlaybackProgress>>
     suspend fun removeFromHistory(videoId: String)

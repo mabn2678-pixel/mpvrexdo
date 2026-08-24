@@ -462,7 +462,7 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        viewModel.saveCurrentProgressNow()
+        viewModel.saveCurrentProgressNow(isSynchronous = true)
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
         val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
         val isBackgroundPlay = viewModel.isBackgroundPlay.value
@@ -480,7 +480,7 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        viewModel.saveCurrentProgressNow()
+        viewModel.saveCurrentProgressNow(isSynchronous = true)
         val isPipMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) isInPictureInPictureMode else false
         val hasActiveSleepTimer = (viewModel.remainingTime.value > 0)
         val isBackgroundPlay = viewModel.isBackgroundPlay.value
@@ -527,6 +527,9 @@ class PlayerActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            viewModel.saveCurrentProgressNow(isSynchronous = true)
+        } catch (_: Exception) {}
         try {
             unregisterReceiver(screenUnlockReceiver)
         } catch (e: Exception) {

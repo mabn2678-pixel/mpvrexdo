@@ -12,8 +12,17 @@ interface PlaybackProgressDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProgress(progress: PlaybackProgressEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertProgressSync(progress: PlaybackProgressEntity)
+
     @Query("SELECT * FROM playback_progress WHERE videoId = :videoId")
     fun getProgress(videoId: String): Flow<PlaybackProgressEntity?>
+
+    @Query("SELECT * FROM playback_progress WHERE videoId = :videoId LIMIT 1")
+    suspend fun getProgressOnce(videoId: String): PlaybackProgressEntity?
+
+    @Query("SELECT * FROM playback_progress WHERE videoId = :videoId LIMIT 1")
+    fun getProgressOnceSync(videoId: String): PlaybackProgressEntity?
 
     @Query("SELECT * FROM playback_progress")
     fun getAllProgress(): Flow<List<PlaybackProgressEntity>>

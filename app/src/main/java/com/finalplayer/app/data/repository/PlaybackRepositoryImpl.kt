@@ -16,10 +16,22 @@ class PlaybackRepositoryImpl(
         playbackProgressDao.upsertProgress(progress.toEntity())
     }
 
+    override fun saveProgressSync(progress: PlaybackProgress) {
+        playbackProgressDao.upsertProgressSync(progress.toEntity())
+    }
+
     override fun getProgress(videoId: String): Flow<PlaybackProgress?> {
         return playbackProgressDao.getProgress(videoId).map { entity ->
             entity?.toDomainModel()
         }
+    }
+
+    override suspend fun getProgressOnce(videoId: String): PlaybackProgress? {
+        return playbackProgressDao.getProgressOnce(videoId)?.toDomainModel()
+    }
+
+    override fun getProgressOnceSync(videoId: String): PlaybackProgress? {
+        return playbackProgressDao.getProgressOnceSync(videoId)?.toDomainModel()
     }
 
     override fun getAllProgress(): Flow<List<PlaybackProgress>> {

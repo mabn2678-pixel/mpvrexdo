@@ -22,8 +22,11 @@ import org.koin.core.component.inject
 class SecureFolderViewModel(
     private val secureMediaDao: SecureMediaDao,
     private val videoRepository: VideoRepository,
-    private val pinPreferences: SecurePinPreferences
+    private val pinPreferences: SecurePinPreferences,
+    private val fileTransferManager: com.finalplayer.app.data.transfer.FileTransferManager
 ) : ViewModel() {
+
+    val transferProgress: StateFlow<com.finalplayer.app.data.transfer.TransferProgress?> = fileTransferManager.transferState
 
     // حالة القفل — لا تُحفظ بين الجلسات
     private val _isUnlocked = MutableStateFlow(false)
@@ -165,25 +168,43 @@ class SecureFolderViewModel(
     // ════ Media Management ════
 
     fun removeFromSecureFolder(videoId: String, context: android.content.Context, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
-        viewModelScope.launch {
-            val result = videoRepository.restoreVideoFromSecureFolder(videoId, context)
-            if (result.isSuccess) {
-                onResult(true, "تمت استعادة الفيديو بنجاح إلى هاتفك")
-            } else {
-                onResult(false, result.exceptionOrNull()?.localizedMessage ?: "حدث خطأ أثناء استعادة الفيديو")
+        val target = secureVideos.value.find { it.id == videoId }
+        if (target != null) {
+            fileTransferManager.startTransfer(
+                videos = listOf(target),
+                destination = null,
+                type = com.finalplayer.app.data.transfer.TransferType.RESTORE_FROM_SECURE,
+                runInBackground = false,
+                onComplete = onResult
+            )
+        } else {
+            viewModelScope.launch {
+                val result = videoRepository.restoreVideoFromSecureFolder(videoId, context)
+                if (result.isSuccess) {
+                    onResult(true, "تمت استعادة الفيديو بنجاح إلى هاتفك")
+                } else {
+                    onResult(false, result.exceptionOrNull()?.localizedMessage ?: "حدث خطأ أثناء استعادة الفيديو")
+                }
             }
         }
     }
 
     fun restoreVideosFromSecureFolder(videos: List<VideoItem>, context: android.content.Context, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
-        viewModelScope.launch {
-            val result = videoRepository.restoreVideosFromSecureFolder(videos, context)
-            if (result.isSuccess) {
-                onResult(true, "تمت استعادة ${videos.size} عنصر بنجاح إلى هاتفك")
-            } else {
-                onResult(false, result.exceptionOrNull()?.localizedMessage ?: "حدث خطأ أثناء استعادة العناصر")
-            }
-        }
+        fileTransferManager.startTransfer(
+            videos = videos,
+            destination = null,
+            type = com.finalplayer.app.data.transfer.TransferType.RESTORE_FROM_SECURE,
+            runInBackground = false,
+            onComplete = onResult
+        )
+    }
+
+    fun cancelTransfer() {
+        fileTransferManager.cancelTransfer()
+    }
+
+    fun moveToBackground() {
+        fileTransferManager.moveToBackground()
     }
 
     fun deleteSecureVideos(videos: List<VideoItem>, context: android.content.Context, onResult: (Boolean, String) -> Unit = { _, _ -> }) {

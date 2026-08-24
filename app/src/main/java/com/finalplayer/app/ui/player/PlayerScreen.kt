@@ -58,7 +58,7 @@ fun PlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
-                    viewModel.saveCurrentProgressNow()
+                    viewModel.saveCurrentProgressNow(isSynchronous = true)
                     val hasSleepTimer = viewModel.remainingTime.value > 0
                     val isBackgroundPlay = viewModel.isBackgroundPlay.value
                     if (activity?.isFinishing == false && !hasSleepTimer && !isBackgroundPlay) {
@@ -73,7 +73,7 @@ fun PlayerScreen(
                     } catch (_: Exception) {}
                 }
                 Lifecycle.Event.ON_STOP, Lifecycle.Event.ON_DESTROY -> {
-                    viewModel.saveCurrentProgressNow()
+                    viewModel.saveCurrentProgressNow(isSynchronous = true)
                     val hasSleepTimer = viewModel.remainingTime.value > 0
                     val isBackgroundPlay = viewModel.isBackgroundPlay.value
                     if (activity?.isFinishing == true) {
@@ -94,7 +94,7 @@ fun PlayerScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            viewModel.saveCurrentProgressNow()
+            viewModel.saveCurrentProgressNow(isSynchronous = true)
             lifecycleOwner.lifecycle.removeObserver(observer)
             if (activity?.isFinishing == true) {
                 try {
@@ -217,7 +217,7 @@ fun PlayerScreen(
         }
 
         onDispose {
-            viewModel.saveCurrentProgressNow()
+            viewModel.saveCurrentProgressNow(isSynchronous = true)
             if (activity?.isFinishing == true) {
                 try {
                     mpvView.stop()

@@ -368,7 +368,7 @@ class PlayerViewModel(
         }
     }
 
-    fun saveCurrentProgressNow() {
+    fun saveCurrentProgressNow(isSynchronous: Boolean = false) {
         val saveOnExit = playerPrefs?.savePositionOnQuit?.get() ?: true
         if (!saveOnExit) return
 
@@ -410,6 +410,30 @@ class PlayerViewModel(
             val finalPos = if (isCompleted) 0L else effectivePosMs
             val currentUri = mpvController.playerState.value.currentFilePath
 
+            // 1. Synchronous SharedPreferences backup for instant, zero-latency persistence
+            try {
+                val prefs = context.getSharedPreferences("finalplayer_playback_resume", Context.MODE_PRIVATE)
+                val editor = prefs.edit()
+                editor.putLong("pos_$videoId", finalPos)
+                editor.putLong("dur_$videoId", effectiveDurMs)
+                editor.putLong("time_$videoId", System.currentTimeMillis())
+                editor.putBoolean("completed_$videoId", isCompleted)
+                if (!currentUri.isNullOrEmpty() && currentUri != videoId) {
+                    editor.putLong("pos_$currentUri", finalPos)
+                    editor.putLong("dur_$currentUri", effectiveDurMs)
+                    editor.putLong("time_$currentUri", System.currentTimeMillis())
+                    editor.putBoolean("completed_$currentUri", isCompleted)
+                }
+                if (isSynchronous) {
+                    editor.commit()
+                } else {
+                    editor.apply()
+                }
+            } catch (e: Exception) {
+                Log.e("PlayerViewModel", "Error saving progress to SharedPreferences", e)
+            }
+
+            // 2. Room Database persistence
             val progressPrimary = PlaybackProgress(
                 videoId = videoId,
                 positionMs = finalPos,
@@ -418,22 +442,33 @@ class PlayerViewModel(
                 isCompleted = isCompleted
             )
 
-            @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-            kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            if (isSynchronous) {
                 try {
-                    playbackRepository.saveProgress(progressPrimary)
+                    playbackRepository.saveProgressSync(progressPrimary)
                     if (!currentUri.isNullOrEmpty() && currentUri != videoId) {
-                        playbackRepository.saveProgress(progressPrimary.copy(videoId = currentUri))
+                        playbackRepository.saveProgressSync(progressPrimary.copy(videoId = currentUri))
                     }
                 } catch (e: Exception) {
-                    Log.e("PlayerViewModel", "Error saving playback progress", e)
+                    Log.e("PlayerViewModel", "Error synchronously saving progress to Room", e)
+                }
+            } else {
+                @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+                kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                    try {
+                        playbackRepository.saveProgress(progressPrimary)
+                        if (!currentUri.isNullOrEmpty() && currentUri != videoId) {
+                            playbackRepository.saveProgress(progressPrimary.copy(videoId = currentUri))
+                        }
+                    } catch (e: Exception) {
+                        Log.e("PlayerViewModel", "Error saving playback progress to Room", e)
+                    }
                 }
             }
         }
     }
 
     private suspend fun saveCurrentProgress() {
-        saveCurrentProgressNow()
+        saveCurrentProgressNow(isSynchronous = false)
     }
 
     fun setShortsPlaylist(items: List<VideoItem>, startIndex: Int = 0) {
@@ -504,7 +539,7 @@ class PlayerViewModel(
     fun playPlaylistItem(index: Int) {
         val items = _playlistItems.value
         if (index in items.indices) {
-            saveCurrentProgressNow()
+            saveCurrentProgressNow(isSynchronous = true)
             eofHandled = false
             _currentPlaylistIndex.value = index
             val item = items[index]
@@ -566,16 +601,53 @@ class PlayerViewModel(
     }
 
     fun checkSavedProgress(videoId: String, fallbackPath: String? = null) {
+        val saveOnExit = playerPrefs?.savePositionOnQuit?.get() ?: true
+        if (!saveOnExit) {
+            _resumePositionSec.value = null
+            return
+        }
+
+        // 1. Immediate synchronous read from SharedPreferences
+        try {
+            val prefs = context.getSharedPreferences("finalplayer_playback_resume", Context.MODE_PRIVATE)
+            var savedPos = prefs.getLong("pos_$videoId", -1L)
+            var savedDur = prefs.getLong("dur_$videoId", -1L)
+            var isCompleted = prefs.getBoolean("completed_$videoId", false)
+
+            if ((savedPos <= 1000L || isCompleted) && !fallbackPath.isNullOrEmpty() && fallbackPath != videoId) {
+                val fallbackPos = prefs.getLong("pos_$fallbackPath", -1L)
+                val fallbackCompleted = prefs.getBoolean("completed_$fallbackPath", false)
+                if (fallbackPos > 1000L && !fallbackCompleted) {
+                    savedPos = fallbackPos
+                    savedDur = prefs.getLong("dur_$fallbackPath", -1L)
+                    isCompleted = false
+                }
+            }
+
+            if (savedPos > 1000L && !isCompleted) {
+                val savedTimeInSeconds = savedPos / 1000.0
+                lastKnownPositionMs = savedPos
+                if (savedDur > 0L) lastKnownDurationMs = savedDur
+                _resumePositionSec.value = savedTimeInSeconds
+                hasAppliedAutoResume = false
+                try {
+                    mpvController.setPropertyInt("start", savedTimeInSeconds.toInt())
+                    MPVLib.setPropertyInt("start", savedTimeInSeconds.toInt())
+                    MPVLib.setOptionString("start", savedTimeInSeconds.toInt().toString())
+                } catch (_: Exception) {}
+            } else {
+                _resumePositionSec.value = null
+            }
+        } catch (e: Exception) {
+            Log.e("PlayerViewModel", "Error synchronously checking SharedPreferences progress", e)
+        }
+
+        // 2. Asynchronous check against Room Database for completeness
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val saveOnExit = playerPrefs?.savePositionOnQuit?.get() ?: true
-                if (!saveOnExit) {
-                    _resumePositionSec.value = null
-                    return@launch
-                }
-                var progress = playbackRepository.getProgress(videoId).firstOrNull()
+                var progress = playbackRepository.getProgressOnce(videoId)
                 if ((progress == null || progress.positionMs <= 1000L) && !fallbackPath.isNullOrEmpty() && fallbackPath != videoId) {
-                    progress = playbackRepository.getProgress(fallbackPath).firstOrNull()
+                    progress = playbackRepository.getProgressOnce(fallbackPath)
                 }
                 if (progress != null && !progress.isCompleted && progress.positionMs > 1000L) {
                     val savedTimeInSeconds = progress.positionMs / 1000.0
@@ -584,15 +656,15 @@ class PlayerViewModel(
                     hasAppliedAutoResume = false
                     withContext(Dispatchers.Main) {
                         _resumePositionSec.value = savedTimeInSeconds
-                        mpvController.setPropertyInt("start", savedTimeInSeconds.toInt())
-                        MPVLib.setPropertyInt("start", savedTimeInSeconds.toInt())
-                        MPVLib.setOptionString("start", savedTimeInSeconds.toInt().toString())
+                        try {
+                            mpvController.setPropertyInt("start", savedTimeInSeconds.toInt())
+                            MPVLib.setPropertyInt("start", savedTimeInSeconds.toInt())
+                            MPVLib.setOptionString("start", savedTimeInSeconds.toInt().toString())
+                        } catch (_: Exception) {}
                     }
-                } else {
-                    _resumePositionSec.value = null
                 }
             } catch (e: Exception) {
-                _resumePositionSec.value = null
+                Log.e("PlayerViewModel", "Error checking Room DB progress", e)
             }
         }
     }
@@ -2041,7 +2113,7 @@ class PlayerViewModel(
     }
 
     override fun onCleared() {
-        saveCurrentProgressNow()
+        saveCurrentProgressNow(isSynchronous = true)
         stopPlayback()
         mpvController.stopAndDestroy()
         pollingJob?.cancel()

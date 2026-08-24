@@ -28,7 +28,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.FileCopy
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OpenInBrowser
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -50,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -70,9 +73,47 @@ fun FileTransferProgressDialog(
 ) {
     if (progress == null || !progress.isRunning || progress.isBackground) return
 
-    val isMove = progress.type == TransferType.MOVE
-    val actionTitle = if (isMove) "نقل الملفات" else "نسخ الملفات"
-    val actionVerb = if (isMove) "جاري النقل" else "جاري النسخ"
+    val actionTitle: String
+    val actionVerb: String
+    val iconVector: ImageVector
+    val iconBgColor: Color
+    val iconTintColor: Color
+    val progressColor: Color
+
+    when (progress.type) {
+        TransferType.MOVE -> {
+            actionTitle = "نقل الملفات"
+            actionVerb = "جاري النقل"
+            iconVector = Icons.Default.DriveFileMove
+            iconBgColor = Color(0xFF388E3C).copy(alpha = 0.2f)
+            iconTintColor = Color(0xFF81C784)
+            progressColor = Color(0xFF4CAF50)
+        }
+        TransferType.COPY -> {
+            actionTitle = "نسخ الملفات"
+            actionVerb = "جاري النسخ"
+            iconVector = Icons.Default.FileCopy
+            iconBgColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+            iconTintColor = MaterialTheme.colorScheme.primary
+            progressColor = MaterialTheme.colorScheme.primary
+        }
+        TransferType.HIDE_TO_SECURE -> {
+            actionTitle = "نقل إلى المجلد الآمن"
+            actionVerb = "جاري التشفير والحماية"
+            iconVector = Icons.Default.Lock
+            iconBgColor = Color(0xFFF57C00).copy(alpha = 0.2f)
+            iconTintColor = Color(0xFFFFB74D)
+            progressColor = Color(0xFFFF9800)
+        }
+        TransferType.RESTORE_FROM_SECURE -> {
+            actionTitle = "استعادة إلى الهاتف"
+            actionVerb = "جاري فك الحماية والاستعادة"
+            iconVector = Icons.Default.PhoneAndroid
+            iconBgColor = Color(0xFF0097A7).copy(alpha = 0.2f)
+            iconTintColor = Color(0xFF4DD0E1)
+            progressColor = Color(0xFF00ACC1)
+        }
+    }
 
     val animatedProgress by animateFloatAsState(
         targetValue = (progress.percentage.coerceIn(0, 100) / 100f),
@@ -133,14 +174,14 @@ fun FileTransferProgressDialog(
                             ) {
                                 Surface(
                                     shape = CircleShape,
-                                    color = if (isMove) Color(0xFF388E3C).copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                    color = iconBgColor,
                                     modifier = Modifier.size(42.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = if (isMove) Icons.Default.DriveFileMove else Icons.Default.FileCopy,
+                                            imageVector = iconVector,
                                             contentDescription = null,
-                                            tint = if (isMove) Color(0xFF81C784) else MaterialTheme.colorScheme.primary,
+                                            tint = iconTintColor,
                                             modifier = Modifier.size(24.dp)
                                         )
                                     }
@@ -156,7 +197,7 @@ fun FileTransferProgressDialog(
                                         color = Color.White
                                     )
                                     Text(
-                                        text = "$actionVerb في الذاكرة...",
+                                        text = "$actionVerb...",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = Color.White.copy(alpha = 0.6f)
                                     )
@@ -166,8 +207,8 @@ fun FileTransferProgressDialog(
                             // Percentage Pill
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                                color = progressColor.copy(alpha = 0.2f),
+                                border = androidx.compose.foundation.BorderStroke(0.5.dp, progressColor.copy(alpha = 0.4f)),
                                 modifier = Modifier.padding(start = 4.dp)
                             ) {
                                 Text(
@@ -176,7 +217,7 @@ fun FileTransferProgressDialog(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
                                     ),
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = progressColor,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
@@ -211,7 +252,7 @@ fun FileTransferProgressDialog(
                                     .fillMaxWidth()
                                     .height(10.dp)
                                     .clip(RoundedCornerShape(5.dp)),
-                                color = if (isMove) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
+                                color = progressColor,
                                 trackColor = Color.White.copy(alpha = 0.12f)
                             )
 
