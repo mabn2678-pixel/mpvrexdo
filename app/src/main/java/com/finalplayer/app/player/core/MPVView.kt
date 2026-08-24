@@ -15,7 +15,7 @@ import java.io.File
 class MPVView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
-) : SurfaceView(context, attrs), SurfaceHolder.Callback {
+) : SurfaceView(context, attrs), SurfaceHolder.Callback, MPVLib.EventObserver {
 
     private fun appendDebugLog(message: String) {
         try {
@@ -65,6 +65,7 @@ class MPVView @JvmOverloads constructor(
                     mpvLib = lib
                     initOptions(configDir, lib)
                     lib.init()
+                    lib.addObserver(this)
                     isInitialized = true
                     synchronized(activeInstances) {
                         activeInstances.add(this)
@@ -245,25 +246,13 @@ class MPVView @JvmOverloads constructor(
     }
 
     private var pendingStartPositionSec: Double? = null
-    private var pendingStartSeekAttempts: Int = 0
 
     fun playFile(path: String, startPositionSec: Double? = null) {
         val lib = getActiveLib() ?: return
         try {
             val savedTimePos = startPositionSec ?: 0.0
-            if (savedTimePos > 1.0) {
-                pendingStartPositionSec = savedTimePos
-                pendingStartSeekAttempts = 0
-                try {
-                    lib.setOptionString("start", savedTimePos.toString())
-                    lib.setPropertyDouble("start", savedTimePos)
-                } catch (_: Throwable) {}
-                lib.command(arrayOf("loadfile", path, "replace", "start=$savedTimePos"))
-            } else {
-                pendingStartPositionSec = null
-                pendingStartSeekAttempts = 0
-                lib.command(arrayOf("loadfile", path))
-            }
+            pendingStartPositionSec = if (savedTimePos > 1.0) savedTimePos else null
+            lib.command(arrayOf("loadfile", path))
             isPaused = false
         } catch (e: Throwable) {
             Log.e(TAG, "Error playing file: $path", e)
@@ -545,20 +534,6 @@ class MPVView @JvmOverloads constructor(
             val posSec = lib.getPropertyDouble("time-pos") ?: 0.0
             val durSec = lib.getPropertyDouble("duration") ?: 0.0
 
-            if (pendingStartPositionSec != null && pendingStartPositionSec!! > 1.0) {
-                val targetSec = pendingStartPositionSec!!
-                pendingStartSeekAttempts++
-                if (posSec < 1.5 || posSec < targetSec - 1.5) {
-                    try {
-                        lib.command(arrayOf("seek", targetSec.toString(), "absolute"))
-                        lib.setPropertyDouble("time-pos", targetSec)
-                    } catch (_: Throwable) {}
-                }
-                if (posSec >= targetSec - 1.5 || pendingStartSeekAttempts > 20) {
-                    pendingStartPositionSec = null
-                }
-            }
-
             val paused = lib.getPropertyBoolean("pause") ?: true
             val pausedForCache = lib.getPropertyBoolean("paused-for-cache") ?: false
             val cacheSec = lib.getPropertyDouble("demuxer-cache-time") ?: 0.0
@@ -623,6 +598,7 @@ class MPVView @JvmOverloads constructor(
 
         try {
             libToDestroy.command(arrayOf("stop"))
+            libToDestroy.removeObserver(this)
             libToDestroy.detachSurface()
             libToDestroy.destroy()
             Log.d(TAG, "MPVLib destroyed")
@@ -659,6 +635,27 @@ class MPVView @JvmOverloads constructor(
                 true
             }
             else -> false
+        }
+    }
+
+    override fun eventProperty(property: String) {}
+    override fun eventProperty(property: String, value: Long) {}
+    override fun eventProperty(property: String, value: Double) {}
+    override fun eventProperty(property: String, value: Boolean) {}
+    override fun eventProperty(property: String, value: String) {}
+
+    override fun event(eventId: Int) {
+        if (eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED) {
+            val targetSec = pendingStartPositionSec
+            if (targetSec != null && targetSec > 1.0) {
+                try {
+                    val lib = getActiveLib()
+                    lib?.setPropertyDouble("time-pos", targetSec)
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error seeking on file loaded", e)
+                }
+                pendingStartPositionSec = null
+            }
         }
     }
 
