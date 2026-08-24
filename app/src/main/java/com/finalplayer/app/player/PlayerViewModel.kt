@@ -371,12 +371,27 @@ class PlayerViewModel(
         }
     }
 
+    private fun normalizeVideoKey(key: String?): String {
+        if (key.isNullOrBlank()) return ""
+        val clean = if (key.startsWith("file://")) key.substring(7) else key
+        return if (clean.startsWith("/")) {
+            try {
+                java.io.File(clean).canonicalPath
+            } catch (_: Exception) {
+                clean
+            }
+        } else {
+            clean
+        }
+    }
+
     fun saveCurrentProgressNow(isSynchronous: Boolean = false) {
         val saveOnExit = playerPrefs?.savePositionOnQuit?.get() ?: true
         if (!saveOnExit) return
 
         val videoId = _currentVideoId.value ?: return
         if (videoId.isEmpty()) return
+        val normVideoId = normalizeVideoKey(videoId)
 
         val livePosSec = try { 
             MPVLib.getPropertyDouble("time-pos") ?: mpvController.getAttachedView()?.getPropertyDouble("time-pos")
@@ -432,20 +447,26 @@ class PlayerViewModel(
             val isCompleted = effectiveDurMs > 5000L && (effectivePosMs.toFloat() / effectiveDurMs.toFloat()) > 0.95f
             val finalPos = if (isCompleted) 0L else effectivePosMs
             val currentUri = mpvController.playerState.value.currentFilePath
+            val normUri = normalizeVideoKey(currentUri)
+
+            Log.d("ResumeDebug", "saveCurrentProgressNow: videoId=$videoId (norm=$normVideoId), effectivePosMs=$effectivePosMs, currentUri=$currentUri (norm=$normUri)")
+
+            val keysToSave = setOfNotNull(
+                videoId.takeIf { it.isNotEmpty() },
+                normVideoId.takeIf { it.isNotEmpty() },
+                currentUri?.takeIf { it.isNotEmpty() },
+                normUri.takeIf { it.isNotEmpty() }
+            )
 
             // 1. Synchronous SharedPreferences backup for instant, zero-latency persistence
             try {
                 val prefs = context.getSharedPreferences("finalplayer_playback_resume", Context.MODE_PRIVATE)
                 val editor = prefs.edit()
-                editor.putLong("pos_$videoId", finalPos)
-                editor.putLong("dur_$videoId", effectiveDurMs)
-                editor.putLong("time_$videoId", System.currentTimeMillis())
-                editor.putBoolean("completed_$videoId", isCompleted)
-                if (!currentUri.isNullOrEmpty() && currentUri != videoId) {
-                    editor.putLong("pos_$currentUri", finalPos)
-                    editor.putLong("dur_$currentUri", effectiveDurMs)
-                    editor.putLong("time_$currentUri", System.currentTimeMillis())
-                    editor.putBoolean("completed_$currentUri", isCompleted)
+                for (key in keysToSave) {
+                    editor.putLong("pos_$key", finalPos)
+                    editor.putLong("dur_$key", effectiveDurMs)
+                    editor.putLong("time_$key", System.currentTimeMillis())
+                    editor.putBoolean("completed_$key", isCompleted)
                 }
                 if (isSynchronous) {
                     editor.commit()
@@ -458,7 +479,7 @@ class PlayerViewModel(
 
             // 2. Room Database persistence
             val progressPrimary = PlaybackProgress(
-                videoId = videoId,
+                videoId = if (normVideoId.isNotEmpty()) normVideoId else videoId,
                 positionMs = finalPos,
                 durationMs = effectiveDurMs,
                 lastPlayedTimestamp = System.currentTimeMillis(),
@@ -467,9 +488,8 @@ class PlayerViewModel(
 
             if (isSynchronous) {
                 try {
-                    playbackRepository.saveProgressSync(progressPrimary)
-                    if (!currentUri.isNullOrEmpty() && currentUri != videoId) {
-                        playbackRepository.saveProgressSync(progressPrimary.copy(videoId = currentUri))
+                    for (key in keysToSave) {
+                        playbackRepository.saveProgressSync(progressPrimary.copy(videoId = key))
                     }
                 } catch (e: Exception) {
                     Log.e("PlayerViewModel", "Error synchronously saving progress to Room", e)
@@ -478,9 +498,8 @@ class PlayerViewModel(
                 @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
                 kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
                     try {
-                        playbackRepository.saveProgress(progressPrimary)
-                        if (!currentUri.isNullOrEmpty() && currentUri != videoId) {
-                            playbackRepository.saveProgress(progressPrimary.copy(videoId = currentUri))
+                        for (key in keysToSave) {
+                            playbackRepository.saveProgress(progressPrimary.copy(videoId = key))
                         }
                     } catch (e: Exception) {
                         Log.e("PlayerViewModel", "Error saving playback progress to Room", e)
@@ -636,33 +655,49 @@ class PlayerViewModel(
             return
         }
 
+        val normVideoId = normalizeVideoKey(videoId)
+        val normFallback = normalizeVideoKey(fallbackPath)
+        val keysToCheck = listOfNotNull(
+            videoId.takeIf { it.isNotEmpty() },
+            normVideoId.takeIf { it.isNotEmpty() && it != videoId },
+            fallbackPath?.takeIf { it.isNotEmpty() && it != videoId && it != normVideoId },
+            normFallback.takeIf { it.isNotEmpty() && it != videoId && it != normVideoId && it != fallbackPath }
+        )
+
+        var savedPos = -1L
+        var savedDur = -1L
+        var isCompleted = false
+        var roomProg: com.finalplayer.app.domain.model.PlaybackProgress? = null
+
         // 1. Immediate synchronous read from SharedPreferences
         try {
             val prefs = context.getSharedPreferences("finalplayer_playback_resume", Context.MODE_PRIVATE)
-            var savedPos = prefs.getLong("pos_$videoId", -1L)
-            var savedDur = prefs.getLong("dur_$videoId", -1L)
-            var isCompleted = prefs.getBoolean("completed_$videoId", false)
-
-            if ((savedPos <= 1000L || isCompleted) && !fallbackPath.isNullOrEmpty() && fallbackPath != videoId) {
-                val fallbackPos = prefs.getLong("pos_$fallbackPath", -1L)
-                val fallbackCompleted = prefs.getBoolean("completed_$fallbackPath", false)
-                if (fallbackPos > 1000L && !fallbackCompleted) {
-                    savedPos = fallbackPos
-                    savedDur = prefs.getLong("dur_$fallbackPath", -1L)
+            for (key in keysToCheck) {
+                val pos = prefs.getLong("pos_$key", -1L)
+                val completed = prefs.getBoolean("completed_$key", false)
+                if (pos > 1000L && !completed) {
+                    savedPos = pos
+                    savedDur = prefs.getLong("dur_$key", -1L)
                     isCompleted = false
+                    break
                 }
             }
 
             // Also check Room synchronously if SharedPreferences had no valid entry
-            if (savedPos <= 1000L || isCompleted) {
-                val roomProg = playbackRepository.getProgressOnceSync(videoId)
-                    ?: if (!fallbackPath.isNullOrEmpty() && fallbackPath != videoId) playbackRepository.getProgressOnceSync(fallbackPath) else null
-                if (roomProg != null && roomProg.positionMs > 1000L && !roomProg.isCompleted) {
-                    savedPos = roomProg.positionMs
-                    savedDur = roomProg.durationMs
-                    isCompleted = false
+            if (savedPos <= 1000L) {
+                for (key in keysToCheck) {
+                    val prog = playbackRepository.getProgressOnceSync(key)
+                    if (prog != null && prog.positionMs > 1000L && !prog.isCompleted) {
+                        roomProg = prog
+                        savedPos = prog.positionMs
+                        savedDur = prog.durationMs
+                        isCompleted = false
+                        break
+                    }
                 }
             }
+
+            Log.d("ResumeDebug", "checkSavedProgress: videoId=$videoId (norm=$normVideoId), fallbackPath=$fallbackPath, savedPos=$savedPos, isCompleted=$isCompleted, roomProg=$roomProg")
 
             if (savedPos > 1000L && !isCompleted) {
                 val savedTimeInSeconds = savedPos / 1000.0
@@ -686,9 +721,13 @@ class PlayerViewModel(
         // 2. Asynchronous check against Room Database for completeness
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                var progress = playbackRepository.getProgressOnce(videoId)
-                if ((progress == null || progress.positionMs <= 1000L) && !fallbackPath.isNullOrEmpty() && fallbackPath != videoId) {
-                    progress = playbackRepository.getProgressOnce(fallbackPath)
+                var progress: com.finalplayer.app.domain.model.PlaybackProgress? = null
+                for (key in keysToCheck) {
+                    val p = playbackRepository.getProgressOnce(key)
+                    if (p != null && p.positionMs > 1000L && !p.isCompleted) {
+                        progress = p
+                        break
+                    }
                 }
                 if (progress != null && !progress.isCompleted && progress.positionMs > 1000L) {
                     val savedTimeInSeconds = progress.positionMs / 1000.0

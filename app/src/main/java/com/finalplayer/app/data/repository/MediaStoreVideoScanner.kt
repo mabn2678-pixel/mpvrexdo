@@ -179,8 +179,9 @@ class MediaStoreVideoScanner(private val context: Context) {
 
                             val parentPath = file.parent ?: "/storage/emulated/0"
                             val fileDuration = extractDurationForVideo(path, "")
+                            val canonicalId = try { file.canonicalPath } catch (e: Exception) { path }
                             val entity = VideoEntity(
-                                id = "file_${path.hashCode()}",
+                                id = canonicalId,
                                 uri = file.absolutePath,
                                 title = file.name,
                                 duration = fileDuration,

@@ -172,10 +172,25 @@ class PlayerActivity : ComponentActivity() {
         }
 
         // Parse video/audio details from intent
-        videoPath = intent.getStringExtra(EXTRA_VIDEO_PATH)
+        val rawVideoPath = intent.getStringExtra(EXTRA_VIDEO_PATH)
             ?: intent.data?.toString()
             ?: ""
-        videoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: videoPath
+        val cleanPath = if (rawVideoPath.startsWith("file://")) rawVideoPath.substring(7) else rawVideoPath
+        videoPath = if (cleanPath.startsWith("/")) {
+            try { java.io.File(cleanPath).canonicalPath } catch (_: Exception) { rawVideoPath }
+        } else {
+            rawVideoPath
+        }
+
+        val rawVideoId = intent.getStringExtra(EXTRA_VIDEO_ID) ?: videoPath
+        val cleanId = if (rawVideoId.startsWith("file://")) rawVideoId.substring(7) else rawVideoId
+        videoId = if (cleanId.startsWith("/")) {
+            try { java.io.File(cleanId).canonicalPath } catch (_: Exception) { rawVideoId }
+        } else {
+            rawVideoId
+        }
+        
+        Log.d("ResumeDebug", "PlayerActivity onCreate intent: videoId=$videoId, videoPath=$videoPath")
         
         val customTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE)
         if (!customTitle.isNullOrEmpty()) {
