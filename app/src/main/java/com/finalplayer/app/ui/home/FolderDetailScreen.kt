@@ -586,7 +586,7 @@ fun VideoListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
             .clip(RoundedCornerShape(12.dp))
             .then(
                 if (isSelectionMode) {
@@ -600,7 +600,7 @@ fun VideoListItem(
                     Modifier.clickable { onClick() }
                 }
             )
-            .padding(start = 6.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 10.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. 3-dots button placed at the outer edge (flush against phone wall)
@@ -621,8 +621,6 @@ fun VideoListItem(
                 modifier = Modifier.size(20.dp)
             )
         }
-
-        Spacer(modifier = Modifier.width(4.dp))
 
         // 2. Thumbnail with Duration Overlay, Progress Bar, Status Badge & Selection Overlay
         Box(
@@ -714,7 +712,7 @@ fun VideoListItem(
             }
         }
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(4.dp))
 
         // 3. Text Details Column (Title + Optional Path + Chips + Subtitle languages)
         Column(

@@ -552,6 +552,10 @@ class PlayerViewModel(
         }
     }
 
+    fun playFile(urlToLoad: String, savedTimePos: Double = 0.0) {
+        mpvController.play(urlToLoad, if (savedTimePos > 0.0) savedTimePos else null)
+    }
+
     fun playPlaylistItem(index: Int) {
         val items = _playlistItems.value
         if (index in items.indices) {

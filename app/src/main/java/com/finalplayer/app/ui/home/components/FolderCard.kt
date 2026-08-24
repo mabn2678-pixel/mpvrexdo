@@ -67,7 +67,7 @@ fun FolderCard(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 2.dp, vertical = 6.dp)
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp)
             .clip(RoundedCornerShape(12.dp))
             .then(
                 if (isSelectionMode) {
@@ -81,7 +81,7 @@ fun FolderCard(
                     Modifier.clickable { onClick() }
                 }
             )
-            .padding(vertical = 4.dp, horizontal = 2.dp),
+            .padding(start = 10.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 1. 3-dots button placed at the outer edge (flush against phone wall)
@@ -102,8 +102,6 @@ fun FolderCard(
                 modifier = Modifier.size(20.dp)
             )
         }
-
-        Spacer(modifier = Modifier.width(4.dp))
 
         // 2. Stacked Folder Preview with optional Unwatched Badge & Selection Checkmark
         Box(
@@ -132,7 +130,7 @@ fun FolderCard(
             }
         }
 
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(6.dp))
 
         // 3. Details Column
         Column(

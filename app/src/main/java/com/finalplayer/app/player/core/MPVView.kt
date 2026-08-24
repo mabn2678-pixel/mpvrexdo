@@ -249,24 +249,9 @@ class MPVView @JvmOverloads constructor(
     fun playFile(path: String, startPositionSec: Double? = null) {
         val lib = getActiveLib() ?: return
         try {
-            pendingStartPositionSec = if (startPositionSec != null && startPositionSec > 1.0) startPositionSec else null
-            if (pendingStartPositionSec != null) {
-                val startSec = pendingStartPositionSec!!
-                try {
-                    lib.command(arrayOf("loadfile", path, "replace", "0", "start=${startSec.toInt()}"))
-                } catch (_: Throwable) {
-                    try {
-                        lib.command(arrayOf("loadfile", path, "replace", "start=${startSec.toInt()}"))
-                    } catch (_: Throwable) {
-                        lib.command(arrayOf("loadfile", path))
-                    }
-                }
-                try {
-                    lib.setPropertyDouble("start", startSec)
-                } catch (_: Throwable) {}
-                try {
-                    lib.setPropertyDouble("time-pos", startSec)
-                } catch (_: Throwable) {}
+            val savedTimePos = startPositionSec ?: 0.0
+            if (savedTimePos > 0.0) {
+                lib.command(arrayOf("loadfile", path, "replace", "start=$savedTimePos"))
             } else {
                 lib.command(arrayOf("loadfile", path))
             }
