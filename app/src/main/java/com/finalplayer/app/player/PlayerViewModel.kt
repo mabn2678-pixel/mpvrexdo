@@ -570,13 +570,6 @@ class PlayerViewModel(
             prefetchVideoAspect(item.uri)
             checkSavedProgress(videoId)
             mpvController.play(item.uri, _resumePositionSec.value)
-            try {
-                autoLoadSubtitlesFromVideoFolder(Uri.parse(item.uri))
-                applyAllSubtitlePreferences()
-                updateTracks()
-            } catch (e: Exception) {
-                Log.e("PlayerViewModel", "Error loading subtitles/tracks for playlist item", e)
-            }
         }
     }
 

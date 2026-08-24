@@ -36,6 +36,8 @@ class MPVView @JvmOverloads constructor(
 
     var onSurfaceReady: (() -> Unit)? = null
 
+    var onVideoFileLoaded: (() -> Unit)? = null
+
     // Playback state properties
     var isPaused: Boolean = true
         private set
@@ -256,8 +258,12 @@ class MPVView @JvmOverloads constructor(
             pendingStartPositionSec = if (savedTimePos > 1.0) savedTimePos else null
             resumeSeekAttempts = 0
             resumeSeekWindowStartMs = System.currentTimeMillis()
+
+            // مهم جداً: أبقِ الفيديو متوقفاً مؤقتاً فور التحميل، قبل أي محاولة seek
+            lib.setPropertyBoolean("pause", true)
+            isPaused = true
+
             lib.command(arrayOf("loadfile", path))
-            isPaused = false
         } catch (e: Throwable) {
             Log.e(TAG, "Error playing file: $path", e)
         }
@@ -649,28 +655,51 @@ class MPVView @JvmOverloads constructor(
     override fun eventProperty(property: String, value: String) {}
 
     override fun event(eventId: Int) {
-        if (eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED ||
-            eventId == MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART) {
+        if (eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED) {
+            val lib = getActiveLib() ?: return
+            val targetSec = pendingStartPositionSec
+            if (targetSec != null && targetSec > 1.0) {
+                try {
+                    // نفذ الـ seek والفيديو لسه متوقف مؤقتاً
+                    lib.command(arrayOf("seek", targetSec.toString(), "absolute+exact"))
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error applying resume seek", e)
+                }
+            }
+            pendingStartPositionSec = null
+
+            // شغّل الفيديو فقط الآن، بعد ما الـ seek خلص تماماً
+            try {
+                lib.setPropertyBoolean("pause", false)
+                isPaused = false
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error unpausing after resume seek", e)
+            }
+
+            try {
+                onVideoFileLoaded?.invoke()
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error in onVideoFileLoaded callback", e)
+            }
+        } else if (eventId == MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART) {
             val targetSec = pendingStartPositionSec ?: return
             val lib = getActiveLib() ?: return
             val elapsedSinceLoad = System.currentTimeMillis() - resumeSeekWindowStartMs
-            // Stop trying after 8 seconds from load or after 6 attempts, whichever comes first
-            if (elapsedSinceLoad > 8000L || resumeSeekAttempts >= 6) {
+            // سقف أقصى 5 ثواني لمنع أي تكرار غير محدود
+            if (elapsedSinceLoad > 5000L || resumeSeekAttempts >= 1) {
                 pendingStartPositionSec = null
                 return
             }
             try {
                 val currentPos = lib.getPropertyDouble("time-pos") ?: 0.0
-                // Only re-apply seek if current position is far from target (meaning a real reset happened)
                 if (kotlin.math.abs(currentPos - targetSec) > 2.0) {
-                    lib.setPropertyDouble("time-pos", targetSec)
+                    lib.command(arrayOf("seek", targetSec.toString(), "absolute+exact"))
                     resumeSeekAttempts++
-                } else {
-                    // Successfully reached the target
-                    pendingStartPositionSec = null
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "Error re-applying resume seek", e)
+                Log.e(TAG, "Error re-applying resume seek on restart", e)
+            } finally {
+                pendingStartPositionSec = null
             }
         }
     }

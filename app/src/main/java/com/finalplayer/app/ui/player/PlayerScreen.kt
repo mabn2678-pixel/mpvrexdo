@@ -217,6 +217,14 @@ fun PlayerScreen(
                     val resumeSec = viewModel.resumePositionSec.value
                     viewModel.mpvController.play(target, resumeSec)
                 }
+            }
+        }
+
+        mpvView.onVideoFileLoaded = {
+            val target = viewModel.mpvController.playerState.value.currentFilePath
+                ?: viewModel.currentVideoId.value
+                ?: videoPath
+            if (target.isNotEmpty()) {
                 viewModel.autoLoadSubtitlesFromVideoFolder(android.net.Uri.parse(target))
                 viewModel.applyAllSubtitlePreferences()
                 viewModel.updateTracks()
