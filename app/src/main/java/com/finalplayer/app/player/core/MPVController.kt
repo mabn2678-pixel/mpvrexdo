@@ -243,6 +243,14 @@ class MPVController(private val context: Context) {
         mpvView?.setPropertyInt(property, value)
     }
 
+    fun setPropertyDouble(property: String, value: Double) {
+        mpvView?.setPropertyDouble(property, value)
+    }
+
+    fun getPropertyDouble(property: String): Double? {
+        return mpvView?.getPropertyDouble(property)
+    }
+
     fun setPropertyFloat(property: String, value: Float) {
         mpvView?.setPropertyFloat(property, value)
     }

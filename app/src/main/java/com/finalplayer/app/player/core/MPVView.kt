@@ -245,14 +245,23 @@ class MPVView @JvmOverloads constructor(
     }
 
     private var pendingStartPositionSec: Double? = null
+    private var pendingStartSeekAttempts: Int = 0
 
     fun playFile(path: String, startPositionSec: Double? = null) {
         val lib = getActiveLib() ?: return
         try {
             val savedTimePos = startPositionSec ?: 0.0
-            if (savedTimePos > 0.0) {
+            if (savedTimePos > 1.0) {
+                pendingStartPositionSec = savedTimePos
+                pendingStartSeekAttempts = 0
+                try {
+                    lib.setOptionString("start", savedTimePos.toString())
+                    lib.setPropertyDouble("start", savedTimePos)
+                } catch (_: Throwable) {}
                 lib.command(arrayOf("loadfile", path, "replace", "start=$savedTimePos"))
             } else {
+                pendingStartPositionSec = null
+                pendingStartSeekAttempts = 0
                 lib.command(arrayOf("loadfile", path))
             }
             isPaused = false
@@ -538,13 +547,14 @@ class MPVView @JvmOverloads constructor(
 
             if (pendingStartPositionSec != null && pendingStartPositionSec!! > 1.0) {
                 val targetSec = pendingStartPositionSec!!
-                if (posSec < 2.0 || posSec < targetSec - 1.0) {
+                pendingStartSeekAttempts++
+                if (posSec < 1.5 || posSec < targetSec - 1.5) {
                     try {
                         lib.command(arrayOf("seek", targetSec.toString(), "absolute"))
                         lib.setPropertyDouble("time-pos", targetSec)
                     } catch (_: Throwable) {}
                 }
-                if (posSec >= targetSec - 1.0 || durSec > 0.0) {
+                if (posSec >= targetSec - 1.5 || pendingStartSeekAttempts > 20) {
                     pendingStartPositionSec = null
                 }
             }
@@ -565,13 +575,17 @@ class MPVView @JvmOverloads constructor(
                 else dw.toDouble() / dh.toDouble()
             } else if (w > 0 && h > 0) {
                 if (rotate == 90 || rotate == 270) h.toDouble() / w.toDouble()
-                else w.toDouble() / h.toDouble()
+                else dw.toDouble() / dh.toDouble()
             } else if (rawAspect > 0) {
                 if (rotate == 90 || rotate == 270) 1.0 / rawAspect
                 else rawAspect
             } else 0.0
 
-            positionMs = (posSec * 1000).toLong().coerceAtLeast(0L)
+            positionMs = if (pendingStartPositionSec != null && pendingStartPositionSec!! > 1.0 && posSec < 1.5) {
+                (pendingStartPositionSec!! * 1000).toLong()
+            } else {
+                (posSec * 1000).toLong().coerceAtLeast(0L)
+            }
             durationMs = (durSec * 1000).toLong().coerceAtLeast(0L)
             isPaused = paused
             isPausedForCache = pausedForCache

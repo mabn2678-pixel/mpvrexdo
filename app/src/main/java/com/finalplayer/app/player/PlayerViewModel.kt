@@ -393,11 +393,6 @@ class PlayerViewModel(
             else -> 0L
         }
 
-        // Database & cache protection: NEVER overwrite with 0 or values <= 1.0s on exit
-        if (posMs <= 1000L) {
-            return
-        }
-
         val durMs = when {
             liveDurSec != null && liveDurSec > 0.0 -> (liveDurSec * 1000.0).toLong()
             _preciseDuration.value > 0f -> (_preciseDuration.value * 1000f).toLong()
@@ -412,14 +407,19 @@ class PlayerViewModel(
 
         val savedResumeMs = (_resumePositionSec.value?.times(1000.0))?.toLong() ?: 0L
 
-        // If auto-resume is pending or player is near start (< 2.5s) while a valid resume point exists (> 2.5s), protect it!
+        // If auto-resume is pending or player is near start (< 2.0s) while a valid resume point exists (> 2.0s), protect it!
         val effectivePosMs = when {
             _dragSeekState.value != null -> (_dragSeekState.value!!.targetPositionSec * 1000).toLong()
-            !hasAppliedAutoResume && savedResumeMs > 2500L && posMs < 2500L -> savedResumeMs
+            !hasAppliedAutoResume && savedResumeMs > 1500L && posMs < 1500L -> savedResumeMs
             posMs > 1000L -> posMs
             lastKnownPositionMs > 1000L -> lastKnownPositionMs
             savedResumeMs > 1000L -> savedResumeMs
             else -> 0L
+        }
+
+        // Database & cache protection: NEVER overwrite with 0 or values <= 1.0s on exit if no valid position
+        if (effectivePosMs <= 1000L) {
+            return
         }
 
         if (posMs > 1000L && (hasAppliedAutoResume || savedResumeMs <= 1000L)) {
@@ -653,16 +653,28 @@ class PlayerViewModel(
                 }
             }
 
+            // Also check Room synchronously if SharedPreferences had no valid entry
+            if (savedPos <= 1000L || isCompleted) {
+                val roomProg = playbackRepository.getProgressOnceSync(videoId)
+                    ?: if (!fallbackPath.isNullOrEmpty() && fallbackPath != videoId) playbackRepository.getProgressOnceSync(fallbackPath) else null
+                if (roomProg != null && roomProg.positionMs > 1000L && !roomProg.isCompleted) {
+                    savedPos = roomProg.positionMs
+                    savedDur = roomProg.durationMs
+                    isCompleted = false
+                }
+            }
+
             if (savedPos > 1000L && !isCompleted) {
                 val savedTimeInSeconds = savedPos / 1000.0
                 lastKnownPositionMs = savedPos
                 if (savedDur > 0L) lastKnownDurationMs = savedDur
                 _resumePositionSec.value = savedTimeInSeconds
+                _precisePosition.value = savedTimeInSeconds.toFloat()
                 hasAppliedAutoResume = false
                 try {
-                    mpvController.setPropertyInt("start", savedTimeInSeconds.toInt())
-                    MPVLib.setPropertyInt("start", savedTimeInSeconds.toInt())
-                    MPVLib.setOptionString("start", savedTimeInSeconds.toInt().toString())
+                    mpvController.setPropertyDouble("start", savedTimeInSeconds)
+                    MPVLib.setPropertyDouble("start", savedTimeInSeconds)
+                    MPVLib.setOptionString("start", savedTimeInSeconds.toString())
                 } catch (_: Exception) {}
             } else {
                 _resumePositionSec.value = null
@@ -682,14 +694,17 @@ class PlayerViewModel(
                     val savedTimeInSeconds = progress.positionMs / 1000.0
                     lastKnownPositionMs = progress.positionMs
                     lastKnownDurationMs = progress.durationMs
-                    hasAppliedAutoResume = false
                     withContext(Dispatchers.Main) {
-                        _resumePositionSec.value = savedTimeInSeconds
-                        try {
-                            mpvController.setPropertyInt("start", savedTimeInSeconds.toInt())
-                            MPVLib.setPropertyInt("start", savedTimeInSeconds.toInt())
-                            MPVLib.setOptionString("start", savedTimeInSeconds.toInt().toString())
-                        } catch (_: Exception) {}
+                        if (_resumePositionSec.value == null || _resumePositionSec.value!! <= 1.0) {
+                            _resumePositionSec.value = savedTimeInSeconds
+                            _precisePosition.value = savedTimeInSeconds.toFloat()
+                            hasAppliedAutoResume = false
+                            try {
+                                mpvController.setPropertyDouble("start", savedTimeInSeconds)
+                                MPVLib.setPropertyDouble("start", savedTimeInSeconds)
+                                MPVLib.setOptionString("start", savedTimeInSeconds.toString())
+                            } catch (_: Exception) {}
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -1304,8 +1319,17 @@ class PlayerViewModel(
     }
 
     fun setDecoder(decoder: Decoder) {
+        val currentPosSec = try {
+            MPVLib.getPropertyDouble("time-pos") ?: mpvController.getAttachedView()?.getPropertyDouble("time-pos")
+        } catch (_: Exception) { null } ?: _precisePosition.value.toDouble()
+
         mpvController.setDecoder(decoder.value)
         _currentDecoder.value = decoder
+
+        if (currentPosSec > 1.0) {
+            seekTo(currentPosSec.toFloat())
+            mpvController.seekTo((currentPosSec * 1000.0).toLong())
+        }
     }
 
     fun updateDecoder(decoder: Decoder) {
@@ -2069,11 +2093,11 @@ class PlayerViewModel(
                 if (!hasAppliedAutoResume && _resumePositionSec.value != null) {
                     val targetResume = _resumePositionSec.value!!
                     if (targetResume > 1.0) {
-                        if (posSec < targetResume - 0.8 || posSec < 2.0) {
+                        if (posSec < 1.5 || posSec < targetResume - 1.5) {
                             seekTo(targetResume.toFloat())
                             mpvController.seekTo((targetResume * 1000).toLong())
                         }
-                        if (posSec >= targetResume - 0.8 || durSec > 0.0) {
+                        if (posSec >= targetResume - 1.5) {
                             hasAppliedAutoResume = true
                         }
                     } else {
@@ -2083,13 +2107,13 @@ class PlayerViewModel(
 
                 val timeSinceSeek = System.currentTimeMillis() - lastSeekTimeMs
                 if (_dragSeekState.value == null && !_isSliderDragging.value && timeSinceSeek > 1200L) {
-                    if (!hasAppliedAutoResume && _resumePositionSec.value != null && _resumePositionSec.value!! > 2.0 && posSec < 2.0f) {
+                    if (!hasAppliedAutoResume && _resumePositionSec.value != null && _resumePositionSec.value!! > 1.5 && posSec < 1.5f) {
                         // Do not overwrite precisePosition with 00.00/00.01 while resuming
                     } else {
                         if (kotlin.math.abs(_precisePosition.value - posSec) >= 0.1f) {
                             _precisePosition.value = posSec
                         }
-                        if (state.positionMs > 0L) {
+                        if (posSec > 1.0f && state.positionMs > 1000L) {
                             lastKnownPositionMs = state.positionMs
                         }
                     }
