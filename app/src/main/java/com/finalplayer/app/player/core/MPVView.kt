@@ -246,12 +246,16 @@ class MPVView @JvmOverloads constructor(
     }
 
     private var pendingStartPositionSec: Double? = null
+    private var resumeSeekAttempts: Int = 0
+    private var resumeSeekWindowStartMs: Long = 0L
 
     fun playFile(path: String, startPositionSec: Double? = null) {
         val lib = getActiveLib() ?: return
         try {
             val savedTimePos = startPositionSec ?: 0.0
             pendingStartPositionSec = if (savedTimePos > 1.0) savedTimePos else null
+            resumeSeekAttempts = 0
+            resumeSeekWindowStartMs = System.currentTimeMillis()
             lib.command(arrayOf("loadfile", path))
             isPaused = false
         } catch (e: Throwable) {
@@ -645,16 +649,28 @@ class MPVView @JvmOverloads constructor(
     override fun eventProperty(property: String, value: String) {}
 
     override fun event(eventId: Int) {
-        if (eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED) {
-            val targetSec = pendingStartPositionSec
-            if (targetSec != null && targetSec > 1.0) {
-                try {
-                    val lib = getActiveLib()
-                    lib?.setPropertyDouble("time-pos", targetSec)
-                } catch (e: Throwable) {
-                    Log.e(TAG, "Error seeking on file loaded", e)
-                }
+        if (eventId == MPVLib.MpvEvent.MPV_EVENT_FILE_LOADED ||
+            eventId == MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART) {
+            val targetSec = pendingStartPositionSec ?: return
+            val lib = getActiveLib() ?: return
+            val elapsedSinceLoad = System.currentTimeMillis() - resumeSeekWindowStartMs
+            // Stop trying after 8 seconds from load or after 6 attempts, whichever comes first
+            if (elapsedSinceLoad > 8000L || resumeSeekAttempts >= 6) {
                 pendingStartPositionSec = null
+                return
+            }
+            try {
+                val currentPos = lib.getPropertyDouble("time-pos") ?: 0.0
+                // Only re-apply seek if current position is far from target (meaning a real reset happened)
+                if (kotlin.math.abs(currentPos - targetSec) > 2.0) {
+                    lib.setPropertyDouble("time-pos", targetSec)
+                    resumeSeekAttempts++
+                } else {
+                    // Successfully reached the target
+                    pendingStartPositionSec = null
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Error re-applying resume seek", e)
             }
         }
     }
