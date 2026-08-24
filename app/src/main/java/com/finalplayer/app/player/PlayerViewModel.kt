@@ -277,13 +277,16 @@ class PlayerViewModel(
         val currentOverride = _userOrientationOverride.value
         val currentAspect = _videoAspect.value ?: 1.7777
         val defaultIsPortrait = currentAspect < 0.95
-        if (currentOverride == null) {
-            _userOrientationOverride.value = if (defaultIsPortrait) "landscape" else "portrait"
+        val nextOrientation = if (currentOverride == null) {
+            if (defaultIsPortrait) "landscape" else "portrait"
         } else if (currentOverride == "landscape") {
-            _userOrientationOverride.value = "portrait"
+            "portrait"
         } else {
-            _userOrientationOverride.value = "landscape"
+            "landscape"
         }
+        _userOrientationOverride.value = nextOrientation
+        val isPortrait = nextOrientation == "portrait"
+        adjustSubtitleScaleForOrientation(isPortrait)
     }
 
     fun resetOrientationOverride() {
@@ -356,7 +359,7 @@ class PlayerViewModel(
         setAspectRatio("default")
     }
 
-    private var hasAppliedAutoResume = false
+    var hasAppliedAutoResume = false
 
     private fun startAutoSaveProgress() {
         autoSaveProgressJob?.cancel()
@@ -386,10 +389,6 @@ class PlayerViewModel(
             else -> 0L
         }
 
-        if (posMs > 1000L) {
-            lastKnownPositionMs = posMs
-        }
-
         val durMs = when {
             liveDurSec != null && liveDurSec > 0.0 -> (liveDurSec * 1000.0).toLong()
             _preciseDuration.value > 0f -> (_preciseDuration.value * 1000f).toLong()
@@ -402,7 +401,22 @@ class PlayerViewModel(
             lastKnownDurationMs = durMs
         }
 
-        val effectivePosMs = if (posMs > 0L) posMs else lastKnownPositionMs
+        val savedResumeMs = (_resumePositionSec.value?.times(1000.0))?.toLong() ?: 0L
+
+        // If auto-resume is pending or player is near start (< 2.5s) while a valid resume point exists (> 2.5s), protect it!
+        val effectivePosMs = when {
+            _dragSeekState.value != null -> (_dragSeekState.value!!.targetPositionSec * 1000).toLong()
+            !hasAppliedAutoResume && savedResumeMs > 2500L && posMs < 2500L -> savedResumeMs
+            posMs > 0L -> posMs
+            lastKnownPositionMs > 0L -> lastKnownPositionMs
+            savedResumeMs > 1000L -> savedResumeMs
+            else -> 0L
+        }
+
+        if (posMs > 1000L && (hasAppliedAutoResume || savedResumeMs <= 1000L)) {
+            lastKnownPositionMs = posMs
+        }
+
         val effectiveDurMs = if (durMs > 0L) durMs else lastKnownDurationMs
 
         if (effectiveDurMs > 0 && effectivePosMs > 1000L) {
@@ -480,6 +494,7 @@ class PlayerViewModel(
             val item = items[startIndex]
             _currentVideoId.value = item.id
             _videoTitle.value = item.title
+            checkSavedProgress(item.id, item.uri)
         }
     }
 
@@ -491,6 +506,7 @@ class PlayerViewModel(
             val item = items[startIndex]
             _currentVideoId.value = item.id
             _videoTitle.value = item.title
+            checkSavedProgress(item.id, item.uri)
         }
     }
 
@@ -838,7 +854,8 @@ class PlayerViewModel(
     fun applyAllSubtitlePreferences() {
         val prefs = subtitlesPrefs ?: return
         viewModelScope.launch {
-            val fontSize = prefs.fontSize.get()
+            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+            val fontSize = if (isPortrait) 21 else 39
             val isBold = prefs.bold.get()
             val isItalic = prefs.italic.get()
             val scale = prefs.subScale.get()
@@ -1014,7 +1031,7 @@ class PlayerViewModel(
 
     fun adjustSubtitleScaleForOrientation(isPortrait: Boolean) {
         try {
-            val fontSize = subtitlesPrefs?.fontSize?.get() ?: 21
+            val fontSize = if (isPortrait) 21 else 39
             MPVLib.setPropertyString("sub-scale-by-window", "yes")
             MPVLib.setOptionString("sub-scale-by-window", "yes")
             MPVLib.setPropertyString("sub-scale-with-window", "yes")
@@ -1025,6 +1042,7 @@ class PlayerViewModel(
             MPVLib.setOptionString("sub-ass-override", "force")
             MPVLib.setPropertyInt("sub-font-size", fontSize)
             MPVLib.setOptionString("sub-font-size", fontSize.toString())
+            mpvController.setPropertyInt("sub-font-size", fontSize)
             MPVLib.setPropertyFloat("sub-scale", 1.0f)
             MPVLib.setOptionString("sub-scale", "1.0")
         } catch (e: Exception) {
@@ -2017,24 +2035,33 @@ class PlayerViewModel(
                     eofHandled = false
                 }
 
-                val timeSinceSeek = System.currentTimeMillis() - lastSeekTimeMs
-                if (_dragSeekState.value == null && !_isSliderDragging.value && timeSinceSeek > 1200L) {
-                    if (kotlin.math.abs(_precisePosition.value - posSec) >= 0.1f) {
-                        _precisePosition.value = posSec
-                    }
-                    if (state.positionMs > 0L) {
-                        lastKnownPositionMs = state.positionMs
+                // Auto resume to exact saved progress automatically without showing any banner or asking
+                if (!hasAppliedAutoResume && _resumePositionSec.value != null) {
+                    val targetResume = _resumePositionSec.value!!
+                    if (targetResume > 1.0) {
+                        if (posSec < targetResume - 0.8 || posSec < 2.0) {
+                            seekTo(targetResume.toFloat())
+                            mpvController.seekTo((targetResume * 1000).toLong())
+                        }
+                        if (posSec >= targetResume - 0.8 || durSec > 0.0) {
+                            hasAppliedAutoResume = true
+                        }
+                    } else {
+                        hasAppliedAutoResume = true
                     }
                 }
 
-                // Auto resume to exact saved progress automatically without showing any banner or asking
-                if (!hasAppliedAutoResume && _resumePositionSec.value != null && durSec > 0f) {
-                    val targetResume = _resumePositionSec.value!!
-                    if (targetResume > 1.0 && (posSec < targetResume - 0.8 || posSec < 2.0)) {
-                        hasAppliedAutoResume = true
-                        seekTo(targetResume.toFloat())
-                    } else if (posSec >= targetResume - 0.8) {
-                        hasAppliedAutoResume = true
+                val timeSinceSeek = System.currentTimeMillis() - lastSeekTimeMs
+                if (_dragSeekState.value == null && !_isSliderDragging.value && timeSinceSeek > 1200L) {
+                    if (!hasAppliedAutoResume && _resumePositionSec.value != null && _resumePositionSec.value!! > 2.0 && posSec < 2.0f) {
+                        // Do not overwrite precisePosition with 00.00/00.01 while resuming
+                    } else {
+                        if (kotlin.math.abs(_precisePosition.value - posSec) >= 0.1f) {
+                            _precisePosition.value = posSec
+                        }
+                        if (state.positionMs > 0L) {
+                            lastKnownPositionMs = state.positionMs
+                        }
                     }
                 }
 

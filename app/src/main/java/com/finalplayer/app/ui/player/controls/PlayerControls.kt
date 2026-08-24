@@ -325,7 +325,7 @@ fun PlayerControls(
             ConstraintLayout(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(start = 12.dp, top = 8.dp, end = 2.dp, bottom = 8.dp)
             ) {
                 val (topBar, centerControls, bottomBar) = createRefs()
 
@@ -523,7 +523,9 @@ fun PlayerControls(
                         width = Dimension.fillToConstraints
                     }
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier.padding(end = 10.dp)
+                    ) {
                         val currentPos = if (isDraggingSlider) dragPositionSeconds else positionSeconds
                         val safeDuration = if (durationSeconds > 0f) durationSeconds else 1f
 

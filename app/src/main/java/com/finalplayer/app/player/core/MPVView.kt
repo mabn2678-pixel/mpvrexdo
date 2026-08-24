@@ -244,12 +244,29 @@ class MPVView @JvmOverloads constructor(
         }
     }
 
+    private var pendingStartPositionSec: Double? = null
+
     fun playFile(path: String, startPositionSec: Double? = null) {
         val lib = getActiveLib() ?: return
         try {
-            if (startPositionSec != null && startPositionSec > 1.0) {
-                lib.setOptionString("start", startPositionSec.toInt().toString())
-                lib.command(arrayOf("loadfile", path, "replace", "start=${startPositionSec.toInt()}"))
+            pendingStartPositionSec = if (startPositionSec != null && startPositionSec > 1.0) startPositionSec else null
+            if (pendingStartPositionSec != null) {
+                val startSec = pendingStartPositionSec!!
+                try {
+                    lib.command(arrayOf("loadfile", path, "replace", "0", "start=${startSec.toInt()}"))
+                } catch (_: Throwable) {
+                    try {
+                        lib.command(arrayOf("loadfile", path, "replace", "start=${startSec.toInt()}"))
+                    } catch (_: Throwable) {
+                        lib.command(arrayOf("loadfile", path))
+                    }
+                }
+                try {
+                    lib.setPropertyDouble("start", startSec)
+                } catch (_: Throwable) {}
+                try {
+                    lib.setPropertyDouble("time-pos", startSec)
+                } catch (_: Throwable) {}
             } else {
                 lib.command(arrayOf("loadfile", path))
             }
@@ -322,7 +339,9 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("sub-scale-by-window", "yes")
             lib.setOptionString("sub-scale-with-window", "yes")
             lib.setOptionString("sub-ass-scale-with-window", "yes")
-            lib.setOptionString("sub-font-size", "21")
+            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+            val initialSubFontSize = if (isPortrait) "21" else "39"
+            lib.setOptionString("sub-font-size", initialSubFontSize)
             lib.setOptionString("sub-scale", "1.0")
             lib.setOptionString("sub-pos", "100")
             lib.setOptionString("sub-border-size", "3.0")
@@ -531,6 +550,20 @@ class MPVView @JvmOverloads constructor(
 
             val posSec = lib.getPropertyDouble("time-pos") ?: 0.0
             val durSec = lib.getPropertyDouble("duration") ?: 0.0
+
+            if (pendingStartPositionSec != null && pendingStartPositionSec!! > 1.0) {
+                val targetSec = pendingStartPositionSec!!
+                if (posSec < 2.0 || posSec < targetSec - 1.0) {
+                    try {
+                        lib.command(arrayOf("seek", targetSec.toString(), "absolute"))
+                        lib.setPropertyDouble("time-pos", targetSec)
+                    } catch (_: Throwable) {}
+                }
+                if (posSec >= targetSec - 1.0 || durSec > 0.0) {
+                    pendingStartPositionSec = null
+                }
+            }
+
             val paused = lib.getPropertyBoolean("pause") ?: true
             val pausedForCache = lib.getPropertyBoolean("paused-for-cache") ?: false
             val cacheSec = lib.getPropertyDouble("demuxer-cache-time") ?: 0.0
