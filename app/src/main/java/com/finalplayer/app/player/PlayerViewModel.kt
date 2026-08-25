@@ -234,7 +234,9 @@ class PlayerViewModel(
     val currentVideoId: StateFlow<String?> = _currentVideoId.asStateFlow()
 
     private val _isPortraitMode = MutableStateFlow(false)
+    val isPortraitMode: StateFlow<Boolean> = _isPortraitMode.asStateFlow()
     private val _isPipMode = MutableStateFlow(false)
+    val isPipMode: StateFlow<Boolean> = _isPipMode.asStateFlow()
 
     fun updateDisplayMode(isPortrait: Boolean, isPip: Boolean) {
         _isPortraitMode.value = isPortrait

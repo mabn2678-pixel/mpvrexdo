@@ -82,15 +82,6 @@ fun SecureFolderScreen(
     val isSelectionMode = isUnlocked && selectedVideos.isNotEmpty()
     val isAllSelected = secureVideos.isNotEmpty() && selectedVideos.size == secureVideos.size
 
-    var isLoadingVideo by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isLoadingVideo) {
-        if (isLoadingVideo) {
-            kotlinx.coroutines.delay(3000)
-            isLoadingVideo = false
-        }
-    }
-
     var showPinDialog by remember { mutableStateOf(false) }
     var showSortSheet by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -227,7 +218,6 @@ fun SecureFolderScreen(
                         val first = selectedVideos.firstOrNull()
                         if (first != null) {
                             val idx = secureVideos.indexOf(first).coerceAtLeast(0)
-                            isLoadingVideo = true
                             onVideoClick(first, secureVideos, idx)
                         }
                     }
@@ -328,7 +318,6 @@ fun SecureFolderScreen(
                                     if (isSelectionMode) {
                                         selectedVideos = if (isSelected) selectedVideos - video else selectedVideos + video
                                     } else {
-                                        isLoadingVideo = true
                                         onVideoClick(video, secureVideos, index)
                                     }
                                 },
@@ -361,7 +350,6 @@ fun SecureFolderScreen(
                                     if (isSelectionMode) {
                                         selectedVideos = if (isSelected) selectedVideos - video else selectedVideos + video
                                     } else {
-                                        isLoadingVideo = true
                                         onVideoClick(video, secureVideos, index)
                                     }
                                 },
@@ -450,10 +438,4 @@ fun SecureFolderScreen(
         onCancel = { viewModel.cancelTransfer() },
         onMoveToBackground = { viewModel.moveToBackground() }
     )
-
-    if (isLoadingVideo) {
-        com.finalplayer.app.ui.components.VideoLoadingOverlay(
-            modifier = Modifier.fillMaxSize()
-        )
-    }
 }

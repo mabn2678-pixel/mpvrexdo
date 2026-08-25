@@ -34,6 +34,7 @@ import com.finalplayer.app.player.core.MPVLib
 import com.finalplayer.app.player.PlayerActivity
 import com.finalplayer.app.player.PlayerViewModel
 import com.finalplayer.app.player.core.MPVView
+import com.finalplayer.app.ui.player.components.PlayerLoadingOverlay
 import com.finalplayer.app.ui.player.controls.PlayerControls
 
 @Composable
@@ -164,6 +165,7 @@ fun PlayerScreen(
     val videoAspect by viewModel.videoAspect.collectAsStateWithLifecycle()
     val isBuffering by viewModel.isBuffering.collectAsStateWithLifecycle()
     val resumePositionSec by viewModel.resumePositionSec.collectAsStateWithLifecycle()
+    val isPipMode by viewModel.isPipMode.collectAsStateWithLifecycle()
 
     // Initialize initial system audio & brightness
     LaunchedEffect(Unit) {
@@ -390,5 +392,14 @@ fun PlayerScreen(
                 modifier = Modifier.size(48.dp)
             )
         }
+
+        // شاشة الانتقال والتحميل الفخمة بأيقونة التطبيق وتأثير الموجات
+        val isVideoReady = durationSeconds > 0.5f || positionSeconds > 0.1f
+        PlayerLoadingOverlay(
+            videoTitle = dynamicVideoTitle.ifEmpty { videoTitle },
+            isVideoReady = isVideoReady,
+            isPipMode = isPipMode || (activity?.isInPictureInPictureMode == true),
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }

@@ -111,15 +111,6 @@ fun HomeScreen(
     var selectedVideos by remember { mutableStateOf<Set<VideoItem>>(emptySet()) }
     var selectedFolders by remember { mutableStateOf<Set<VideoFolder>>(emptySet()) }
 
-    var isLoadingVideo by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isLoadingVideo) {
-        if (isLoadingVideo) {
-            kotlinx.coroutines.delay(3000)
-            isLoadingVideo = false
-        }
-    }
-
     val isFolderSelectionMode = selectedFolders.isNotEmpty() && uiState.selectedTab == HomeTab.HOME
     val isVideoSelectionMode = selectedVideos.isNotEmpty() && uiState.selectedTab == HomeTab.HOME
     val isSelectionMode = (isFolderSelectionMode || isVideoSelectionMode) && uiState.selectedTab == HomeTab.HOME
@@ -343,7 +334,6 @@ fun HomeScreen(
                             val firstVideo = folderVideos.firstOrNull()
                             if (firstVideo != null) {
                                 val idx = uiState.allVideos.indexOf(firstVideo).coerceAtLeast(0)
-                                isLoadingVideo = true
                                 onVideoClick(firstVideo, uiState.allVideos, idx)
                             }
                         }
@@ -389,7 +379,6 @@ fun HomeScreen(
                             val first = selectedVideos.firstOrNull()
                             if (first != null) {
                                 val idx = uiState.allVideos.indexOf(first).coerceAtLeast(0)
-                                isLoadingVideo = true
                                 onVideoClick(first, uiState.allVideos, idx)
                             }
                         }
@@ -486,7 +475,6 @@ fun HomeScreen(
                                                         if (isVideoSelectionMode) {
                                                             toggleSelection(video)
                                                         } else {
-                                                            isLoadingVideo = true
                                                             onVideoClick(video, uiState.allVideos, index)
                                                         }
                                                     },
@@ -530,7 +518,6 @@ fun HomeScreen(
                                                         if (isVideoSelectionMode) {
                                                             toggleSelection(video)
                                                         } else {
-                                                            isLoadingVideo = true
                                                             onVideoClick(video, uiState.allVideos, index)
                                                         }
                                                     },
@@ -733,7 +720,6 @@ fun HomeScreen(
             onDismiss = { contextMenuVideos = null },
             onPlay = { selectedVideo ->
                 val idx = uiState.allVideos.indexOf(selectedVideo).coerceAtLeast(0)
-                isLoadingVideo = true
                 onVideoClick(selectedVideo, uiState.allVideos, idx)
             },
             onShare = { shareItems ->
@@ -786,7 +772,6 @@ fun HomeScreen(
                 val first = vInFolder.firstOrNull()
                 if (first != null) {
                     val idx = uiState.allVideos.indexOf(first).coerceAtLeast(0)
-                    isLoadingVideo = true
                     onVideoClick(first, uiState.allVideos, idx)
                 } else {
                     coroutineScope.launch { snackbarHostState.showSnackbar("لا توجد فيديوهات في هذا المجلد") }
@@ -980,10 +965,4 @@ fun HomeScreen(
         onCancel = { viewModel.cancelTransfer() },
         onMoveToBackground = { viewModel.moveTransferToBackground() }
     )
-
-    if (isLoadingVideo) {
-        com.finalplayer.app.ui.components.VideoLoadingOverlay(
-            modifier = Modifier.fillMaxSize()
-        )
-    }
 }
