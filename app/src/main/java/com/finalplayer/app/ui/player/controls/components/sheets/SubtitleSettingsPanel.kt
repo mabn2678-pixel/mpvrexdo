@@ -72,14 +72,22 @@ enum class ColorTarget(val title: String) {
 @Composable
 fun SubtitleSettingsPanel(
     onDismiss: () -> Unit,
+    isPortrait: Boolean = false,
+    isPip: Boolean = false,
     subPrefs: SubtitlesPreferences = koinInject()
 ) {
     val coroutineScope = rememberCoroutineScope()
 
+    val fontSizePref = when {
+        isPip -> subPrefs.fontSizePip
+        isPortrait -> subPrefs.fontSizePortrait
+        else -> subPrefs.fontSize
+    }
+
     // الحالة المحلية للطباعة والخط
     var isBold by remember { mutableStateOf(subPrefs.bold.get()) }
     var isItalic by remember { mutableStateOf(subPrefs.italic.get()) }
-    var fontSize by remember { mutableIntStateOf(subPrefs.fontSize.get()) }
+    var fontSize by remember(isPortrait, isPip) { mutableIntStateOf(fontSizePref.get()) }
     var borderSize by remember { mutableIntStateOf(subPrefs.borderSize.get().toInt()) }
     var shadowOffset by remember { mutableIntStateOf(subPrefs.shadowOffset.get()) }
     var subPos by remember { mutableIntStateOf(subPrefs.subPos.get()) }
@@ -111,7 +119,9 @@ fun SubtitleSettingsPanel(
 
     // تهيئة الخصائص في مشغل MPV عند فتح اللوحة لأول مرة
     LaunchedEffect(Unit) {
-        applyTypographyToMPV(isBold, isItalic, fontSize, borderSize, shadowOffset, subPos, borderStyle, overrideAss)
+        val liveFontSize = MPVLib.getPropertyInt("sub-font-size") ?: fontSizePref.get()
+        fontSize = liveFontSize
+        applyTypographyToMPV(isBold, isItalic, liveFontSize, borderSize, shadowOffset, subPos, borderStyle, overrideAss)
         applyColorToMPV(ColorTarget.TEXT, textAlpha, textRed, textGreen, textBlue)
         applyColorToMPV(ColorTarget.BORDER, borderAlpha, borderRed, borderGreen, borderBlue)
         applyColorToMPV(ColorTarget.BACKGROUND, bgAlpha, bgRed, bgGreen, bgBlue)
@@ -200,7 +210,7 @@ fun SubtitleSettingsPanel(
                             MPVLib.setPropertyString("sub-ass-override", "force")
                             MPVLib.setOptionString("sub-ass-override", "force")
                             coroutineScope.launch {
-                                subPrefs.fontSize.set(size)
+                                fontSizePref.set(size)
                                 subPrefs.subScale.set(1.0f)
                                 subPrefs.overrideAssSubs.set(true)
                             }

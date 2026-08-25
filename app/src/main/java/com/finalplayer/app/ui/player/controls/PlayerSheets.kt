@@ -51,9 +51,16 @@ fun PlayerSheets(
             onOpenSettings = { onOpenSheet(Sheets.SubtitleSettings) },
             onDismiss = onDismiss
         )
-        Sheets.SubtitleSettings -> SubtitleSettingsPanel(
-            onDismiss = onDismiss
-        )
+        Sheets.SubtitleSettings -> {
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val activity = context as? android.app.Activity
+            SubtitleSettingsPanel(
+                onDismiss = onDismiss,
+                isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT,
+                isPip = activity?.isInPictureInPictureMode == true
+            )
+        }
         Sheets.AudioTracks -> AudioTracksSheet(
             tracks = audioTracks,
             currentAudioId = currentAudioId,

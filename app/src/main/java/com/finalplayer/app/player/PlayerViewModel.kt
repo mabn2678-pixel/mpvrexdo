@@ -1095,20 +1095,6 @@ class PlayerViewModel(
                 }
             }
             viewModelScope.launch {
-                prefs.fontSize.changes().collect { size ->
-                    MPVLib.setPropertyInt("sub-font-size", size)
-                    MPVLib.setOptionString("sub-font-size", size.toString())
-                    MPVLib.setPropertyFloat("sub-scale", 1.0f)
-                    MPVLib.setOptionString("sub-scale", "1.0")
-                    MPVLib.setPropertyString("sub-scale-by-window", "yes")
-                    MPVLib.setOptionString("sub-scale-by-window", "yes")
-                    MPVLib.setPropertyString("sub-scale-with-window", "yes")
-                    MPVLib.setOptionString("sub-scale-with-window", "yes")
-                    MPVLib.setPropertyString("sub-ass-override", "force")
-                    MPVLib.setOptionString("sub-ass-override", "force")
-                }
-            }
-            viewModelScope.launch {
                 prefs.subScale.changes().collect { scale ->
                     MPVLib.setPropertyFloat("sub-scale", scale)
                 }
