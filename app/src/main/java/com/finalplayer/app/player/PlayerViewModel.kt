@@ -244,13 +244,26 @@ class PlayerViewModel(
 
     fun applyCurrentModeSubtitleFontSize() {
         val prefs = subtitlesPrefs ?: return
-        val fontSize = when {
-            _isPipMode.value -> prefs.fontSizePip.get()
-            _isPortraitMode.value -> prefs.fontSizePortrait.get()
-            else -> prefs.fontSize.get()
+        val fontSize: Int
+        val subScale: Float
+        when {
+            _isPipMode.value -> {
+                fontSize = prefs.fontSizePip.get()
+                subScale = 1.8f   // مضاعف إضافي يكسر التحجيم التلقائي ويخلي الترجمة تبان أكبر فعلياً داخل نافذة PIP الصغيرة
+            }
+            _isPortraitMode.value -> {
+                fontSize = prefs.fontSizePortrait.get()
+                subScale = 1.0f
+            }
+            else -> {
+                fontSize = prefs.fontSize.get()
+                subScale = 1.0f
+            }
         }
         MPVLib.setPropertyInt("sub-font-size", fontSize)
         MPVLib.setOptionString("sub-font-size", fontSize.toString())
+        MPVLib.setPropertyFloat("sub-scale", subScale)
+        MPVLib.setOptionString("sub-scale", subScale.toString())
     }
 
     private val _playlistItems = MutableStateFlow<List<VideoItem>>(emptyList())
@@ -966,11 +979,6 @@ class PlayerViewModel(
             } else bgCLong
             val bgHex = formatLongToHex(effectiveBgCLong)
 
-            applyCurrentModeSubtitleFontSize()
-
-            MPVLib.setPropertyFloat("sub-scale", 1.0f)
-            MPVLib.setOptionString("sub-scale", "1.0")
-
             MPVLib.setPropertyString("blend-subtitles", "no")
             MPVLib.setOptionString("blend-subtitles", "no")
             MPVLib.setPropertyString("sub-use-margins", "yes")
@@ -1016,6 +1024,8 @@ class PlayerViewModel(
 
             MPVLib.setOptionString("sub-ass-override", "force")
             MPVLib.setPropertyString("sub-ass-override", "force")
+
+            applyCurrentModeSubtitleFontSize()
         }
     }
 

@@ -118,10 +118,11 @@ fun SubtitleSettingsPanel(
     var bgBlue by remember { mutableIntStateOf((backgroundColorLong and 0xFF).toInt()) }
 
     // تهيئة الخصائص في مشغل MPV عند فتح اللوحة لأول مرة
+    val currentSubScale = if (isPip) 1.8f else 1.0f
     LaunchedEffect(Unit) {
         val liveFontSize = MPVLib.getPropertyInt("sub-font-size") ?: fontSizePref.get()
         fontSize = liveFontSize
-        applyTypographyToMPV(isBold, isItalic, liveFontSize, borderSize, shadowOffset, subPos, borderStyle, overrideAss)
+        applyTypographyToMPV(isBold, isItalic, liveFontSize, borderSize, shadowOffset, subPos, borderStyle, overrideAss, currentSubScale)
         applyColorToMPV(ColorTarget.TEXT, textAlpha, textRed, textGreen, textBlue)
         applyColorToMPV(ColorTarget.BORDER, borderAlpha, borderRed, borderGreen, borderBlue)
         applyColorToMPV(ColorTarget.BACKGROUND, bgAlpha, bgRed, bgGreen, bgBlue)
@@ -199,10 +200,11 @@ fun SubtitleSettingsPanel(
                         fontSize = fontSize,
                         onFontSizeChange = { size ->
                             fontSize = size
+                            val targetScale = if (isPip) 1.8f else 1.0f
                             MPVLib.setPropertyInt("sub-font-size", size)
                             MPVLib.setOptionString("sub-font-size", size.toString())
-                            MPVLib.setPropertyFloat("sub-scale", 1.0f)
-                            MPVLib.setOptionString("sub-scale", "1.0")
+                            MPVLib.setPropertyFloat("sub-scale", targetScale)
+                            MPVLib.setOptionString("sub-scale", targetScale.toString())
                             MPVLib.setPropertyString("sub-scale-by-window", "yes")
                             MPVLib.setOptionString("sub-scale-by-window", "yes")
                             MPVLib.setPropertyString("sub-scale-with-window", "yes")
@@ -211,7 +213,9 @@ fun SubtitleSettingsPanel(
                             MPVLib.setOptionString("sub-ass-override", "force")
                             coroutineScope.launch {
                                 fontSizePref.set(size)
-                                subPrefs.subScale.set(1.0f)
+                                if (!isPip) {
+                                    subPrefs.subScale.set(1.0f)
+                                }
                                 subPrefs.overrideAssSubs.set(true)
                             }
                         },
@@ -725,7 +729,8 @@ private fun applyTypographyToMPV(
     shadowOffset: Int,
     subPos: Int,
     borderStyle: String,
-    overrideAss: Boolean
+    overrideAss: Boolean,
+    subScale: Float = 1.0f
 ) {
     // sub-bold: تفعيل أو إلغاء الخط العريض
     MPVLib.setPropertyBoolean("sub-bold", bold)
@@ -740,8 +745,8 @@ private fun applyTypographyToMPV(
     // sub-font-size & sub-scale: حجم الخط المطبق ونسبة التكبير
     MPVLib.setPropertyInt("sub-font-size", fontSize)
     MPVLib.setOptionString("sub-font-size", fontSize.toString())
-    MPVLib.setPropertyFloat("sub-scale", 1.0f)
-    MPVLib.setOptionString("sub-scale", "1.0")
+    MPVLib.setPropertyFloat("sub-scale", subScale)
+    MPVLib.setOptionString("sub-scale", subScale.toString())
 
     // sub-outline-size: حجم الحدود (0..20)
     MPVLib.setPropertyInt("sub-outline-size", borderSize)
