@@ -326,7 +326,9 @@ class MPVView @JvmOverloads constructor(
         val lib = libParam ?: getActiveLib() ?: return
         try {
             lib.setOptionString("sub-auto", "no")
-            lib.setOptionString("sub-font-size", "55")
+            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+            val initialSize = if (isPortrait) 21 else 41
+            lib.setOptionString("sub-font-size", initialSize.toString())
             lib.setOptionString("sub-scale", "1.0")
             lib.setOptionString("sub-scale-by-window", "yes")
             lib.setOptionString("sub-scale-with-window", "yes")

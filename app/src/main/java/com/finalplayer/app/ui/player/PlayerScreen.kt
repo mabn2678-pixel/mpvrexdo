@@ -234,6 +234,9 @@ fun PlayerScreen(
 
         mpvView.onSurfaceReady = {
             playCurrentTarget()
+            val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+            val isPip = activity?.isInPictureInPictureMode == true
+            mpvView.applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = isPip)
         }
 
         viewModel.mpvController.attachView(mpvView)

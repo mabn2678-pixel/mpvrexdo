@@ -727,11 +727,6 @@ class PlayerViewModel(
         }
         subtitlesPrefs?.let { prefs ->
             viewModelScope.launch {
-                prefs.fontSize.changes().collect { fontSize ->
-                    mpvController.setPropertyInt("sub-font-size", fontSize)
-                }
-            }
-            viewModelScope.launch {
                 prefs.subScale.changes().collect { scale ->
                     mpvController.setPropertyFloat("sub-scale", scale)
                 }
@@ -951,8 +946,15 @@ class PlayerViewModel(
             } else bgCLong
             val bgHex = formatLongToHex(effectiveBgCLong)
 
-            MPVLib.setPropertyInt("sub-font-size", fontSize)
-            MPVLib.setOptionString("sub-font-size", fontSize.toString())
+            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+            val attachedView = mpvController.getAttachedView()
+            if (attachedView != null) {
+                attachedView.applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = false)
+            } else {
+                val modeSize = if (isPortrait) 21 else 41
+                MPVLib.setPropertyInt("sub-font-size", modeSize)
+                MPVLib.setOptionString("sub-font-size", modeSize.toString())
+            }
 
             MPVLib.setPropertyFloat("sub-scale", 1.0f)
             MPVLib.setOptionString("sub-scale", "1.0")
