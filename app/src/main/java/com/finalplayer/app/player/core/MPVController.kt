@@ -14,7 +14,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MPVController(private val context: Context) {
 
@@ -28,15 +27,8 @@ class MPVController(private val context: Context) {
     fun attachView(view: MPVView) {
         this.mpvView = view
         MPVLib.activeView = view
-        scope.launch(Dispatchers.Default) {
-            view.initialize(context, context.filesDir)
-            withContext(Dispatchers.Main) {
-                if (view.isSurfaceReady && view.holder.surface?.isValid == true) {
-                    view.attachSurfaceIfReady()
-                }
-                startPolling()
-            }
-        }
+        view.initialize(context, context.filesDir)
+        startPolling()
     }
 
     fun detachView() {
