@@ -156,6 +156,15 @@ fun FolderDetailScreen(
     var selectedVideos by remember { mutableStateOf<Set<VideoItem>>(emptySet()) }
     val isSelectionMode = selectedVideos.isNotEmpty()
 
+    var isLoadingVideo by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isLoadingVideo) {
+        if (isLoadingVideo) {
+            kotlinx.coroutines.delay(3000)
+            isLoadingVideo = false
+        }
+    }
+
     var contextMenuVideos by remember { mutableStateOf<List<VideoItem>?>(null) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showFolderPicker by remember { mutableStateOf(false) }
@@ -284,6 +293,7 @@ fun FolderDetailScreen(
                         val first = selectedVideos.firstOrNull()
                         if (first != null) {
                             val idx = sortedVideos.indexOf(first).coerceAtLeast(0)
+                            isLoadingVideo = true
                             onVideoClick(first, sortedVideos, idx)
                         }
                     }
@@ -302,6 +312,7 @@ fun FolderDetailScreen(
                         }.maxByOrNull { it.second }?.first ?: sortedVideos.first()
 
                         val idx = sortedVideos.indexOf(lastPlayedVideo).coerceAtLeast(0)
+                        isLoadingVideo = true
                         onVideoClick(lastPlayedVideo, sortedVideos, idx)
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -351,6 +362,7 @@ fun FolderDetailScreen(
                             if (isSelectionMode) {
                                 toggleSelection(video)
                             } else {
+                                isLoadingVideo = true
                                 onVideoClick(video, sortedVideos, index)
                             }
                         },
@@ -397,6 +409,7 @@ fun FolderDetailScreen(
                             if (isSelectionMode) {
                                 toggleSelection(video)
                             } else {
+                                isLoadingVideo = true
                                 onVideoClick(video, sortedVideos, index)
                             }
                         },
@@ -454,6 +467,7 @@ fun FolderDetailScreen(
             onDismiss = { contextMenuVideos = null },
             onPlay = { selectedVideo ->
                 val idx = sortedVideos.indexOf(selectedVideo).coerceAtLeast(0)
+                isLoadingVideo = true
                 onVideoClick(selectedVideo, sortedVideos, idx)
             },
             onShare = { shareItems ->
@@ -567,6 +581,12 @@ fun FolderDetailScreen(
         onCancel = { viewModel.cancelTransfer() },
         onMoveToBackground = { viewModel.moveTransferToBackground() }
     )
+
+    if (isLoadingVideo) {
+        com.finalplayer.app.ui.components.VideoLoadingOverlay(
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)

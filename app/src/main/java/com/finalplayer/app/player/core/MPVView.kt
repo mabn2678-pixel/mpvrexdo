@@ -60,6 +60,21 @@ class MPVView @JvmOverloads constructor(
         holder.addCallback(this)
     }
 
+    fun attachSurfaceIfReady() {
+        synchronized(this) {
+            if (isInitialized && isSurfaceReady) {
+                try {
+                    val lib = mpvLib
+                    if (lib != null && holder.surface != null && holder.surface.isValid) {
+                        lib.attachSurface(holder.surface)
+                    }
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error attaching surface in attachSurfaceIfReady", e)
+                }
+            }
+        }
+    }
+
     fun initialize(context: Context, configDir: File) {
         synchronized(this) {
             if (isInitialized) return
@@ -76,7 +91,7 @@ class MPVView @JvmOverloads constructor(
                     }
                     Log.d(TAG, "MPVLib initialized successfully")
 
-                    if (isSurfaceReady) {
+                    if (isSurfaceReady && holder.surface?.isValid == true) {
                         lib.attachSurface(holder.surface)
                     }
                 } else {

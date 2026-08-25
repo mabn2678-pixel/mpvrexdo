@@ -35,7 +35,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +67,15 @@ fun SearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     val focusRequester = remember { FocusRequester() }
+
+    var isLoadingVideo by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isLoadingVideo) {
+        if (isLoadingVideo) {
+            kotlinx.coroutines.delay(3000)
+            isLoadingVideo = false
+        }
+    }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -177,11 +188,20 @@ fun SearchScreen(
                         SearchResultVideoCard(
                             video = video,
                             query = query,
-                            onClick = { onVideoClick(video, searchResults.videos, index) }
+                            onClick = {
+                                isLoadingVideo = true
+                                onVideoClick(video, searchResults.videos, index)
+                            }
                         )
                     }
                 }
             }
+        }
+
+        if (isLoadingVideo) {
+            com.finalplayer.app.ui.components.VideoLoadingOverlay(
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }
