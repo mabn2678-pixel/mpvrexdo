@@ -447,7 +447,7 @@ class PlayerActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         val isPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-        viewModel.mpvController.getAttachedView()?.applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = isInPictureInPictureMode)
+        viewModel.updateDisplayMode(isPortrait, isInPictureInPictureMode)
         if (isInPictureInPictureMode) {
             wasInPipMode = true
             closedFromPipMode = false
@@ -456,7 +456,7 @@ class PlayerActivity : ComponentActivity() {
             viewModel.setControlsShown(true)
             if (wasInPipMode) {
                 wasInPipMode = false
-                if (isFinishing || lifecycle.currentState < androidx.lifecycle.Lifecycle.State.RESUMED) {
+                if (isFinishing) {
                     closedFromPipMode = true
                     viewModel.pause()
                     viewModel.stopPlayback()

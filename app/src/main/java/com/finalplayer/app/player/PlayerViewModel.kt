@@ -233,6 +233,26 @@ class PlayerViewModel(
     private val _currentVideoId = MutableStateFlow<String?>(null)
     val currentVideoId: StateFlow<String?> = _currentVideoId.asStateFlow()
 
+    private val _isPortraitMode = MutableStateFlow(false)
+    private val _isPipMode = MutableStateFlow(false)
+
+    fun updateDisplayMode(isPortrait: Boolean, isPip: Boolean) {
+        _isPortraitMode.value = isPortrait
+        _isPipMode.value = isPip
+        applyCurrentModeSubtitleFontSize()
+    }
+
+    fun applyCurrentModeSubtitleFontSize() {
+        val prefs = subtitlesPrefs ?: return
+        val fontSize = when {
+            _isPipMode.value -> prefs.fontSizePip.get()
+            _isPortraitMode.value -> prefs.fontSizePortrait.get()
+            else -> prefs.fontSize.get()
+        }
+        MPVLib.setPropertyInt("sub-font-size", fontSize)
+        MPVLib.setOptionString("sub-font-size", fontSize.toString())
+    }
+
     private val _playlistItems = MutableStateFlow<List<VideoItem>>(emptyList())
     val playlistItems: StateFlow<List<VideoItem>> = _playlistItems.asStateFlow()
 
@@ -946,15 +966,7 @@ class PlayerViewModel(
             } else bgCLong
             val bgHex = formatLongToHex(effectiveBgCLong)
 
-            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-            val attachedView = mpvController.getAttachedView()
-            if (attachedView != null) {
-                attachedView.applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = false)
-            } else {
-                val modeSize = if (isPortrait) 21 else 41
-                MPVLib.setPropertyInt("sub-font-size", modeSize)
-                MPVLib.setOptionString("sub-font-size", modeSize.toString())
-            }
+            applyCurrentModeSubtitleFontSize()
 
             MPVLib.setPropertyFloat("sub-scale", 1.0f)
             MPVLib.setOptionString("sub-scale", "1.0")
@@ -1092,6 +1104,21 @@ class PlayerViewModel(
                         MPVLib.setPropertyString("sub-back-color", "#00000000")
                         MPVLib.setOptionString("sub-back-color", "#00000000")
                     }
+                }
+            }
+            viewModelScope.launch {
+                prefs.fontSize.changes().collect {
+                    applyCurrentModeSubtitleFontSize()
+                }
+            }
+            viewModelScope.launch {
+                prefs.fontSizePortrait.changes().collect {
+                    applyCurrentModeSubtitleFontSize()
+                }
+            }
+            viewModelScope.launch {
+                prefs.fontSizePip.changes().collect {
+                    applyCurrentModeSubtitleFontSize()
                 }
             }
             viewModelScope.launch {
@@ -1613,6 +1640,7 @@ class PlayerViewModel(
                 autoLoadSubtitlesFromVideoFolderInternal(videoUri)
             }
             applyAllSubtitlePreferences()
+            applyCurrentModeSubtitleFontSize()
             val hasSaved = hasState || hasAppliedAutoResume || (_resumePositionSec.value != null && _resumePositionSec.value!! > 1.0)
             subtitleTrackSelector?.selectSubtitleTrack(
                 hasSavedState = hasSaved,

@@ -349,25 +349,6 @@ class MPVView @JvmOverloads constructor(
         }
     }
 
-    fun applySubtitleFontSizeForMode(isPortrait: Boolean, isPip: Boolean) {
-        val lib = getActiveLib() ?: return
-        val subPrefs = try {
-            org.koin.java.KoinJavaComponent.getKoin().getOrNull<com.finalplayer.app.data.preferences.SubtitlesPreferences>()
-        } catch (_: Throwable) { null }
-
-        val fontSize = when {
-            isPip -> subPrefs?.fontSizePip?.get() ?: 61          // وضع PIP: نافذة صغيرة جداً، خط أصغر بكثير
-            isPortrait -> subPrefs?.fontSizePortrait?.get() ?: 21   // الوضع العمودي: الفيديو أضيق، خط أكبر نسبياً ليكون مقروءاً
-            else -> subPrefs?.fontSize?.get() ?: 41           // الوضع الأفقي: المساحة أوسع، الحجم الأساسي القياسي
-        }
-        try {
-            lib.setPropertyInt("sub-font-size", fontSize)
-            lib.setOptionString("sub-font-size", fontSize.toString())
-        } catch (e: Throwable) {
-            Log.e(TAG, "Error applying subtitle font size for mode", e)
-        }
-    }
-
     fun isIdle(): Boolean {
         val lib = getActiveLib() ?: return true
         return try {
@@ -701,9 +682,6 @@ class MPVView @JvmOverloads constructor(
             } catch (e: Throwable) {
                 Log.e(TAG, "Error unpausing after resume seek", e)
             }
-
-            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-            applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = false)
 
             try {
                 onVideoFileLoaded?.invoke()

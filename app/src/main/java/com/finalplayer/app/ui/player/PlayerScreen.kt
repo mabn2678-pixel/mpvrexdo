@@ -53,7 +53,7 @@ fun PlayerScreen(
     LaunchedEffect(configuration.orientation) {
         val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
         val isPip = activity?.isInPictureInPictureMode == true
-        mpvView.applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = isPip)
+        viewModel.updateDisplayMode(isPortrait, isPip)
     }
 
     BackHandler {
@@ -236,7 +236,7 @@ fun PlayerScreen(
             playCurrentTarget()
             val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
             val isPip = activity?.isInPictureInPictureMode == true
-            mpvView.applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = isPip)
+            viewModel.updateDisplayMode(isPortrait, isPip)
         }
 
         viewModel.mpvController.attachView(mpvView)

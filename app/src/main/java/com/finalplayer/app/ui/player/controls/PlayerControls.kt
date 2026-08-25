@@ -549,65 +549,70 @@ fun PlayerControls(
                         modifier = Modifier.padding(end = 10.dp)
                     ) {
                         val currentPos = if (isDraggingSlider) dragPositionSeconds else positionSeconds
-                        val safeDuration = if (durationSeconds > 0f) durationSeconds else 1f
+                        val isDurationReady = durationSeconds > 1f
+                        val safeDuration = if (isDurationReady) durationSeconds else 1f
 
                         // 1. Seekbar row with time on both sides (left & right)
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = formatTime(currentPos),
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        textDirection = androidx.compose.ui.text.style.TextDirection.Ltr
-                                    ),
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-
-                                FinalPlayerSeekbar(
-                                    position = currentPos,
-                                    duration = safeDuration,
-                                    onValueChange = { newValue ->
-                                        if (!isDraggingSlider) {
-                                            onSliderDragStart()
-                                        }
-                                        isDraggingSlider = true
-                                        dragPositionSeconds = newValue
-                                    },
-                                    onValueChangeFinished = {
-                                        onSeekTo(dragPositionSeconds)
-                                        isDraggingSlider = false
-                                    },
+                        if (isDurationReady) {
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                Row(
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("player_seek_slider")
-                                )
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = formatTime(currentPos),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr
+                                        ),
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
 
-                                Text(
-                                    text = if (showRemainingTimeText) {
-                                        "-${formatTime((safeDuration - currentPos).coerceAtLeast(0f))}"
-                                    } else {
-                                        formatTime(safeDuration)
-                                    },
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold,
-                                        textDirection = androidx.compose.ui.text.style.TextDirection.Ltr
-                                    ),
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    modifier = Modifier.clickable {
-                                        showRemainingTimeText = !showRemainingTimeText
-                                    }
-                                )
+                                    FinalPlayerSeekbar(
+                                        position = currentPos,
+                                        duration = safeDuration,
+                                        onValueChange = { newValue ->
+                                            if (!isDraggingSlider) {
+                                                onSliderDragStart()
+                                            }
+                                            isDraggingSlider = true
+                                            dragPositionSeconds = newValue
+                                        },
+                                        onValueChangeFinished = {
+                                            onSeekTo(dragPositionSeconds)
+                                            isDraggingSlider = false
+                                        },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("player_seek_slider")
+                                    )
+
+                                    Text(
+                                        text = if (showRemainingTimeText) {
+                                            "-${formatTime((safeDuration - currentPos).coerceAtLeast(0f))}"
+                                        } else {
+                                            formatTime(safeDuration)
+                                        },
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            textDirection = androidx.compose.ui.text.style.TextDirection.Ltr
+                                        ),
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.clickable {
+                                            showRemainingTimeText = !showRemainingTimeText
+                                        }
+                                    )
+                                }
                             }
+                        } else {
+                            Spacer(modifier = Modifier.height(32.dp))
                         }
 
                         // 2. Control toolbar row below seekbar (hidden in Shorts mode for clean UI)
