@@ -115,6 +115,12 @@ class MainActivity : FragmentActivity() {
         playlist: List<com.finalplayer.app.domain.model.VideoItem> = emptyList(),
         index: Int = 0
     ) {
+        if (playlist.isNotEmpty()) {
+            com.finalplayer.app.player.PlayerPlaylistHolder.setPlaylist(playlist, index)
+        } else {
+            com.finalplayer.app.player.PlayerPlaylistHolder.clear()
+        }
+
         val intent = Intent(this, PlayerActivity::class.java).apply {
             putExtra(PlayerActivity.EXTRA_VIDEO_PATH, path)
             putExtra(PlayerActivity.EXTRA_VIDEO_TITLE, title)

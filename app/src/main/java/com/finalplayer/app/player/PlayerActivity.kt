@@ -215,6 +215,8 @@ class PlayerActivity : ComponentActivity() {
         val playlistIds = intent.getStringArrayListExtra(EXTRA_PLAYLIST_IDS)
         val playlistDurations = intent.getLongArrayExtra(EXTRA_PLAYLIST_DURATIONS)
 
+        val holderData = PlayerPlaylistHolder.getPlaylist()
+
         if (isShortsMode && !shortsUris.isNullOrEmpty()) {
             val items = shortsUris.mapIndexed { index, uri ->
                 com.finalplayer.app.domain.model.VideoItem(
@@ -228,10 +230,14 @@ class PlayerActivity : ComponentActivity() {
                 )
             }
             viewModel.setShortsPlaylist(items, shortsIndex)
+        } else if (holderData != null && holderData.first.isNotEmpty()) {
+            val (items, initialIdx) = holderData
+            viewModel.setCurrentVideoDetails(videoId, videoTitle, videoPath)
+            viewModel.setPlaylist(items, initialIdx)
         } else if (!playlistUris.isNullOrEmpty()) {
             val items = playlistUris.mapIndexed { index, uri ->
                 com.finalplayer.app.domain.model.VideoItem(
-                    id = normalizeVideoKey(uri),
+                    id = playlistIds?.getOrNull(index) ?: normalizeVideoKey(uri),
                     uri = uri,
                     title = playlistTitles?.getOrNull(index) ?: "Video",
                     duration = playlistDurations?.getOrNull(index) ?: 0L,
@@ -440,6 +446,8 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        val isPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        viewModel.mpvController.getAttachedView()?.applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = isInPictureInPictureMode)
         if (isInPictureInPictureMode) {
             wasInPipMode = true
             closedFromPipMode = false

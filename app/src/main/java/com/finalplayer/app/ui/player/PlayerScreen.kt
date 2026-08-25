@@ -50,16 +50,17 @@ fun PlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val mpvView = remember { MPVView(context) }
 
+    LaunchedEffect(configuration.orientation) {
+        val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+        val isPip = activity?.isInPictureInPictureMode == true
+        mpvView.applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = isPip)
+    }
+
     BackHandler {
         try {
             viewModel.stopPlayback()
         } catch (_: Exception) {}
         onBackClick()
-    }
-
-    LaunchedEffect(configuration.orientation) {
-        val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-        viewModel.adjustSubtitleScaleForOrientation(isPortrait)
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -140,6 +141,7 @@ fun PlayerScreen(
     val selectedSecondarySubId by viewModel.selectedSecondarySubId.collectAsStateWithLifecycle()
     val selectedAudioId by viewModel.selectedAudioId.collectAsStateWithLifecycle()
     val currentSubText by viewModel.currentSubText.collectAsStateWithLifecycle()
+    val dynamicVideoTitle by viewModel.videoTitle.collectAsStateWithLifecycle()
 
     val currentDecoder by viewModel.currentDecoder.collectAsStateWithLifecycle()
     val playbackSpeed by viewModel.playbackSpeed.collectAsStateWithLifecycle()
@@ -221,9 +223,12 @@ fun PlayerScreen(
                 ?: viewModel.currentVideoId.value
                 ?: videoPath
             if (target.isNotEmpty()) {
-                viewModel.autoLoadSubtitlesFromVideoFolder(android.net.Uri.parse(target))
-                viewModel.applyAllSubtitlePreferences()
-                viewModel.updateTracks()
+                val uri = if (target.startsWith("content://") || target.startsWith("file://")) {
+                    android.net.Uri.parse(target)
+                } else {
+                    android.net.Uri.fromFile(java.io.File(target))
+                }
+                viewModel.onVideoFileLoaded(uri)
             }
         }
 
@@ -264,7 +269,7 @@ fun PlayerScreen(
         )
 
         PlayerControls(
-            title = videoTitle,
+            title = dynamicVideoTitle.ifEmpty { videoTitle },
             isPaused = isPaused ?: true,
             positionSeconds = positionSeconds,
             durationSeconds = durationSeconds,

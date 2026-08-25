@@ -326,26 +326,39 @@ class MPVView @JvmOverloads constructor(
         val lib = libParam ?: getActiveLib() ?: return
         try {
             lib.setOptionString("sub-auto", "no")
-            lib.setOptionString("embeddedfonts", "yes")
-            lib.setOptionString("sub-ass-override", "force")
-            lib.setOptionString("sub-use-margins", "yes")
-            lib.setOptionString("blend-subtitles", "no")
-            lib.setOptionString("sub-margin-y", "5")
+            lib.setOptionString("sub-font-size", "55")
+            lib.setOptionString("sub-scale", "1.0")
             lib.setOptionString("sub-scale-by-window", "yes")
             lib.setOptionString("sub-scale-with-window", "yes")
             lib.setOptionString("sub-ass-scale-with-window", "yes")
-            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-            val initialSubFontSize = if (isPortrait) "21" else "39"
-            lib.setOptionString("sub-font-size", initialSubFontSize)
-            lib.setOptionString("sub-scale", "1.0")
-            lib.setOptionString("sub-pos", "100")
+            lib.setOptionString("sub-use-margins", "yes")
+            lib.setOptionString("sub-ass-override", "force")
+            lib.setOptionString("embeddedfonts", "yes")
+            lib.setOptionString("blend-subtitles", "no")
+            lib.setOptionString("sub-margin-y", "5")
             lib.setOptionString("sub-border-size", "3.0")
+            lib.setOptionString("sub-pos", "100")
             lib.setOptionString("sub-color", "#FFFFFFFF")
             lib.setOptionString("sub-border-color", "#FF000000")
             lib.setOptionString("sub-shadow-offset", "1")
             lib.setOptionString("sub-shadow-color", "#80000000")
         } catch (e: Throwable) {
             Log.e(TAG, "Error applying subtitle options", e)
+        }
+    }
+
+    fun applySubtitleFontSizeForMode(isPortrait: Boolean, isPip: Boolean) {
+        val lib = getActiveLib() ?: return
+        val fontSize = when {
+            isPip -> 61          // وضع PIP: نافذة صغيرة جداً، خط أصغر بكثير
+            isPortrait -> 21   // الوضع العمودي: الفيديو أضيق، خط أكبر نسبياً ليكون مقروءاً
+            else -> 41           // الوضع الأفقي: المساحة أوسع، الحجم الأساسي القياسي
+        }
+        try {
+            lib.setPropertyInt("sub-font-size", fontSize)
+            lib.setOptionString("sub-font-size", fontSize.toString())
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error applying subtitle font size for mode", e)
         }
     }
 
@@ -489,8 +502,10 @@ class MPVView @JvmOverloads constructor(
                 val title = lib.getPropertyString("track-list/$i/title") ?: ""
                 val isDefault = lib.getPropertyBoolean("track-list/$i/default") ?: false
                 val forced = lib.getPropertyBoolean("track-list/$i/forced") ?: false
+                val hearingImpaired = lib.getPropertyBoolean("track-list/$i/hearing-impaired") ?: false
                 val external = lib.getPropertyBoolean("track-list/$i/external") ?: false
                 val extFilename = lib.getPropertyString("track-list/$i/external-filename")
+                val isImage = lib.getPropertyBoolean("track-list/$i/image") ?: false
 
                 list.add(
                     TrackNode(
@@ -500,8 +515,10 @@ class MPVView @JvmOverloads constructor(
                         title = title,
                         isDefault = isDefault,
                         forced = forced,
+                        hearingImpaired = hearingImpaired,
                         external = external,
-                        externalFilename = extFilename
+                        externalFilename = extFilename,
+                        isImage = isImage
                     )
                 )
             }
@@ -678,6 +695,9 @@ class MPVView @JvmOverloads constructor(
             } catch (e: Throwable) {
                 Log.e(TAG, "Error unpausing after resume seek", e)
             }
+
+            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+            applySubtitleFontSizeForMode(isPortrait = isPortrait, isPip = false)
 
             try {
                 onVideoFileLoaded?.invoke()

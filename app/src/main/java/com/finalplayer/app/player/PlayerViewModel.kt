@@ -24,6 +24,7 @@ import com.finalplayer.app.utils.normalizeVideoKey
 import com.finalplayer.app.player.core.MPVLib
 import com.finalplayer.app.player.core.MPVView
 import com.finalplayer.app.player.core.TrackSelector
+import com.finalplayer.app.player.core.SubtitleTrackSelector
 import com.finalplayer.app.ui.player.ChapterNode
 import com.finalplayer.app.ui.player.Decoder
 import com.finalplayer.app.ui.player.Sheets
@@ -90,6 +91,12 @@ class PlayerViewModel(
             TrackSelector(subtitlesPrefs, audioPrefs)
         } else null
     }
+
+    private val subtitleTrackSelector: SubtitleTrackSelector? by lazy {
+        subtitlesPrefs?.let { SubtitleTrackSelector(it) }
+    }
+
+    private var savedSubtitleId: String? = null
 
     private val subtitleAddMutex = Mutex()
 
@@ -286,8 +293,6 @@ class PlayerViewModel(
             "landscape"
         }
         _userOrientationOverride.value = nextOrientation
-        val isPortrait = nextOrientation == "portrait"
-        adjustSubtitleScaleForOrientation(isPortrait)
     }
 
     fun resetOrientationOverride() {
@@ -443,6 +448,10 @@ class PlayerViewModel(
                 editor.putLong("dur_$videoId", effectiveDurMs)
                 editor.putLong("time_$videoId", System.currentTimeMillis())
                 editor.putBoolean("completed_$videoId", isCompleted)
+                val currentSid = mpvController.getCurrentSid()
+                val isSubDisabled = (_selectedSubId.value ?: currentSid) <= 0
+                val sidToSave = if (isSubDisabled) "no" else currentSid.toString()
+                editor.putString("sid_$videoId", sidToSave)
                 if (isSynchronous) {
                     editor.commit()
                 } else {
@@ -533,7 +542,12 @@ class PlayerViewModel(
                     }
                 }
 
-                val targetList = if (folderVideos.size > 1) folderVideos else allVideos
+                val targetList = if (folderVideos.size > 1) {
+                    folderVideos.sortedBy { it.title.lowercase(java.util.Locale.ROOT) }
+                } else {
+                    allVideos.sortedBy { it.title.lowercase(java.util.Locale.ROOT) }
+                }
+
                 if (targetList.size > 1) {
                     val foundIndex = targetList.indexOfFirst {
                         it.id == videoId || it.uri == videoPath || it.uri == videoId || it.id == videoPath
@@ -544,6 +558,10 @@ class PlayerViewModel(
                             _playlistItems.value = targetList
                             _currentPlaylistIndex.value = foundIndex
                             _isPlaylistMode.value = true
+                            val activeItem = targetList.getOrNull(foundIndex)
+                            if (activeItem != null) {
+                                _videoTitle.value = activeItem.title
+                            }
                         }
                     }
                 }
@@ -569,6 +587,7 @@ class PlayerViewModel(
             _videoTitle.value = item.title
             prefetchVideoAspect(item.uri)
             checkSavedProgress(videoId)
+            hasAttemptedAutoSelectSub = false
             mpvController.play(item.uri, _resumePositionSec.value)
         }
     }
@@ -638,6 +657,7 @@ class PlayerViewModel(
             val prefs = context.getSharedPreferences("finalplayer_playback_resume", Context.MODE_PRIVATE)
             val pos = prefs.getLong("pos_$videoId", -1L)
             val completed = prefs.getBoolean("completed_$videoId", false)
+            savedSubtitleId = prefs.getString("sid_$videoId", null)
             if (pos > 1000L && !completed) {
                 savedPos = pos
                 savedDur = prefs.getLong("dur_$videoId", -1L)
@@ -859,8 +879,7 @@ class PlayerViewModel(
     fun applyAllSubtitlePreferences() {
         val prefs = subtitlesPrefs ?: return
         viewModelScope.launch {
-            val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
-            val fontSize = if (isPortrait) 21 else 39
+            val fontSize = prefs.fontSize.get()
             val isBold = prefs.bold.get()
             val isItalic = prefs.italic.get()
             val scale = prefs.subScale.get()
@@ -1032,27 +1051,6 @@ class PlayerViewModel(
 
     fun updateSubPositionByDelta(deltaYPx: Float, screenHeightPx: Float = 1000f) {
         handleSubtitleVerticalDrag(deltaYPx, screenHeightPx)
-    }
-
-    fun adjustSubtitleScaleForOrientation(isPortrait: Boolean) {
-        try {
-            val fontSize = if (isPortrait) 21 else 39
-            MPVLib.setPropertyString("sub-scale-by-window", "yes")
-            MPVLib.setOptionString("sub-scale-by-window", "yes")
-            MPVLib.setPropertyString("sub-scale-with-window", "yes")
-            MPVLib.setOptionString("sub-scale-with-window", "yes")
-            MPVLib.setPropertyString("sub-ass-scale-with-window", "yes")
-            MPVLib.setOptionString("sub-ass-scale-with-window", "yes")
-            MPVLib.setPropertyString("sub-ass-override", "force")
-            MPVLib.setOptionString("sub-ass-override", "force")
-            MPVLib.setPropertyInt("sub-font-size", fontSize)
-            MPVLib.setOptionString("sub-font-size", fontSize.toString())
-            mpvController.setPropertyInt("sub-font-size", fontSize)
-            MPVLib.setPropertyFloat("sub-scale", 1.0f)
-            MPVLib.setOptionString("sub-scale", "1.0")
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     private fun observePreferencesAndApply() {
@@ -1265,14 +1263,6 @@ class PlayerViewModel(
         _selectedSubId.value = mpvController.getCurrentSid()
         _selectedSecondarySubId.value = mpvController.getCurrentSecondarySid()
         _selectedAudioId.value = mpvController.getCurrentAid()
-
-        // Auto select best sub if not done yet
-        if (!hasAttemptedAutoSelectSub && subs.isNotEmpty()) {
-            hasAttemptedAutoSelectSub = true
-            viewModelScope.launch {
-                trackSelector?.onFileLoaded(false, mpvController)
-            }
-        }
     }
 
     fun selectAudioTrack(id: Int) {
@@ -1517,51 +1507,68 @@ class PlayerViewModel(
         "smi", "sup", "txt", "lrc"
     )
 
-    fun autoLoadSubtitlesFromVideoFolder(videoUri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val videoPath = when (videoUri.scheme) {
-                    "file" -> videoUri.path ?: return@launch
-                    "content" -> {
-                        context.contentResolver.query(
-                            videoUri,
-                            arrayOf(MediaStore.Video.Media.DATA),
-                            null, null, null
-                        )?.use { cursor ->
-                            if (cursor.moveToFirst()) {
-                                val col = cursor.getColumnIndexOrThrow(
-                                    MediaStore.Video.Media.DATA
-                                )
-                                cursor.getString(col)
-                            } else null
-                        } ?: return@launch
-                    }
-                    else -> videoUri.path ?: videoUri.toString()
+    suspend fun autoLoadSubtitlesFromVideoFolderInternal(videoUri: Uri) = withContext(Dispatchers.IO) {
+        try {
+            val videoPath = when (videoUri.scheme) {
+                "file" -> videoUri.path ?: return@withContext
+                "content" -> {
+                    context.contentResolver.query(
+                        videoUri,
+                        arrayOf(MediaStore.Video.Media.DATA),
+                        null, null, null
+                    )?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val col = cursor.getColumnIndexOrThrow(
+                                MediaStore.Video.Media.DATA
+                            )
+                            cursor.getString(col)
+                        } else null
+                    } ?: return@withContext
                 }
-
-                val videoFile = File(videoPath)
-                val videoName = videoFile.nameWithoutExtension
-                val parentDir = videoFile.parentFile ?: return@launch
-
-                parentDir.listFiles()?.filter { file ->
-                    file.isFile &&
-                    file.extension.lowercase() in SUBTITLE_EXTENSIONS &&
-                    (
-                        file.nameWithoutExtension == videoName ||
-                        file.nameWithoutExtension.startsWith("$videoName.") ||
-                        file.nameWithoutExtension.startsWith("${videoName}_")
-                    )
-                }?.sortedBy { it.name }
-                 ?.forEach { subFile ->
-                    addSubtitle(
-                        uri = Uri.fromFile(subFile),
-                        context = context,
-                        select = false
-                    )
-                 }
-            } catch (e: Exception) {
-                Log.w("PlayerViewModel", "Auto subtitle scan failed", e)
+                else -> videoUri.path ?: videoUri.toString()
             }
+
+            val videoFile = File(videoPath)
+            if (!videoFile.exists()) return@withContext
+            val videoName = videoFile.nameWithoutExtension
+            val parentDir = videoFile.parentFile ?: return@withContext
+
+            val matchingFiles = parentDir.listFiles()?.filter { file ->
+                file.isFile &&
+                file.extension.lowercase() in SUBTITLE_EXTENSIONS &&
+                (
+                    file.nameWithoutExtension == videoName ||
+                    file.nameWithoutExtension.startsWith("$videoName.") ||
+                    file.nameWithoutExtension.startsWith("${videoName}_")
+                )
+            }?.sortedBy { it.name } ?: emptyList()
+
+            for (subFile in matchingFiles) {
+                val subPath = subFile.absolutePath
+                withContext(Dispatchers.Main) {
+                    val currentTracks = mpvController.getTracks()
+                    val alreadyAdded = currentTracks.any { track ->
+                        track.type == "sub" && (
+                            track.externalFilename == subPath ||
+                            track.title == subPath ||
+                            track.externalFilename == subFile.name
+                        )
+                    }
+                    if (!alreadyAdded) {
+                        mpvController.addSubtitle(subPath, select = false)
+                        _externalSubtitles.add(subPath)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("PlayerViewModel", "Auto subtitle scan failed", e)
+        }
+    }
+
+    fun autoLoadSubtitlesFromVideoFolder(videoUri: Uri) {
+        viewModelScope.launch {
+            autoLoadSubtitlesFromVideoFolderInternal(videoUri)
+            updateTracks()
         }
     }
 
@@ -1610,11 +1617,21 @@ class PlayerViewModel(
         updateTracks()
     }
 
-    fun onVideoFileLoaded(hasState: Boolean = false) {
+    fun onVideoFileLoaded(videoUri: Uri? = null, hasState: Boolean = false) {
         hasAttemptedAutoSelectSub = false
         setAspectRatio("default")
         viewModelScope.launch {
-            trackSelector?.onFileLoaded(hasState, mpvController)
+            if (videoUri != null) {
+                autoLoadSubtitlesFromVideoFolderInternal(videoUri)
+            }
+            applyAllSubtitlePreferences()
+            val hasSaved = hasState || hasAppliedAutoResume || (_resumePositionSec.value != null && _resumePositionSec.value!! > 1.0)
+            subtitleTrackSelector?.selectSubtitleTrack(
+                hasSavedState = hasSaved,
+                savedSid = savedSubtitleId,
+                mpvController = mpvController
+            )
+            trackSelector?.onFileLoaded(hasSaved, mpvController)
             updateTracks()
         }
     }
