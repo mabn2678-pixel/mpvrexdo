@@ -55,6 +55,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
 import android.provider.MediaStore
+import android.content.ContentValues
+import android.os.Build
 import java.io.File
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -1477,34 +1479,105 @@ class PlayerViewModel(
     fun takeScreenshot(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Ensure directory /storage/emulated/0/Pictures/FinalPlayer exists
                 val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                    ?: File("/storage/emulated/0/Pictures")
                 val finalPlayerDir = File(picturesDir, "FinalPlayer")
                 if (!finalPlayerDir.exists()) {
                     finalPlayerDir.mkdirs()
                 }
-                val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US).format(java.util.Date())
-                val imageFile = File(finalPlayerDir, "FinalPlayer_$timeStamp.jpg")
+
+                val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                val fileName = "FinalPlayer_$timeStamp.jpg"
+                val imageFile = File(finalPlayerDir, fileName)
+
+                // Temp file inside app internal cache so MPV C-lib can always write without any storage permission constraint
+                val tempFile = File(context.cacheDir, "temp_screenshot_$timeStamp.jpg")
+                if (tempFile.exists()) tempFile.delete()
 
                 // Configure MPV for JPG screenshot format
-                mpvController.getAttachedView()?.setPropertyString("screenshot-format", "jpg")
-                mpvController.getAttachedView()?.setPropertyString("screenshot-jpeg-quality", "95")
+                val attachedView = mpvController.getAttachedView()
+                attachedView?.setPropertyString("screenshot-format", "jpg")
+                attachedView?.setPropertyString("screenshot-jpeg-quality", "95")
 
-                // screenshot-to-file <filename> sub captures video + subtitles only (no UI overlay)
-                mpvController.getAttachedView()?.command(arrayOf("screenshot-to-file", imageFile.absolutePath, "sub"))
+                // "subtitles" captures video + rendered subtitles (without UI overlay)
+                attachedView?.command(arrayOf("screenshot-to-file", tempFile.absolutePath, "subtitles"))
 
-                // Register file in Android MediaScanner
-                android.media.MediaScannerConnection.scanFile(
-                    context,
-                    arrayOf(imageFile.absolutePath),
-                    arrayOf("image/jpeg")
-                ) { _, _ -> }
+                // Wait up to 1.5 seconds for MPV to finish writing the temp file
+                var waited = 0
+                while ((!tempFile.exists() || tempFile.length() == 0L) && waited < 1500) {
+                    delay(50)
+                    waited += 50
+                }
 
-                withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(
+                if (tempFile.exists() && tempFile.length() > 0L) {
+                    // 1. Direct copy to /storage/emulated/0/Pictures/FinalPlayer/
+                    if (!finalPlayerDir.exists()) {
+                        finalPlayerDir.mkdirs()
+                    }
+                    try {
+                        tempFile.copyTo(imageFile, overwrite = true)
+                    } catch (e: Exception) {
+                        Log.w("PlayerViewModel", "Direct copy to Pictures/FinalPlayer failed, relying on MediaStore", e)
+                    }
+
+                    // 2. Insert into MediaStore for Scoped Storage and instant Gallery/FileManager index
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val contentValues = ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/FinalPlayer")
+                            put(MediaStore.MediaColumns.IS_PENDING, 1)
+                        }
+                        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                        if (uri != null) {
+                            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                                tempFile.inputStream().use { inputStream ->
+                                    inputStream.copyTo(outputStream)
+                                }
+                            }
+                            contentValues.clear()
+                            contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                            context.contentResolver.update(uri, contentValues, null, null)
+                        }
+                    }
+
+                    // 3. Register file in Android MediaScanner
+                    android.media.MediaScannerConnection.scanFile(
                         context,
-                        "تم حفظ لقطة الشاشة في Pictures/FinalPlayer",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
+                        arrayOf(imageFile.absolutePath),
+                        arrayOf("image/jpeg")
+                    ) { _, _ -> }
+
+                    tempFile.delete()
+
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            context,
+                            "تم حفظ لقطة الشاشة في Pictures/FinalPlayer",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    // Fallback to direct file save if temp file failed
+                    if (!finalPlayerDir.exists()) {
+                        finalPlayerDir.mkdirs()
+                    }
+                    attachedView?.command(arrayOf("screenshot-to-file", imageFile.absolutePath, "subtitles"))
+                    delay(400)
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(imageFile.absolutePath),
+                        arrayOf("image/jpeg")
+                    ) { _, _ -> }
+
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            context,
+                            "تم حفظ لقطة الشاشة في Pictures/FinalPlayer",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("PlayerViewModel", "Error taking screenshot", e)

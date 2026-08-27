@@ -1,7 +1,6 @@
 package com.finalplayer.app.ui.player.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -49,48 +48,38 @@ import com.finalplayer.app.R
 import kotlinx.coroutines.delay
 
 /**
- * شاشة انتقال وتحميل أنيقة تظهر عند فتح أي فيديو لمدة 2-3 ثوانٍ
- * حتى يتم تهيئة وتحميل مشغل mpv في الخلفية، مع تأثير تموجات وموجات ناعمة (Ripple Waves)
- * ونبض انسيابي لأيقونة التطبيق، وتختفي بسلاسة عبر Fade Out.
+ * شاشة انتقال وتحميل تظهر عند فتح أي فيديو لمدة 1.6 ثانية بالضبط
+ * مع تأثير موجات ونبض انسيابي لأيقونة التطبيق بلون السمة الحالي (App Theme Color)
+ * وتختفي بسلاسة عبر Fade Out ليكشف المشغل في الخلفية.
  */
 @Composable
 fun PlayerLoadingOverlay(
     videoTitle: String,
     isVideoReady: Boolean,
     isPipMode: Boolean,
-    minDisplayTimeMs: Long = 2200L,
-    maxDisplayTimeMs: Long = 3500L,
+    displayTimeMs: Long = 1600L,
     modifier: Modifier = Modifier
 ) {
     var isVisible by remember { mutableStateOf(true) }
 
-    LaunchedEffect(isVideoReady, isPipMode) {
+    LaunchedEffect(isPipMode) {
         if (isPipMode) {
             isVisible = false
             return@LaunchedEffect
         }
-
-        val startTime = System.currentTimeMillis()
-        // انتظر حتى انقضاء الحد الأدنى لزمن العرض (2.2 ثانية)
-        delay(minDisplayTimeMs)
-
-        // إذا كان الفيديو جاهزاً بعد انتهاء الحد الأدنى، قم بالإخفاء
-        val elapsed = System.currentTimeMillis() - startTime
-        if (isVideoReady) {
-            isVisible = false
-        } else {
-            // انتظر حتى يصبح جاهزاً أو حتى بلوغ الحد الأقصى للمهلة
-            val remainingMax = (maxDisplayTimeMs - elapsed).coerceAtLeast(0L)
-            delay(remainingMax)
-            isVisible = false
-        }
+        delay(displayTimeMs)
+        isVisible = false
     }
 
     AnimatedVisibility(
         visible = isVisible && !isPipMode,
-        exit = fadeOut(animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing)),
         modifier = modifier
     ) {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        val secondaryColor = MaterialTheme.colorScheme.secondary
+        val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+
         // حركات التموج والنبض المستمر
         val infiniteTransition = rememberInfiniteTransition(label = "PulseWavesTransition")
 
@@ -99,7 +88,7 @@ fun PlayerLoadingOverlay(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2000, easing = LinearEasing),
+                animation = tween(durationMillis = 1600, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "Wave1"
@@ -110,7 +99,7 @@ fun PlayerLoadingOverlay(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2000, delayMillis = 500, easing = LinearEasing),
+                animation = tween(durationMillis = 1600, delayMillis = 400, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "Wave2"
@@ -121,7 +110,7 @@ fun PlayerLoadingOverlay(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 2000, delayMillis = 1000, easing = LinearEasing),
+                animation = tween(durationMillis = 1600, delayMillis = 800, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),
             label = "Wave3"
@@ -132,7 +121,7 @@ fun PlayerLoadingOverlay(
             initialValue = 0.96f,
             targetValue = 1.04f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+                animation = tween(durationMillis = 800, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "IconBreathing"
@@ -144,33 +133,33 @@ fun PlayerLoadingOverlay(
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF1E2638),
-                            Color(0xFF0F131D),
-                            Color(0xFF07090E),
+                            primaryColor.copy(alpha = 0.22f),
+                            Color(0xFF141722),
+                            Color(0xFF0A0C12),
                             Color.Black
                         )
                     )
                 ),
             contentAlignment = Alignment.Center
         ) {
-            // رسم الموجات المتوسعة في الخلفية
+            // رسم الموجات المتوسعة في الخلفية بلون التطبيق
             Box(
                 modifier = Modifier
                     .size(280.dp)
                     .drawBehind {
                         val baseRadiusPx = 54.dp.toPx()
-                        val maxExpansionPx = 80.dp.toPx()
+                        val maxExpansionPx = 82.dp.toPx()
 
                         // رسم موجة دائرية
-                        fun drawWave(progress: Float, primaryColor: Color, secondaryColor: Color) {
+                        fun drawWave(progress: Float, waveColor: Color) {
                             if (progress in 0.001f..0.999f) {
                                 val currentRadius = baseRadiusPx + (maxExpansionPx * progress)
-                                val alpha = (1f - progress).coerceIn(0f, 1f) * 0.65f
+                                val alpha = (1f - progress).coerceIn(0f, 1f) * 0.75f
                                 val strokeWidth = (3.dp.toPx() * (1f - progress * 0.5f)).coerceAtLeast(1.dp.toPx())
 
                                 // حلقة الموجة الخارجية
                                 drawCircle(
-                                    color = primaryColor.copy(alpha = alpha),
+                                    color = waveColor.copy(alpha = alpha),
                                     radius = currentRadius,
                                     center = center,
                                     style = Stroke(width = strokeWidth)
@@ -178,39 +167,39 @@ fun PlayerLoadingOverlay(
 
                                 // توهج ناعم خفيف
                                 drawCircle(
-                                    color = secondaryColor.copy(alpha = alpha * 0.15f),
+                                    color = waveColor.copy(alpha = alpha * 0.18f),
                                     radius = currentRadius,
                                     center = center
                                 )
                             }
                         }
 
-                        // الموجة 1: لون سماوي/أزرق نيون
-                        drawWave(wave1Progress, Color(0xFF64B5F6), Color(0xFF2196F3))
-                        // الموجة 2: لون أزرق فيروزي مائل للبنفسجي
-                        drawWave(wave2Progress, Color(0xFF90CAF9), Color(0xFF42A5F5))
-                        // الموجة 3: أبيض ناصع مع زرقة
-                        drawWave(wave3Progress, Color(0xFFE3F2FD), Color(0xFFBBDEFB))
+                        // الموجة 1: لون التطبيق الأساسي (Primary)
+                        drawWave(wave1Progress, primaryColor)
+                        // الموجة 2: اللون الثانوي أو المشتق من سمة التطبيق
+                        drawWave(wave2Progress, secondaryColor)
+                        // الموجة 3: حاوية اللون الأساسي الفاتحة
+                        drawWave(wave3Progress, primaryContainer)
                     },
                 contentAlignment = Alignment.Center
             ) {
-                // أيقونة التطبيق داخل دائرة فخمة
+                // أيقونة التطبيق داخل دائرة فخمة ملونة بلون التطبيق
                 Box(
                     modifier = Modifier
                         .size(108.dp)
                         .scale(iconBreathingScale)
                         .shadow(
-                            elevation = 20.dp,
+                            elevation = 22.dp,
                             shape = CircleShape,
-                            ambientColor = Color(0xFF2196F3),
-                            spotColor = Color(0xFF64B5F6)
+                            ambientColor = primaryColor,
+                            spotColor = primaryColor
                         )
                         .clip(CircleShape)
                         .background(
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    Color(0xFF25334D),
-                                    Color(0xFF141B29)
+                                    primaryColor.copy(alpha = 0.35f),
+                                    Color(0xFF161922)
                                 )
                             )
                         )
@@ -218,9 +207,9 @@ fun PlayerLoadingOverlay(
                             width = 2.dp,
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    Color.White.copy(alpha = 0.8f),
-                                    Color(0xFF64B5F6).copy(alpha = 0.6f),
-                                    Color(0xFF1E88E5).copy(alpha = 0.3f)
+                                    Color.White.copy(alpha = 0.85f),
+                                    primaryColor.copy(alpha = 0.8f),
+                                    secondaryColor.copy(alpha = 0.5f)
                                 )
                             ),
                             shape = CircleShape
@@ -263,12 +252,12 @@ fun PlayerLoadingOverlay(
                 Text(
                     text = "جارٍ تجهيز المشغل...",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color(0xFF90CAF9),
+                        color = primaryColor,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     ),
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.alpha(0.75f)
+                    modifier = Modifier.alpha(0.85f)
                 )
             }
         }
