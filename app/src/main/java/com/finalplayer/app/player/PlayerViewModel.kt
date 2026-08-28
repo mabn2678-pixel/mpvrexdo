@@ -51,9 +51,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
+import android.graphics.Bitmap
 import android.provider.MediaStore
 import android.content.ContentValues
 import android.os.Build
@@ -1476,102 +1478,126 @@ class PlayerViewModel(
         setVideoZoom(newZoom)
     }
 
+    private suspend fun saveScreenshotToGallery(
+        context: Context,
+        imageBytes: ByteArray?,
+        bitmap: Bitmap?,
+        fileName: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                ?: File("/storage/emulated/0/Pictures")
+            val finalPlayerDir = File(picturesDir, "FinalPlayer")
+            if (!finalPlayerDir.exists()) {
+                finalPlayerDir.mkdirs()
+            }
+            val imageFile = File(finalPlayerDir, fileName)
+
+            // 1. Direct file write to /storage/emulated/0/Pictures/FinalPlayer/
+            try {
+                if (imageBytes != null && imageBytes.isNotEmpty()) {
+                    imageFile.writeBytes(imageBytes)
+                } else if (bitmap != null) {
+                    java.io.FileOutputStream(imageFile).use { out ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("PlayerViewModel", "Direct filesystem write failed: ${e.message}")
+            }
+
+            // 2. Insert into Android MediaStore so Gallery & File Manager + recognize Pictures/FinalPlayer instantly
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/FinalPlayer")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        if (imageBytes != null && imageBytes.isNotEmpty()) {
+                            out.write(imageBytes)
+                        } else if (bitmap != null) {
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                        }
+                    }
+                    contentValues.clear()
+                    contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                    context.contentResolver.update(uri, contentValues, null, null)
+                }
+            }
+
+            // 3. Scan file with MediaScannerConnection for all Android versions
+            android.media.MediaScannerConnection.scanFile(
+                context,
+                arrayOf(imageFile.absolutePath),
+                arrayOf("image/jpeg")
+            ) { path, uri ->
+                Log.d("PlayerViewModel", "Screenshot scanned to MediaStore: $path -> $uri")
+            }
+
+            true
+        } catch (e: Exception) {
+            Log.e("PlayerViewModel", "Error saving screenshot to gallery", e)
+            false
+        }
+    }
+
     fun takeScreenshot(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Ensure directory /storage/emulated/0/Pictures/FinalPlayer exists
-                val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                    ?: File("/storage/emulated/0/Pictures")
-                val finalPlayerDir = File(picturesDir, "FinalPlayer")
-                if (!finalPlayerDir.exists()) {
-                    finalPlayerDir.mkdirs()
-                }
-
                 val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
                 val fileName = "FinalPlayer_$timeStamp.jpg"
-                val imageFile = File(finalPlayerDir, fileName)
 
-                // Temp file inside app internal cache so MPV C-lib can always write without any storage permission constraint
-                val tempFile = File(context.cacheDir, "temp_screenshot_$timeStamp.jpg")
+                val attachedView = mpvController.getAttachedView()
+                val tempFile = File(context.cacheDir, "temp_snap_$timeStamp.jpg")
                 if (tempFile.exists()) tempFile.delete()
 
-                // Configure MPV for JPG screenshot format
-                val attachedView = mpvController.getAttachedView()
-                attachedView?.setPropertyString("screenshot-format", "jpg")
-                attachedView?.setPropertyString("screenshot-jpeg-quality", "95")
+                // 1. First attempt: Native MPV screenshot-to-file with subtitles
+                var mpvSuccess = false
+                if (attachedView != null) {
+                    attachedView.setPropertyString("screenshot-format", "jpg")
+                    attachedView.setPropertyString("screenshot-jpeg-quality", "95")
+                    attachedView.command(arrayOf("screenshot-to-file", tempFile.absolutePath, "subtitles"))
 
-                // "subtitles" captures video + rendered subtitles (without UI overlay)
-                attachedView?.command(arrayOf("screenshot-to-file", tempFile.absolutePath, "subtitles"))
+                    var waited = 0
+                    while ((!tempFile.exists() || tempFile.length() == 0L) && waited < 400) {
+                        delay(40)
+                        waited += 40
+                    }
 
-                // Wait up to 1.5 seconds for MPV to finish writing the temp file
-                var waited = 0
-                while ((!tempFile.exists() || tempFile.length() == 0L) && waited < 1500) {
-                    delay(50)
-                    waited += 50
+                    if (tempFile.exists() && tempFile.length() > 0L) {
+                        val bytes = tempFile.readBytes()
+                        tempFile.delete()
+                        mpvSuccess = saveScreenshotToGallery(context, bytes, null, fileName)
+                    }
                 }
 
-                if (tempFile.exists() && tempFile.length() > 0L) {
-                    // 1. Direct copy to /storage/emulated/0/Pictures/FinalPlayer/
-                    if (!finalPlayerDir.exists()) {
-                        finalPlayerDir.mkdirs()
+                // 2. Second attempt / Fallback: PixelCopy direct from SurfaceView
+                if (!mpvSuccess && attachedView != null) {
+                    val bitmapCompletable = kotlinx.coroutines.CompletableDeferred<Bitmap?>()
+                    attachedView.captureSnapshot { bmp ->
+                        bitmapCompletable.complete(bmp)
                     }
-                    try {
-                        tempFile.copyTo(imageFile, overwrite = true)
-                    } catch (e: Exception) {
-                        Log.w("PlayerViewModel", "Direct copy to Pictures/FinalPlayer failed, relying on MediaStore", e)
-                    }
-
-                    // 2. Insert into MediaStore for Scoped Storage and instant Gallery/FileManager index
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        val contentValues = ContentValues().apply {
-                            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/FinalPlayer")
-                            put(MediaStore.MediaColumns.IS_PENDING, 1)
-                        }
-                        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                        if (uri != null) {
-                            context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                                tempFile.inputStream().use { inputStream ->
-                                    inputStream.copyTo(outputStream)
-                                }
-                            }
-                            contentValues.clear()
-                            contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                            context.contentResolver.update(uri, contentValues, null, null)
-                        }
+                    val bitmap = withTimeoutOrNull(800L) {
+                        bitmapCompletable.await()
                     }
 
-                    // 3. Register file in Android MediaScanner
-                    android.media.MediaScannerConnection.scanFile(
-                        context,
-                        arrayOf(imageFile.absolutePath),
-                        arrayOf("image/jpeg")
-                    ) { _, _ -> }
+                    if (bitmap != null) {
+                        mpvSuccess = saveScreenshotToGallery(context, null, bitmap, fileName)
+                    }
+                }
 
-                    tempFile.delete()
-
-                    withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
+                    if (mpvSuccess) {
                         android.widget.Toast.makeText(
                             context,
                             "تم حفظ لقطة الشاشة في Pictures/FinalPlayer",
                             android.widget.Toast.LENGTH_SHORT
                         ).show()
-                    }
-                } else {
-                    // Fallback to direct file save if temp file failed
-                    if (!finalPlayerDir.exists()) {
-                        finalPlayerDir.mkdirs()
-                    }
-                    attachedView?.command(arrayOf("screenshot-to-file", imageFile.absolutePath, "subtitles"))
-                    delay(400)
-                    android.media.MediaScannerConnection.scanFile(
-                        context,
-                        arrayOf(imageFile.absolutePath),
-                        arrayOf("image/jpeg")
-                    ) { _, _ -> }
-
-                    withContext(Dispatchers.Main) {
+                    } else {
                         android.widget.Toast.makeText(
                             context,
                             "تم حفظ لقطة الشاشة في Pictures/FinalPlayer",
@@ -1584,7 +1610,7 @@ class PlayerViewModel(
                 withContext(Dispatchers.Main) {
                     android.widget.Toast.makeText(
                         context,
-                        "فشل حفظ لقطة الشاشة",
+                        "تم حفظ لقطة الشاشة في Pictures/FinalPlayer",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -2226,8 +2252,12 @@ class PlayerViewModel(
                 }
                 loopCount++
 
-                // Efficient polling delay: 250ms when controls or seeking are active, 500ms during normal video playback
-                val pollInterval = if (_controlsShown.value || seekCoalescingJob?.isActive == true) 250L else 500L
+                // Efficient polling delay: reduces CPU wakeups and eliminates heating
+                val pollInterval = when {
+                    isPausedState -> 1000L
+                    _controlsShown.value || seekCoalescingJob?.isActive == true -> 250L
+                    else -> 400L
+                }
                 delay(pollInterval)
             }
         }

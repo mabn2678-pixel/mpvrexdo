@@ -141,7 +141,9 @@ class MPVController(private val context: Context) {
         pollingJob = scope.launch {
             while (isActive) {
                 updateStateFromView()
-                delay(250)
+                val isPlaying = _playerState.value.isPlaying
+                val delayTime = if (isPlaying) 350L else 1000L
+                delay(delayTime)
             }
         }
     }
