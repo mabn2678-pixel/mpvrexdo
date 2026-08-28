@@ -115,21 +115,6 @@ class HomeViewModel(
         observeFoldersAndSort()
         registerMediaStoreObserver()
         refreshVideos()
-        startPeriodicScan()
-    }
-
-    private fun startPeriodicScan() {
-        periodicScanJob?.cancel()
-        periodicScanJob = viewModelScope.launch {
-            while (isActive) {
-                kotlinx.coroutines.delay(15_000L)
-                try {
-                    scanForVideosUseCase()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
     }
 
     private fun registerMediaStoreObserver() {

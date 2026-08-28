@@ -142,7 +142,7 @@ class MPVController(private val context: Context) {
             while (isActive) {
                 updateStateFromView()
                 val isPlaying = _playerState.value.isPlaying
-                val delayTime = if (isPlaying) 350L else 1000L
+                val delayTime = if (isPlaying) 1000L else 2000L
                 delay(delayTime)
             }
         }

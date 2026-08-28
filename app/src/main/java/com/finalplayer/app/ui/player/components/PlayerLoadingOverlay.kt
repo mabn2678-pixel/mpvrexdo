@@ -61,15 +61,21 @@ fun PlayerLoadingOverlay(
     modifier: Modifier = Modifier
 ) {
     var isVisible by remember { mutableStateOf(true) }
+    var isCompletelyFinished by remember { mutableStateOf(false) }
 
     LaunchedEffect(isPipMode) {
         if (isPipMode) {
             isVisible = false
+            isCompletelyFinished = true
             return@LaunchedEffect
         }
         delay(displayTimeMs)
         isVisible = false
+        delay(450L)
+        isCompletelyFinished = true
     }
+
+    if (isCompletelyFinished || isPipMode) return
 
     AnimatedVisibility(
         visible = isVisible && !isPipMode,

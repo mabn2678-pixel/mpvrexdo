@@ -410,7 +410,7 @@ class PlayerViewModel(
         autoSaveProgressJob?.cancel()
         autoSaveProgressJob = viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
-                delay(3000)
+                delay(30000L) // 30 seconds interval to eliminate constant disk I/O and CPU wakeups
                 saveCurrentProgressNow()
             }
         }
@@ -1478,6 +1478,8 @@ class PlayerViewModel(
         setVideoZoom(newZoom)
     }
 
+    private var isTakingScreenshot = false
+
     private suspend fun saveScreenshotToGallery(
         context: Context,
         imageBytes: ByteArray?,
@@ -1485,29 +1487,8 @@ class PlayerViewModel(
         fileName: String
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                ?: File("/storage/emulated/0/Pictures")
-            val finalPlayerDir = File(picturesDir, "FinalPlayer")
-            if (!finalPlayerDir.exists()) {
-                finalPlayerDir.mkdirs()
-            }
-            val imageFile = File(finalPlayerDir, fileName)
-
-            // 1. Direct file write to /storage/emulated/0/Pictures/FinalPlayer/
-            try {
-                if (imageBytes != null && imageBytes.isNotEmpty()) {
-                    imageFile.writeBytes(imageBytes)
-                } else if (bitmap != null) {
-                    java.io.FileOutputStream(imageFile).use { out ->
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w("PlayerViewModel", "Direct filesystem write failed: ${e.message}")
-            }
-
-            // 2. Insert into Android MediaStore so Gallery & File Manager + recognize Pictures/FinalPlayer instantly
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+ (Q+): Single insert via MediaStore into Pictures/FinalPlayer
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
@@ -1526,18 +1507,33 @@ class PlayerViewModel(
                     contentValues.clear()
                     contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
                     context.contentResolver.update(uri, contentValues, null, null)
+                    return@withContext true
                 }
             }
 
-            // 3. Scan file with MediaScannerConnection for all Android versions
+            // Android 9 and older: Direct file write to /storage/emulated/0/Pictures/FinalPlayer/ and scan
+            val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                ?: File("/storage/emulated/0/Pictures")
+            val finalPlayerDir = File(picturesDir, "FinalPlayer")
+            if (!finalPlayerDir.exists()) {
+                finalPlayerDir.mkdirs()
+            }
+            val imageFile = File(finalPlayerDir, fileName)
+
+            if (imageBytes != null && imageBytes.isNotEmpty()) {
+                imageFile.writeBytes(imageBytes)
+            } else if (bitmap != null) {
+                java.io.FileOutputStream(imageFile).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                }
+            }
+
             android.media.MediaScannerConnection.scanFile(
                 context,
                 arrayOf(imageFile.absolutePath),
-                arrayOf("image/jpeg")
-            ) { path, uri ->
-                Log.d("PlayerViewModel", "Screenshot scanned to MediaStore: $path -> $uri")
-            }
-
+                arrayOf("image/jpeg"),
+                null
+            )
             true
         } catch (e: Exception) {
             Log.e("PlayerViewModel", "Error saving screenshot to gallery", e)
@@ -1546,6 +1542,9 @@ class PlayerViewModel(
     }
 
     fun takeScreenshot(context: Context) {
+        if (isTakingScreenshot) return
+        isTakingScreenshot = true
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val timeStamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
@@ -1614,6 +1613,9 @@ class PlayerViewModel(
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                 }
+            } finally {
+                delay(500)
+                isTakingScreenshot = false
             }
         }
     }
@@ -2254,9 +2256,9 @@ class PlayerViewModel(
 
                 // Efficient polling delay: reduces CPU wakeups and eliminates heating
                 val pollInterval = when {
-                    isPausedState -> 1000L
-                    _controlsShown.value || seekCoalescingJob?.isActive == true -> 250L
-                    else -> 400L
+                    isPausedState -> 1500L
+                    _controlsShown.value || seekCoalescingJob?.isActive == true -> 300L
+                    else -> 1000L
                 }
                 delay(pollInterval)
             }

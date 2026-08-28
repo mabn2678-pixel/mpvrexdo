@@ -102,16 +102,18 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("profile", "fast")
 
             // Zero-copy Hardware Decoding: mediacodec renders directly to Surface without CPU copying
-            lib.setOptionString("hwdec", "mediacodec,mediacodec-copy,auto-safe")
+            lib.setOptionString("hwdec", "mediacodec")
             lib.setOptionString("hwdec-codecs", "all")
 
-            // Video output setup
+            // Audio & Video output setup
+            lib.setOptionString("ao", "audiotrack,opensles")
             lib.setOptionString("vo", "gpu")
             lib.setOptionString("gpu-context", "android")
+            lib.setOptionString("gpu-shader-cache-dir", context.cacheDir.absolutePath)
 
             // Optimization for performance & thermal efficiency
             lib.setOptionString("vd-lavc-dr", "yes")
-            lib.setOptionString("vd-lavc-threads", "4")
+            lib.setOptionString("vd-lavc-threads", "2")
             lib.setOptionString("hr-seek", "no")
             lib.setOptionString("hr-seek-framedrop", "yes")
             lib.setOptionString("video-sync", "audio")
@@ -125,8 +127,9 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("opengl-pbo", "yes")
 
             // Buffer & caching options for long video playback
-            lib.setOptionString("demuxer-max-bytes", "32MiB")
-            lib.setOptionString("demuxer-max-back-bytes", "16MiB")
+            lib.setOptionString("demuxer-max-bytes", "16MiB")
+            lib.setOptionString("demuxer-max-back-bytes", "8MiB")
+            lib.setOptionString("demuxer-readahead-secs", "5.0")
 
             // Screenshot directory setup
             val screenshotDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
