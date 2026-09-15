@@ -28,36 +28,7 @@ class VideoRepositoryImpl(
 ) : VideoRepository {
 
     private fun getVaultDirForFile(context: android.content.Context, file: File?): File {
-        val externalDirs = try {
-            context.getExternalFilesDirs(null).filterNotNull()
-        } catch (_: Exception) {
-            emptyList()
-        }
-
-        if (file != null && file.exists()) {
-            val filePath = file.absolutePath
-            for (extDir in externalDirs) {
-                val extRoot = extDir.absolutePath.substringBefore("/Android/")
-                if (filePath.startsWith(extRoot)) {
-                    val vDir = File(extDir, ".secure_vault")
-                    if (!vDir.exists()) vDir.mkdirs()
-                    val nomedia = File(vDir, ".nomedia")
-                    if (!nomedia.exists()) {
-                        try { nomedia.createNewFile() } catch (_: Exception) {}
-                    }
-                    return vDir
-                }
-            }
-        }
-
-        val fallbackBase = context.getExternalFilesDir(null) ?: context.filesDir
-        val vDir = File(fallbackBase, ".secure_vault")
-        if (!vDir.exists()) vDir.mkdirs()
-        val nomedia = File(vDir, ".nomedia")
-        if (!nomedia.exists()) {
-            try { nomedia.createNewFile() } catch (_: Exception) {}
-        }
-        return vDir
+        return FileOperationsUtil.getVaultDir(context, file)
     }
 
     override fun getAllVideos(): Flow<List<VideoItem>> {
@@ -178,17 +149,18 @@ class VideoRepositoryImpl(
     override suspend fun hideVideosToSecureFolder(videos: List<VideoItem>, context: android.content.Context): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             for (video in videos) {
-                val originalFile = FileOperationsUtil.getVideoFile(video)
+                val originalFile = FileOperationsUtil.getVideoFile(video, context)
                 val originalPathStr = if (originalFile.exists()) originalFile.absolutePath else if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
                 
-                val vaultDir = getVaultDirForFile(context, if (originalFile.exists()) originalFile else null)
+                val vaultDir = FileOperationsUtil.getVaultDir(context, if (originalFile.exists()) originalFile else null)
                 val safeFileName = (if (originalFile.exists()) originalFile.name else video.title).replace(Regex("[^a-zA-Z0-9._-]"), "_")
                 val safeId = video.id.replace(Regex("[^a-zA-Z0-9_]"), "_")
                 val vaultFile = File(vaultDir, "${safeId}_$safeFileName")
 
                 var finalVaultPath = originalPathStr
+                var moved = false
                 if (originalFile.exists()) {
-                    val moved = if (originalFile.renameTo(vaultFile)) {
+                    moved = if (originalFile.renameTo(vaultFile)) {
                         true
                     } else {
                         try {
@@ -203,18 +175,41 @@ class VideoRepositoryImpl(
                             false
                         }
                     }
+                } else if (video.uri.startsWith("content://")) {
+                    try {
+                        val inputStream = context.contentResolver.openInputStream(android.net.Uri.parse(video.uri))
+                        if (inputStream != null) {
+                            inputStream.use { input ->
+                                FileOutputStream(vaultFile).use { output ->
+                                    input.copyTo(output, bufferSize = 128 * 1024)
+                                }
+                            }
+                            try {
+                                context.contentResolver.delete(android.net.Uri.parse(video.uri), null, null)
+                            } catch (_: Exception) {}
+                            moved = true
+                        }
+                    } catch (_: Exception) {}
+                }
 
-                    if (moved && vaultFile.exists()) {
-                        finalVaultPath = vaultFile.absolutePath
-                        try {
+                if (moved && vaultFile.exists()) {
+                    finalVaultPath = vaultFile.absolutePath
+                    try {
+                        if (originalFile.exists()) {
                             android.media.MediaScannerConnection.scanFile(
                                 context,
-                                arrayOf(originalFile.absolutePath, vaultFile.absolutePath),
+                                arrayOf(originalFile.absolutePath),
                                 null,
                                 null
                             )
-                        } catch (_: Exception) {}
-                    }
+                        }
+                        android.media.MediaScannerConnection.scanFile(
+                            context,
+                            arrayOf(vaultFile.absolutePath),
+                            null,
+                            null
+                        )
+                    } catch (_: Exception) {}
                 }
 
                 val actualSize = if (File(finalVaultPath).exists()) File(finalVaultPath).length() else video.sizeBytes

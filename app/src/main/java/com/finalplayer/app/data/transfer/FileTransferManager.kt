@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -67,7 +68,7 @@ class FileTransferManager(
         }
 
         val totalBytes = videos.sumOf {
-            val f = FileOperationsUtil.getVideoFile(it)
+            val f = FileOperationsUtil.getVideoFile(it, context)
             if (f.exists()) f.length() else it.sizeBytes
         }.coerceAtLeast(1L)
 
@@ -116,8 +117,8 @@ class FileTransferManager(
                         for ((index, video) in videos.withIndex()) {
                             if (!isActive) throw CancellationException("Transfer cancelled by user")
 
-                            val sourceFile = FileOperationsUtil.getVideoFile(video)
-                            val targetFile = File(targetDest, sourceFile.name.ifBlank { video.title })
+                            val sourceFile = FileOperationsUtil.getVideoFile(video, context)
+                            val targetFile = File(targetDest, if (sourceFile.exists()) sourceFile.name else video.title)
 
                             _transferState.value = _transferState.value?.copy(
                                 currentFileIndex = index + 1,
@@ -125,11 +126,17 @@ class FileTransferManager(
                             )
                             updateNotification()
 
-                            val fileCopied = copyStreamWithProgress(
-                                src = sourceFile,
-                                dst = targetFile,
-                                onBytesChunk = { bytesRead ->
-                                    totalBytesProcessed += bytesRead
+                            val fileSize = if (sourceFile.exists()) sourceFile.length() else video.sizeBytes
+
+                            var moved = false
+                            if (type == TransferType.MOVE && sourceFile.exists()) {
+                                moved = try {
+                                    sourceFile.renameTo(targetFile)
+                                } catch (_: Exception) {
+                                    false
+                                }
+                                if (moved && targetFile.exists()) {
+                                    totalBytesProcessed += fileSize
                                     val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
                                     _transferState.value = _transferState.value?.copy(
                                         transferredBytes = totalBytesProcessed,
@@ -137,16 +144,60 @@ class FileTransferManager(
                                         transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
                                     )
                                     updateNotification()
+                                    FileOperationsUtil.scanFile(context, sourceFile)
                                 }
-                            )
-
-                            if (!fileCopied) {
-                                throw Exception("فشل نقل/نسخ الملف: ${video.title}")
                             }
 
-                            if (type == TransferType.MOVE) {
-                                sourceFile.delete()
-                                FileOperationsUtil.scanFile(context, sourceFile)
+                            if (!moved) {
+                                val fileCopied = if (sourceFile.exists()) {
+                                    copyStreamWithProgress(
+                                        src = sourceFile,
+                                        dst = targetFile,
+                                        onBytesChunk = { bytesRead ->
+                                            totalBytesProcessed += bytesRead
+                                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                                            _transferState.value = _transferState.value?.copy(
+                                                transferredBytes = totalBytesProcessed,
+                                                percentage = pct,
+                                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                            )
+                                            updateNotification()
+                                        }
+                                    )
+                                } else if (video.uri.startsWith("content://")) {
+                                    copyUriStreamWithProgress(
+                                        uri = Uri.parse(video.uri),
+                                        dst = targetFile,
+                                        onBytesChunk = { bytesRead ->
+                                            totalBytesProcessed += bytesRead
+                                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                                            _transferState.value = _transferState.value?.copy(
+                                                transferredBytes = totalBytesProcessed,
+                                                percentage = pct,
+                                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                            )
+                                            updateNotification()
+                                        }
+                                    )
+                                } else {
+                                    false
+                                }
+
+                                if (!fileCopied || !targetFile.exists()) {
+                                    throw Exception("فشل نقل/نسخ الملف: ${video.title}")
+                                }
+
+                                if (type == TransferType.MOVE) {
+                                    if (sourceFile.exists()) {
+                                        sourceFile.delete()
+                                        FileOperationsUtil.scanFile(context, sourceFile)
+                                    }
+                                    if (video.uri.startsWith("content://")) {
+                                        try {
+                                            context.contentResolver.delete(Uri.parse(video.uri), null, null)
+                                        } catch (_: Exception) {}
+                                    }
+                                }
                             }
 
                             FileOperationsUtil.scanFile(context, targetFile)
@@ -171,13 +222,17 @@ class FileTransferManager(
                     }
 
                     TransferType.HIDE_TO_SECURE -> {
-                        val vaultDir = File(context.filesDir, "secure_vault").apply { if (!exists()) mkdirs() }
                         for ((index, video) in videos.withIndex()) {
                             if (!isActive) throw CancellationException("Transfer cancelled by user")
 
-                            val sourceFile = FileOperationsUtil.getVideoFile(video)
-                            val originalPathStr = sourceFile.absolutePath.ifBlank { video.uri }
-                            val vaultTargetFile = File(vaultDir, ".sec_${video.id}_${System.currentTimeMillis()}_$index.dat")
+                            val sourceFile = FileOperationsUtil.getVideoFile(video, context)
+                            val vaultDir = FileOperationsUtil.getVaultDir(context, if (sourceFile.exists()) sourceFile else null)
+
+                            val rawName = if (sourceFile.exists()) sourceFile.name else video.title
+                            val safeExt = rawName.substringAfterLast('.', "mp4")
+                            val safeId = video.id.replace(Regex("[^a-zA-Z0-9_]"), "_")
+                            val vaultTargetFile = File(vaultDir, ".sec_${safeId}_${System.currentTimeMillis()}_$index.$safeExt")
+                            val originalPathStr = if (sourceFile.exists()) sourceFile.absolutePath else if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
 
                             _transferState.value = _transferState.value?.copy(
                                 currentFileIndex = index + 1,
@@ -185,11 +240,18 @@ class FileTransferManager(
                             )
                             updateNotification()
 
-                            val fileCopied = copyStreamWithProgress(
-                                src = sourceFile,
-                                dst = vaultTargetFile,
-                                onBytesChunk = { bytesRead ->
-                                    totalBytesProcessed += bytesRead
+                            val fileSize = if (sourceFile.exists()) sourceFile.length() else video.sizeBytes
+
+                            // 1. Fast atomic rename on the same storage volume (0ms, no memory/CPU overhead)
+                            var moved = false
+                            if (sourceFile.exists()) {
+                                moved = try {
+                                    sourceFile.renameTo(vaultTargetFile)
+                                } catch (_: Exception) {
+                                    false
+                                }
+                                if (moved && vaultTargetFile.exists()) {
+                                    totalBytesProcessed += fileSize
                                     val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
                                     _transferState.value = _transferState.value?.copy(
                                         transferredBytes = totalBytesProcessed,
@@ -197,15 +259,62 @@ class FileTransferManager(
                                         transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
                                     )
                                     updateNotification()
+                                    FileOperationsUtil.scanFile(context, sourceFile)
                                 }
-                            )
-
-                            if (!fileCopied) {
-                                throw Exception("فشل تشفير ونقل الملف إلى المجلد الآمن: ${video.title}")
                             }
 
-                            sourceFile.delete()
-                            FileOperationsUtil.scanFile(context, sourceFile)
+                            // 2. Stream copy fallback if cross-volume or rename restricted
+                            if (!moved) {
+                                val fileCopied = if (sourceFile.exists()) {
+                                    copyStreamWithProgress(
+                                        src = sourceFile,
+                                        dst = vaultTargetFile,
+                                        onBytesChunk = { bytesRead ->
+                                            totalBytesProcessed += bytesRead
+                                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                                            _transferState.value = _transferState.value?.copy(
+                                                transferredBytes = totalBytesProcessed,
+                                                percentage = pct,
+                                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                            )
+                                            updateNotification()
+                                        }
+                                    )
+                                } else if (video.uri.startsWith("content://")) {
+                                    copyUriStreamWithProgress(
+                                        uri = Uri.parse(video.uri),
+                                        dst = vaultTargetFile,
+                                        onBytesChunk = { bytesRead ->
+                                            totalBytesProcessed += bytesRead
+                                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                                            _transferState.value = _transferState.value?.copy(
+                                                transferredBytes = totalBytesProcessed,
+                                                percentage = pct,
+                                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                            )
+                                            updateNotification()
+                                        }
+                                    )
+                                } else {
+                                    false
+                                }
+
+                                if (!fileCopied || !vaultTargetFile.exists() || vaultTargetFile.length() == 0L) {
+                                    vaultTargetFile.delete()
+                                    throw Exception("فشل تشفير ونقل الملف إلى المجلد الآمن: ${video.title}")
+                                }
+
+                                if (sourceFile.exists()) {
+                                    sourceFile.delete()
+                                    FileOperationsUtil.scanFile(context, sourceFile)
+                                }
+                                if (video.uri.startsWith("content://")) {
+                                    try {
+                                        context.contentResolver.delete(Uri.parse(video.uri), null, null)
+                                    } catch (_: Exception) {}
+                                }
+                            }
+
                             FileOperationsUtil.scanFile(context, vaultTargetFile)
 
                             val actualSize = if (vaultTargetFile.exists()) vaultTargetFile.length() else video.sizeBytes
@@ -246,7 +355,8 @@ class FileTransferManager(
                             if (!parent.exists()) {
                                 parent.mkdirs()
                             }
-                            val destinationFile = File(parent, originalTargetFile.name.removePrefix("."))
+                            val cleanName = originalTargetFile.name.removePrefix(".")
+                            val destinationFile = File(parent, cleanName)
 
                             _transferState.value = _transferState.value?.copy(
                                 currentFileIndex = index + 1,
@@ -254,11 +364,18 @@ class FileTransferManager(
                             )
                             updateNotification()
 
-                            val fileRestored = copyStreamWithProgress(
-                                src = vaultFile,
-                                dst = destinationFile,
-                                onBytesChunk = { bytesRead ->
-                                    totalBytesProcessed += bytesRead
+                            val fileSize = if (vaultFile.exists()) vaultFile.length() else video.sizeBytes
+
+                            // 1. Fast atomic rename
+                            var restored = false
+                            if (vaultFile.exists()) {
+                                restored = try {
+                                    vaultFile.renameTo(destinationFile)
+                                } catch (_: Exception) {
+                                    false
+                                }
+                                if (restored && destinationFile.exists()) {
+                                    totalBytesProcessed += fileSize
                                     val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
                                     _transferState.value = _transferState.value?.copy(
                                         transferredBytes = totalBytesProcessed,
@@ -266,16 +383,37 @@ class FileTransferManager(
                                         transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
                                     )
                                     updateNotification()
+                                    FileOperationsUtil.scanFile(context, vaultFile)
                                 }
-                            )
-
-                            if (!fileRestored) {
-                                throw Exception("فشل استعادة الملف: ${video.title}")
                             }
 
-                            vaultFile.delete()
+                            // 2. Fallback stream copy
+                            if (!restored) {
+                                val fileRestored = copyStreamWithProgress(
+                                    src = vaultFile,
+                                    dst = destinationFile,
+                                    onBytesChunk = { bytesRead ->
+                                        totalBytesProcessed += bytesRead
+                                        val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                                        _transferState.value = _transferState.value?.copy(
+                                            transferredBytes = totalBytesProcessed,
+                                            percentage = pct,
+                                            transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                                        )
+                                        updateNotification()
+                                    }
+                                )
+
+                                if (!fileRestored || !destinationFile.exists()) {
+                                    destinationFile.delete()
+                                    throw Exception("فشل استعادة الملف: ${video.title}")
+                                }
+
+                                vaultFile.delete()
+                                FileOperationsUtil.scanFile(context, vaultFile)
+                            }
+
                             FileOperationsUtil.scanFile(context, destinationFile)
-                            FileOperationsUtil.scanFile(context, vaultFile)
 
                             val videoEntity = VideoEntity(
                                 id = entity?.videoId ?: video.id,
@@ -351,6 +489,36 @@ class FileTransferManager(
         if (!src.exists()) return@withContext false
         try {
             FileInputStream(src).use { input ->
+                FileOutputStream(dst).use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        if (!isActive) throw CancellationException("Cancelled")
+                        output.write(buffer, 0, bytesRead)
+                        onBytesChunk(bytesRead)
+                    }
+                    output.flush()
+                }
+            }
+            true
+        } catch (e: CancellationException) {
+            dst.delete()
+            throw e
+        } catch (e: Exception) {
+            e.printStackTrace()
+            dst.delete()
+            false
+        }
+    }
+
+    private suspend fun copyUriStreamWithProgress(
+        uri: Uri,
+        dst: File,
+        onBytesChunk: (Int) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return@withContext false
+            inputStream.use { input ->
                 FileOutputStream(dst).use { output ->
                     val buffer = ByteArray(64 * 1024)
                     var bytesRead: Int

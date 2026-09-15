@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Environment
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import android.provider.MediaStore
 import com.finalplayer.app.domain.model.VideoItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -367,7 +368,93 @@ object FileOperationsUtil {
         }
     }
 
-    fun getVideoFile(videoItem: VideoItem): File {
+    fun getVideoFile(videoItem: VideoItem, context: Context? = null): File {
+        // 1. Direct path check if URI is an absolute file path
+        if (videoItem.uri.startsWith("/")) {
+            val f = File(videoItem.uri)
+            if (f.exists()) return f
+        }
+        if (videoItem.uri.startsWith("file://")) {
+            val path = Uri.parse(videoItem.uri).path
+            if (!path.isNullOrBlank()) {
+                val f = File(path)
+                if (f.exists()) return f
+            }
+        }
+
+        // 2. Direct check in folderPath if it's an absolute path
+        if (videoItem.folderPath.isNotBlank() && videoItem.folderPath.startsWith("/")) {
+            val folder = File(videoItem.folderPath)
+            val direct = File(folder, videoItem.title)
+            if (direct.exists()) return direct
+
+            val withMp4 = File(folder, "${videoItem.title}.mp4")
+            if (withMp4.exists()) return withMp4
+
+            if (folder.exists() && folder.isDirectory) {
+                val match = folder.listFiles()?.firstOrNull {
+                    it.name.equals(videoItem.title, ignoreCase = true) ||
+                    it.nameWithoutExtension.equals(videoItem.title, ignoreCase = true)
+                }
+                if (match != null && match.exists()) return match
+            }
+        }
+
+        // 3. MediaStore lookup if content URI and context is available
+        if (context != null && videoItem.uri.startsWith("content://")) {
+            try {
+                val uri = Uri.parse(videoItem.uri)
+                val projection = arrayOf(MediaStore.Video.Media.DATA)
+                context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idx = cursor.getColumnIndex(MediaStore.Video.Media.DATA)
+                        if (idx >= 0) {
+                            val path = cursor.getString(idx)
+                            if (!path.isNullOrBlank()) {
+                                val f = File(path)
+                                if (f.exists()) return f
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // 4. Check if video ID is a path
+        if (videoItem.id.startsWith("/")) {
+            val f = File(videoItem.id)
+            if (f.exists()) return f
+        }
+
+        // 5. Look in common media directories for the file
+        val candidateDirs = mutableListOf(
+            File("/storage/emulated/0/Download/VideoDownloader"),
+            File("/storage/emulated/0/VideoDownloader"),
+            File("/storage/emulated/0/Download"),
+            File("/storage/emulated/0/Downloads"),
+            File("/storage/emulated/0/Movies"),
+            File("/storage/emulated/0/Movies/VideoDownloader"),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+        )
+        if (videoItem.folderPath.isNotBlank() && !videoItem.folderPath.startsWith("/")) {
+            candidateDirs.add(0, File("/storage/emulated/0", videoItem.folderPath))
+            candidateDirs.add(1, File("/storage/emulated/0/Download", videoItem.folderPath))
+        }
+
+        for (dir in candidateDirs.distinct()) {
+            if (dir.exists() && dir.isDirectory) {
+                val direct = File(dir, videoItem.title)
+                if (direct.exists()) return direct
+                val match = dir.listFiles()?.firstOrNull {
+                    it.name.equals(videoItem.title, ignoreCase = true) ||
+                    it.nameWithoutExtension.equals(videoItem.title, ignoreCase = true)
+                }
+                if (match != null && match.exists()) return match
+            }
+        }
+
+        // Fallback default
         return if (videoItem.folderPath.isNotBlank() && !videoItem.uri.startsWith("/")) {
             File(videoItem.folderPath, videoItem.title)
         } else if (videoItem.uri.startsWith("/")) {
@@ -375,6 +462,39 @@ object FileOperationsUtil {
         } else {
             File(videoItem.folderPath, videoItem.title)
         }
+    }
+
+    fun getVaultDir(context: Context, sourceFile: File? = null): File {
+        val externalDirs = try {
+            context.getExternalFilesDirs(null).filterNotNull()
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        if (sourceFile != null && sourceFile.exists()) {
+            val filePath = sourceFile.absolutePath
+            for (extDir in externalDirs) {
+                val extRoot = extDir.absolutePath.substringBefore("/Android/")
+                if (filePath.startsWith(extRoot)) {
+                    val vDir = File(extDir, ".secure_vault")
+                    if (!vDir.exists()) vDir.mkdirs()
+                    val nomedia = File(vDir, ".nomedia")
+                    if (!nomedia.exists()) {
+                        try { nomedia.createNewFile() } catch (_: Exception) {}
+                    }
+                    return vDir
+                }
+            }
+        }
+
+        val fallbackBase = context.getExternalFilesDir(null) ?: context.filesDir
+        val vDir = File(fallbackBase, ".secure_vault")
+        if (!vDir.exists()) vDir.mkdirs()
+        val nomedia = File(vDir, ".nomedia")
+        if (!nomedia.exists()) {
+            try { nomedia.createNewFile() } catch (_: Exception) {}
+        }
+        return vDir
     }
 
     fun getSongFile(song: com.finalplayer.app.music.data.model.Song): File {
