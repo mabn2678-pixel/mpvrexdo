@@ -113,6 +113,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import com.finalplayer.app.ui.player.Decoder
 import com.finalplayer.app.ui.player.Sheets
 import com.finalplayer.app.ui.player.controls.components.sheets.AudioTracksSheet
+import com.finalplayer.app.ui.player.controls.components.sheets.ChaptersBottomSheet
 import com.finalplayer.app.ui.player.controls.components.sheets.ChaptersSheet
 import com.finalplayer.app.ui.player.controls.components.sheets.DecoderSheet
 import com.finalplayer.app.ui.player.controls.components.sheets.MoreSheet
@@ -120,6 +121,7 @@ import com.finalplayer.app.ui.player.controls.components.sheets.PlaybackSpeedShe
 import com.finalplayer.app.ui.player.controls.components.sheets.SubtitleSettingsPanel
 import com.finalplayer.app.ui.player.controls.components.sheets.SubtitlesSheet
 import com.finalplayer.app.ui.player.controls.components.sheets.TrackNode
+import com.finalplayer.app.player.VideoChapter
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -180,10 +182,13 @@ fun PlayerControls(
     currentDecoder: Decoder = Decoder.HW_PLUS,
     playbackSpeed: Float = 1.0f,
     chapters: List<ChapterNode> = emptyList(),
+    chaptersList: List<VideoChapter> = emptyList(),
     currentChapterIndex: Int? = null,
     sheetShown: Sheets = Sheets.None,
     onOpenSheet: (Sheets) -> Unit = {},
     onCloseSheet: () -> Unit = {},
+    onLoadChapters: () -> Unit = {},
+    onSeekToChapter: (VideoChapter) -> Unit = {},
     onSelectSubtitle: (Int) -> Unit = {},
     onDisableSubtitles: () -> Unit = {},
     onAddExternalSubtitle: (Uri) -> Unit = {},
@@ -232,9 +237,10 @@ fun PlayerControls(
     var dragPositionSeconds by remember { mutableFloatStateOf(0f) }
     var showRemainingTimeText by remember { mutableStateOf(false) }
     var showSleepTimerSheet by remember { mutableStateOf(false) }
+    var showChaptersSheet by remember { mutableStateOf(false) }
     var interactionKey by remember { mutableIntStateOf(0) }
 
-    val isAnySheetOpen = sheetShown !is Sheets.None || showSleepTimerSheet
+    val isAnySheetOpen = sheetShown !is Sheets.None || showSleepTimerSheet || showChaptersSheet
 
     val hideTimeoutMs by layoutPrefs.controlsHideTimeoutMs.asFlow().collectAsState(initial = 3000)
     val gradientOpacity by layoutPrefs.controlsGradientOpacity.asFlow().collectAsState(initial = 0.45f)
@@ -570,7 +576,14 @@ fun PlayerControls(
                                             textDirection = androidx.compose.ui.text.style.TextDirection.Ltr
                                         ),
                                         maxLines = 1,
-                                        softWrap = false
+                                        softWrap = false,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable {
+                                                onLoadChapters()
+                                                showChaptersSheet = true
+                                            }
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
                                     )
 
                                     FinalPlayerSeekbar(
@@ -884,14 +897,25 @@ fun PlayerControls(
             )
         }
         is Sheets.Chapters -> {
-            ChaptersSheet(
-                chapters = chapters,
-                currentChapterIndex = currentChapterIndex,
-                onSeekToChapter = { idx ->
-                    onSelectChapter(idx)
+            val effectiveChapters = chaptersList.ifEmpty {
+                chapters.mapIndexed { idx, ch ->
+                    VideoChapter(
+                        index = idx,
+                        title = ch.title.ifBlank { "الفصل ${idx + 1}" },
+                        timePos = ch.time,
+                        formattedTime = formatTime(ch.time.toFloat())
+                    )
+                }
+            }
+            ChaptersBottomSheet(
+                chapters = effectiveChapters,
+                currentPosSeconds = positionSeconds,
+                onDismiss = onCloseSheet,
+                onChapterClick = { ch ->
+                    onSeekToChapter(ch)
+                    onSelectChapter(ch.index)
                     onCloseSheet()
-                },
-                onDismiss = onCloseSheet
+                }
             )
         }
         is Sheets.More -> {
@@ -984,6 +1008,29 @@ fun PlayerControls(
                     onCancelTimer = {
                         onCancelSleepTimer()
                         showSleepTimerSheet = false
+                    }
+                )
+            }
+
+            if (showChaptersSheet) {
+                val effectiveChapters = chaptersList.ifEmpty {
+                    chapters.mapIndexed { idx, ch ->
+                        VideoChapter(
+                            index = idx,
+                            title = ch.title.ifBlank { "الفصل ${idx + 1}" },
+                            timePos = ch.time,
+                            formattedTime = formatTime(ch.time.toFloat())
+                        )
+                    }
+                }
+                ChaptersBottomSheet(
+                    chapters = effectiveChapters,
+                    currentPosSeconds = positionSeconds,
+                    onDismiss = { showChaptersSheet = false },
+                    onChapterClick = { ch ->
+                        onSeekToChapter(ch)
+                        onSelectChapter(ch.index)
+                        showChaptersSheet = false
                     }
                 )
             }

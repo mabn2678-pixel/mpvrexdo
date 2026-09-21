@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">FinalPlayer</string>
+    <string name="chapters">الفصول</string>
+    <string name="no_chapters">لا توجد فصول في هذا الفيديو</string>
 </resources>

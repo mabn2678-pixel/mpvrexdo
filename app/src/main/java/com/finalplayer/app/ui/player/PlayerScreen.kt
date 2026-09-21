@@ -231,6 +231,7 @@ fun PlayerScreen(
                     android.net.Uri.fromFile(java.io.File(target))
                 }
                 viewModel.onVideoFileLoaded(uri)
+                viewModel.loadChapters()
             }
         }
 
@@ -334,10 +335,13 @@ fun PlayerScreen(
             currentDecoder = currentDecoder,
             playbackSpeed = playbackSpeed,
             chapters = chapters,
+            chaptersList = viewModel.chaptersList,
             currentChapterIndex = currentChapterIndex,
             sheetShown = sheetShown,
             onOpenSheet = { sheet -> viewModel.openSheet(sheet) },
             onCloseSheet = { viewModel.closeSheet() },
+            onLoadChapters = { viewModel.loadChapters() },
+            onSeekToChapter = { chapter -> viewModel.seekToChapter(chapter) },
             onSelectSubtitle = { trackId -> viewModel.toggleSubtitle(trackId) },
             onDisableSubtitles = { viewModel.disableSubtitles() },
             onAddExternalSubtitle = { uri -> viewModel.addSubtitle(uri, context) },

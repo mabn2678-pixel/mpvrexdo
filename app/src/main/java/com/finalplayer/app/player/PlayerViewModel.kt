@@ -63,6 +63,16 @@ import java.io.File
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import kotlin.math.abs
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
+data class VideoChapter(
+    val index: Int,
+    val title: String,
+    val timePos: Double,
+    val formattedTime: String
+)
 
 data class SeekState(
     val targetPositionSec: Float = 0f,
@@ -85,6 +95,78 @@ class PlayerViewModel(
     val decoderPrefs: DecoderPreferences? = null,
     val appearancePrefs: AppearancePreferences? = null
 ) : ViewModel(), KoinComponent {
+
+    var chaptersList by mutableStateOf<List<VideoChapter>>(emptyList())
+        private set
+
+    fun formatTime(seconds: Long): String {
+        val s = seconds.coerceAtLeast(0)
+        val h = s / 3600
+        val m = (s % 3600) / 60
+        val sec = s % 60
+        return if (h > 0) {
+            String.format(java.util.Locale.US, "%d:%02d:%02d", h, m, sec)
+        } else {
+            String.format(java.util.Locale.US, "%02d:%02d", m, sec)
+        }
+    }
+
+    fun loadChapters() {
+        val chapters = mutableListOf<VideoChapter>()
+        try {
+            val count = try {
+                MPVLib.getPropertyInt("chapter-list/count")
+            } catch (_: Throwable) { null }
+                ?: mpvController.getAttachedView()?.getPropertyInt("chapter-list/count")
+                ?: 0
+
+            for (i in 0 until count) {
+                val rawTitle = try {
+                    MPVLib.getPropertyString("chapter-list/$i/title")
+                } catch (_: Throwable) { null }
+                    ?: mpvController.getAttachedView()?.getPropertyString("chapter-list/$i/title")
+                    ?: "الفصل ${i + 1}"
+                val title = if (rawTitle.isBlank()) "الفصل ${i + 1}" else rawTitle
+
+                val time = try {
+                    MPVLib.getPropertyDouble("chapter-list/$i/time")
+                } catch (_: Throwable) { null }
+                    ?: mpvController.getAttachedView()?.getPropertyDouble("chapter-list/$i/time")
+                    ?: 0.0
+
+                val formatted = formatTime(time.toLong())
+                chapters.add(VideoChapter(i, title, time, formatted))
+            }
+
+            if (chapters.isEmpty()) {
+                val mpvChapters = mpvController.getChapters()
+                mpvChapters.forEachIndexed { i, node ->
+                    val title = if (node.title.isBlank()) "الفصل ${i + 1}" else node.title
+                    chapters.add(VideoChapter(i, title, node.time, formatTime(node.time.toLong())))
+                }
+            }
+
+            chaptersList = chapters
+            _chapters.value = chapters.map { ChapterNode(title = it.title, time = it.timePos) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun seekToChapter(chapter: VideoChapter) {
+        seekToChapterTime(chapter.timePos)
+        _currentChapterIndex.value = chapter.index
+    }
+
+    fun seekToChapterTime(timePos: Double) {
+        try {
+            MPVLib.setPropertyDouble("time-pos", timePos)
+        } catch (_: Throwable) {}
+        try {
+            mpvController.getAttachedView()?.setPropertyDouble("time-pos", timePos)
+        } catch (_: Throwable) {}
+        seekTo(timePos.toFloat())
+    }
 
     private val context: Context by inject()
     private val playbackRepository: PlaybackRepository by inject()
@@ -1762,6 +1844,7 @@ class PlayerViewModel(
             )
             trackSelector?.onFileLoaded(hasSaved, mpvController)
             updateTracks()
+            loadChapters()
         }
     }
 
