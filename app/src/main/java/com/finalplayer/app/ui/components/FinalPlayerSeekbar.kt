@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.finalplayer.app.data.preferences.AppearancePreferences
 import com.finalplayer.app.data.preferences.PlayerLayoutPreferences
 import com.finalplayer.app.data.preferences.PlayerPreferences
+import com.finalplayer.app.player.VideoChapter
 import org.koin.compose.koinInject
 
 @Composable
@@ -40,6 +41,7 @@ fun FinalPlayerSeekbar(
     position: Float,
     duration: Float,
     buffered: Float = 0f,
+    chapters: List<VideoChapter> = emptyList(),
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: (Float) -> Unit,
     modifier: Modifier = Modifier,
@@ -114,6 +116,29 @@ fun FinalPlayerSeekbar(
                     .clip(RoundedCornerShape(barHeight / 2))
                     .background(progressColor)
             )
+        }
+
+        // فواصل الفصول بنمط يوتيوب (Chapter Gaps / Dividers)
+        if (chapters.size > 1 && duration > 0f) {
+            chapters.forEachIndexed { idx, ch ->
+                if (idx > 0 && ch.timePos > 0.0 && ch.timePos < duration) {
+                    val chapterFraction = (ch.timePos.toFloat() / duration).coerceIn(0.005f, 0.995f)
+                    Box(
+                        modifier = Modifier
+                            .align(startAlignment)
+                            .fillMaxWidth(chapterFraction)
+                            .wrapContentWidth(thumbAlignment)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 2.5.dp, height = barHeight + 3.dp)
+                                .align(Alignment.Center)
+                                .clip(RoundedCornerShape(1.dp))
+                                .background(Color.Black.copy(alpha = 0.95f))
+                        )
+                    }
+                }
+            }
         }
 
         // Thumb دائري

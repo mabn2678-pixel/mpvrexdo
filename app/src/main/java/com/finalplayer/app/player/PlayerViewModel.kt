@@ -2327,8 +2327,19 @@ class PlayerViewModel(
                     if (!_isLongPressSpeedActive.value) {
                         _playbackSpeed.value = mpvController.getPlaybackSpeed()
                     }
-                    _chapters.value = mpvController.getChapters()
+                    val polledChapters = mpvController.getChapters()
+                    _chapters.value = polledChapters
                     _currentChapterIndex.value = mpvController.getCurrentChapterIndex()
+                    if (chaptersList.isEmpty() && polledChapters.isNotEmpty()) {
+                        chaptersList = polledChapters.mapIndexed { idx, ch ->
+                            VideoChapter(
+                                index = idx,
+                                title = ch.title.ifBlank { "الفصل ${idx + 1}" },
+                                timePos = ch.time,
+                                formattedTime = formatTime(ch.time.toLong())
+                            )
+                        }
+                    }
 
                     val aspect = mpvController.getAttachedView()?.videoAspect
                     if (aspect != null && aspect > 0.05 && _videoAspect.value != aspect) {

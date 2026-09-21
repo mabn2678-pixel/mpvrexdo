@@ -17,6 +17,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -113,7 +114,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import com.finalplayer.app.ui.player.Decoder
 import com.finalplayer.app.ui.player.Sheets
 import com.finalplayer.app.ui.player.controls.components.sheets.AudioTracksSheet
-import com.finalplayer.app.ui.player.controls.components.sheets.ChaptersBottomSheet
 import com.finalplayer.app.ui.player.controls.components.sheets.ChaptersSheet
 import com.finalplayer.app.ui.player.controls.components.sheets.DecoderSheet
 import com.finalplayer.app.ui.player.controls.components.sheets.MoreSheet
@@ -237,10 +237,9 @@ fun PlayerControls(
     var dragPositionSeconds by remember { mutableFloatStateOf(0f) }
     var showRemainingTimeText by remember { mutableStateOf(false) }
     var showSleepTimerSheet by remember { mutableStateOf(false) }
-    var showChaptersSheet by remember { mutableStateOf(false) }
     var interactionKey by remember { mutableIntStateOf(0) }
 
-    val isAnySheetOpen = sheetShown !is Sheets.None || showSleepTimerSheet || showChaptersSheet
+    val isAnySheetOpen = sheetShown !is Sheets.None || showSleepTimerSheet
 
     val hideTimeoutMs by layoutPrefs.controlsHideTimeoutMs.asFlow().collectAsState(initial = 3000)
     val gradientOpacity by layoutPrefs.controlsGradientOpacity.asFlow().collectAsState(initial = 0.45f)
@@ -558,6 +557,86 @@ fun PlayerControls(
                         val isDurationReady = durationSeconds > 1f
                         val safeDuration = if (isDurationReady) durationSeconds else 1f
 
+                        val effectiveChapters = remember(chaptersList, chapters) {
+                            if (chaptersList.isNotEmpty()) {
+                                chaptersList
+                            } else {
+                                chapters.mapIndexed { idx, ch ->
+                                    VideoChapter(
+                                        index = idx,
+                                        title = ch.title.ifBlank { "الفصل ${idx + 1}" },
+                                        timePos = ch.time,
+                                        formattedTime = formatTime(ch.time.toFloat())
+                                    )
+                                }
+                            }
+                        }
+
+                        val activeChapter = remember(effectiveChapters, currentChapterIndex, currentPos) {
+                            if (effectiveChapters.isNotEmpty()) {
+                                if (currentChapterIndex != null && currentChapterIndex in effectiveChapters.indices) {
+                                    effectiveChapters[currentChapterIndex]
+                                } else {
+                                    val idx = effectiveChapters.indexOfLast { currentPos >= it.timePos }
+                                    if (idx >= 0) effectiveChapters[idx] else effectiveChapters.first()
+                                }
+                            } else null
+                        }
+
+                        // اسم الفصل أعلى شريط التمرير في قائمة زجاجية شفافة مثل اليوتيوب
+                        if (activeChapter != null && effectiveChapters.isNotEmpty() && !isShortsMode) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color.Black.copy(alpha = 0.45f),
+                                    border = BorderStroke(0.6.dp, Color.White.copy(alpha = 0.22f)),
+                                    shadowElevation = 2.dp,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            onLoadChapters()
+                                            onOpenSheet(Sheets.Chapters)
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
+                                        Text(
+                                            text = "•",
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                        Text(
+                                            text = activeChapter.title,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = Color.White.copy(alpha = 0.95f),
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 10.5.sp
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        Text(
+                                            text = "›",
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // 1. Seekbar row with time on both sides (left & right)
                         if (isDurationReady) {
                             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -581,7 +660,7 @@ fun PlayerControls(
                                             .clip(RoundedCornerShape(4.dp))
                                             .clickable {
                                                 onLoadChapters()
-                                                showChaptersSheet = true
+                                                onOpenSheet(Sheets.Chapters)
                                             }
                                             .padding(horizontal = 4.dp, vertical = 2.dp)
                                     )
@@ -589,6 +668,7 @@ fun PlayerControls(
                                     FinalPlayerSeekbar(
                                         position = currentPos,
                                         duration = safeDuration,
+                                        chapters = effectiveChapters,
                                         onValueChange = { newValue ->
                                             if (!isDraggingSlider) {
                                                 onSliderDragStart()
@@ -897,25 +977,21 @@ fun PlayerControls(
             )
         }
         is Sheets.Chapters -> {
-            val effectiveChapters = chaptersList.ifEmpty {
-                chapters.mapIndexed { idx, ch ->
-                    VideoChapter(
-                        index = idx,
-                        title = ch.title.ifBlank { "الفصل ${idx + 1}" },
-                        timePos = ch.time,
-                        formattedTime = formatTime(ch.time.toFloat())
-                    )
-                }
-            }
-            ChaptersBottomSheet(
-                chapters = effectiveChapters,
+            ChaptersSheet(
+                chapters = chapters,
+                chaptersList = chaptersList,
+                currentChapterIndex = currentChapterIndex,
                 currentPosSeconds = positionSeconds,
-                onDismiss = onCloseSheet,
-                onChapterClick = { ch ->
+                onSeekToChapter = { idx ->
+                    onSelectChapter(idx)
+                    onCloseSheet()
+                },
+                onSeekToChapterNode = { ch ->
                     onSeekToChapter(ch)
                     onSelectChapter(ch.index)
                     onCloseSheet()
-                }
+                },
+                onDismiss = onCloseSheet
             )
         }
         is Sheets.More -> {
@@ -1008,29 +1084,6 @@ fun PlayerControls(
                     onCancelTimer = {
                         onCancelSleepTimer()
                         showSleepTimerSheet = false
-                    }
-                )
-            }
-
-            if (showChaptersSheet) {
-                val effectiveChapters = chaptersList.ifEmpty {
-                    chapters.mapIndexed { idx, ch ->
-                        VideoChapter(
-                            index = idx,
-                            title = ch.title.ifBlank { "الفصل ${idx + 1}" },
-                            timePos = ch.time,
-                            formattedTime = formatTime(ch.time.toFloat())
-                        )
-                    }
-                }
-                ChaptersBottomSheet(
-                    chapters = effectiveChapters,
-                    currentPosSeconds = positionSeconds,
-                    onDismiss = { showChaptersSheet = false },
-                    onChapterClick = { ch ->
-                        onSeekToChapter(ch)
-                        onSelectChapter(ch.index)
-                        showChaptersSheet = false
                     }
                 )
             }
