@@ -109,6 +109,35 @@ class FileTransferManager(
                 }
 
                 var totalBytesProcessed = 0L
+                var lastProgressTime = 0L
+                var lastReportedPct = -1
+
+                val updateProgressThrottled: (Long) -> Unit = { bytesAdded ->
+                    totalBytesProcessed += bytesAdded
+                    val now = System.currentTimeMillis()
+                    val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                    if (now - lastProgressTime >= 150L || (pct != lastReportedPct && now - lastProgressTime >= 60L)) {
+                        lastProgressTime = now
+                        lastReportedPct = pct
+                        _transferState.value = _transferState.value?.copy(
+                            transferredBytes = totalBytesProcessed,
+                            percentage = pct,
+                            transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                        )
+                        updateNotification()
+                    }
+                }
+
+                val finalizeFileProgress: () -> Unit = {
+                    val finalPct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
+                    _transferState.value = _transferState.value?.copy(
+                        transferredBytes = totalBytesProcessed,
+                        percentage = finalPct,
+                        transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
+                    )
+                    updateNotification()
+                }
+
                 val successFiles = mutableListOf<VideoItem>()
 
                 when (type) {
@@ -135,15 +164,29 @@ class FileTransferManager(
                                 } catch (_: Exception) {
                                     false
                                 }
+                                if (!moved) {
+                                    try {
+                                        java.nio.file.Files.move(
+                                            sourceFile.toPath(),
+                                            targetFile.toPath(),
+                                            java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                                            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                                        )
+                                        moved = targetFile.exists() && targetFile.length() > 0L
+                                    } catch (_: Exception) {
+                                        try {
+                                            java.nio.file.Files.move(
+                                                sourceFile.toPath(),
+                                                targetFile.toPath(),
+                                                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                                            )
+                                            moved = targetFile.exists() && targetFile.length() > 0L
+                                        } catch (_: Exception) {}
+                                    }
+                                }
                                 if (moved && targetFile.exists()) {
                                     totalBytesProcessed += fileSize
-                                    val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                    _transferState.value = _transferState.value?.copy(
-                                        transferredBytes = totalBytesProcessed,
-                                        percentage = pct,
-                                        transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
-                                    )
-                                    updateNotification()
+                                    finalizeFileProgress()
                                     FileOperationsUtil.scanFile(context, sourceFile)
                                 }
                             }
@@ -153,31 +196,13 @@ class FileTransferManager(
                                     copyStreamWithProgress(
                                         src = sourceFile,
                                         dst = targetFile,
-                                        onBytesChunk = { bytesRead ->
-                                            totalBytesProcessed += bytesRead
-                                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                            _transferState.value = _transferState.value?.copy(
-                                                transferredBytes = totalBytesProcessed,
-                                                percentage = pct,
-                                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
-                                            )
-                                            updateNotification()
-                                        }
+                                        onBytesChunk = updateProgressThrottled
                                     )
                                 } else if (video.uri.startsWith("content://")) {
                                     copyUriStreamWithProgress(
                                         uri = Uri.parse(video.uri),
                                         dst = targetFile,
-                                        onBytesChunk = { bytesRead ->
-                                            totalBytesProcessed += bytesRead
-                                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                            _transferState.value = _transferState.value?.copy(
-                                                transferredBytes = totalBytesProcessed,
-                                                percentage = pct,
-                                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
-                                            )
-                                            updateNotification()
-                                        }
+                                        onBytesChunk = updateProgressThrottled
                                     )
                                 } else {
                                     false
@@ -186,6 +211,8 @@ class FileTransferManager(
                                 if (!fileCopied || !targetFile.exists()) {
                                     throw Exception("فشل نقل/نسخ الملف: ${video.title}")
                                 }
+
+                                finalizeFileProgress()
 
                                 if (type == TransferType.MOVE) {
                                     if (sourceFile.exists()) {
@@ -250,50 +277,46 @@ class FileTransferManager(
                                 } catch (_: Exception) {
                                     false
                                 }
+                                if (!moved) {
+                                    try {
+                                        java.nio.file.Files.move(
+                                            sourceFile.toPath(),
+                                            vaultTargetFile.toPath(),
+                                            java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                                            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                                        )
+                                        moved = vaultTargetFile.exists() && vaultTargetFile.length() > 0L
+                                    } catch (_: Exception) {
+                                        try {
+                                            java.nio.file.Files.move(
+                                                sourceFile.toPath(),
+                                                vaultTargetFile.toPath(),
+                                                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                                            )
+                                            moved = vaultTargetFile.exists() && vaultTargetFile.length() > 0L
+                                        } catch (_: Exception) {}
+                                    }
+                                }
                                 if (moved && vaultTargetFile.exists()) {
                                     totalBytesProcessed += fileSize
-                                    val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                    _transferState.value = _transferState.value?.copy(
-                                        transferredBytes = totalBytesProcessed,
-                                        percentage = pct,
-                                        transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
-                                    )
-                                    updateNotification()
+                                    finalizeFileProgress()
                                     FileOperationsUtil.scanFile(context, sourceFile)
                                 }
                             }
 
-                            // 2. Stream copy fallback if cross-volume or rename restricted
+                            // 2. High-speed stream/channel copy fallback if cross-volume or rename restricted
                             if (!moved) {
                                 val fileCopied = if (sourceFile.exists()) {
                                     copyStreamWithProgress(
                                         src = sourceFile,
                                         dst = vaultTargetFile,
-                                        onBytesChunk = { bytesRead ->
-                                            totalBytesProcessed += bytesRead
-                                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                            _transferState.value = _transferState.value?.copy(
-                                                transferredBytes = totalBytesProcessed,
-                                                percentage = pct,
-                                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
-                                            )
-                                            updateNotification()
-                                        }
+                                        onBytesChunk = updateProgressThrottled
                                     )
                                 } else if (video.uri.startsWith("content://")) {
                                     copyUriStreamWithProgress(
                                         uri = Uri.parse(video.uri),
                                         dst = vaultTargetFile,
-                                        onBytesChunk = { bytesRead ->
-                                            totalBytesProcessed += bytesRead
-                                            val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                            _transferState.value = _transferState.value?.copy(
-                                                transferredBytes = totalBytesProcessed,
-                                                percentage = pct,
-                                                transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
-                                            )
-                                            updateNotification()
-                                        }
+                                        onBytesChunk = updateProgressThrottled
                                     )
                                 } else {
                                     false
@@ -303,6 +326,8 @@ class FileTransferManager(
                                     vaultTargetFile.delete()
                                     throw Exception("فشل تشفير ونقل الملف إلى المجلد الآمن: ${video.title}")
                                 }
+
+                                finalizeFileProgress()
 
                                 if (sourceFile.exists()) {
                                     sourceFile.delete()
@@ -366,7 +391,7 @@ class FileTransferManager(
 
                             val fileSize = if (vaultFile.exists()) vaultFile.length() else video.sizeBytes
 
-                            // 1. Fast atomic rename
+                            // 1. Fast atomic rename on same storage volume (0ms)
                             var restored = false
                             if (vaultFile.exists()) {
                                 restored = try {
@@ -374,15 +399,29 @@ class FileTransferManager(
                                 } catch (_: Exception) {
                                     false
                                 }
+                                if (!restored) {
+                                    try {
+                                        java.nio.file.Files.move(
+                                            vaultFile.toPath(),
+                                            destinationFile.toPath(),
+                                            java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                                            java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                                        )
+                                        restored = destinationFile.exists() && destinationFile.length() > 0L
+                                    } catch (_: Exception) {
+                                        try {
+                                            java.nio.file.Files.move(
+                                                vaultFile.toPath(),
+                                                destinationFile.toPath(),
+                                                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                                            )
+                                            restored = destinationFile.exists() && destinationFile.length() > 0L
+                                        } catch (_: Exception) {}
+                                    }
+                                }
                                 if (restored && destinationFile.exists()) {
                                     totalBytesProcessed += fileSize
-                                    val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                    _transferState.value = _transferState.value?.copy(
-                                        transferredBytes = totalBytesProcessed,
-                                        percentage = pct,
-                                        transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
-                                    )
-                                    updateNotification()
+                                    finalizeFileProgress()
                                     FileOperationsUtil.scanFile(context, vaultFile)
                                 }
                             }
@@ -392,22 +431,15 @@ class FileTransferManager(
                                 val fileRestored = copyStreamWithProgress(
                                     src = vaultFile,
                                     dst = destinationFile,
-                                    onBytesChunk = { bytesRead ->
-                                        totalBytesProcessed += bytesRead
-                                        val pct = ((totalBytesProcessed.toDouble() / totalBytes) * 100).toInt().coerceIn(0, 100)
-                                        _transferState.value = _transferState.value?.copy(
-                                            transferredBytes = totalBytesProcessed,
-                                            percentage = pct,
-                                            transferredSizeFormatted = FileOperationsUtil.formatFileSize(totalBytesProcessed)
-                                        )
-                                        updateNotification()
-                                    }
+                                    onBytesChunk = updateProgressThrottled
                                 )
 
                                 if (!fileRestored || !destinationFile.exists()) {
                                     destinationFile.delete()
                                     throw Exception("فشل استعادة الملف: ${video.title}")
                                 }
+
+                                finalizeFileProgress()
 
                                 vaultFile.delete()
                                 FileOperationsUtil.scanFile(context, vaultFile)
@@ -484,48 +516,69 @@ class FileTransferManager(
     private suspend fun copyStreamWithProgress(
         src: File,
         dst: File,
-        onBytesChunk: (Int) -> Unit
+        onBytesChunk: (Long) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
         if (!src.exists()) return@withContext false
         try {
-            FileInputStream(src).use { input ->
-                FileOutputStream(dst).use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var bytesRead: Int
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
+            FileInputStream(src).use { fis ->
+                FileOutputStream(dst).use { fos ->
+                    val inChannel = fis.channel
+                    val outChannel = fos.channel
+                    val size = inChannel.size()
+                    var position = 0L
+                    val chunkSize = 4 * 1024 * 1024L // 4MB chunks for max I/O throughput
+                    while (position < size) {
                         if (!isActive) throw CancellationException("Cancelled")
-                        output.write(buffer, 0, bytesRead)
-                        onBytesChunk(bytesRead)
+                        val toTransfer = (size - position).coerceAtMost(chunkSize)
+                        val transferred = inChannel.transferTo(position, toTransfer, outChannel)
+                        if (transferred <= 0) break
+                        position += transferred
+                        onBytesChunk(transferred)
                     }
-                    output.flush()
+                    fos.flush()
                 }
             }
             true
         } catch (e: CancellationException) {
             dst.delete()
             throw e
-        } catch (e: Exception) {
-            e.printStackTrace()
-            dst.delete()
-            false
+        } catch (_: Exception) {
+            try {
+                FileInputStream(src).buffered(512 * 1024).use { input ->
+                    FileOutputStream(dst).buffered(512 * 1024).use { output ->
+                        val buffer = ByteArray(512 * 1024)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            if (!isActive) throw CancellationException("Cancelled")
+                            output.write(buffer, 0, bytesRead)
+                            onBytesChunk(bytesRead.toLong())
+                        }
+                        output.flush()
+                    }
+                }
+                true
+            } catch (ex: Exception) {
+                dst.delete()
+                false
+            }
         }
     }
 
     private suspend fun copyUriStreamWithProgress(
         uri: Uri,
         dst: File,
-        onBytesChunk: (Int) -> Unit
+        onBytesChunk: (Long) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val inputStream = context.contentResolver.openInputStream(uri) ?: return@withContext false
-            inputStream.use { input ->
-                FileOutputStream(dst).use { output ->
-                    val buffer = ByteArray(64 * 1024)
+            inputStream.buffered(512 * 1024).use { input ->
+                FileOutputStream(dst).buffered(512 * 1024).use { output ->
+                    val buffer = ByteArray(512 * 1024)
                     var bytesRead: Int
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         if (!isActive) throw CancellationException("Cancelled")
                         output.write(buffer, 0, bytesRead)
-                        onBytesChunk(bytesRead)
+                        onBytesChunk(bytesRead.toLong())
                     }
                     output.flush()
                 }

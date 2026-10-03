@@ -160,17 +160,50 @@ class VideoRepositoryImpl(
                 var finalVaultPath = originalPathStr
                 var moved = false
                 if (originalFile.exists()) {
-                    moved = if (originalFile.renameTo(vaultFile)) {
-                        true
-                    } else {
+                    moved = try {
+                        originalFile.renameTo(vaultFile)
+                    } catch (_: Exception) {
+                        false
+                    }
+                    if (!moved) {
                         try {
-                            FileInputStream(originalFile).use { input ->
-                                FileOutputStream(vaultFile).use { output ->
-                                    input.copyTo(output, bufferSize = 128 * 1024)
+                            java.nio.file.Files.move(
+                                originalFile.toPath(),
+                                vaultFile.toPath(),
+                                java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                            )
+                            moved = vaultFile.exists() && vaultFile.length() > 0L
+                        } catch (_: Exception) {
+                            try {
+                                java.nio.file.Files.move(
+                                    originalFile.toPath(),
+                                    vaultFile.toPath(),
+                                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                                )
+                                moved = vaultFile.exists() && vaultFile.length() > 0L
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    if (!moved) {
+                        try {
+                            FileInputStream(originalFile).use { fis ->
+                                FileOutputStream(vaultFile).use { fos ->
+                                    val inChannel = fis.channel
+                                    val outChannel = fos.channel
+                                    val size = inChannel.size()
+                                    var position = 0L
+                                    val chunkSize = 4 * 1024 * 1024L
+                                    while (position < size) {
+                                        val transferred = inChannel.transferTo(position, (size - position).coerceAtMost(chunkSize), outChannel)
+                                        if (transferred <= 0) break
+                                        position += transferred
+                                    }
+                                    fos.flush()
                                 }
                             }
                             originalFile.delete()
-                            true
+                            moved = true
                         } catch (e: Exception) {
                             false
                         }

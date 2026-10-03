@@ -465,17 +465,69 @@ object FileOperationsUtil {
     }
 
     fun getVaultDir(context: Context, sourceFile: File? = null): File {
-        val externalDirs = try {
-            context.getExternalFilesDirs(null).filterNotNull()
-        } catch (_: Exception) {
-            emptyList()
-        }
-
+        // First determine storage root if source file is provided
         if (sourceFile != null && sourceFile.exists()) {
             val filePath = sourceFile.absolutePath
+
+            // 1. Detect root volume directly from file path (e.g., /storage/emulated/0 or /storage/XXXX-XXXX)
+            val directVolumeRoot = if (filePath.startsWith("/storage/emulated/0")) {
+                File("/storage/emulated/0")
+            } else if (filePath.startsWith("/storage/")) {
+                val parts = filePath.split('/')
+                if (parts.size >= 3) File("/storage/${parts[2]}") else null
+            } else null
+
+            if (directVolumeRoot != null && directVolumeRoot.exists()) {
+                try {
+                    val rootVault = File(directVolumeRoot, ".secure_vault")
+                    if (!rootVault.exists()) rootVault.mkdirs()
+                    if (rootVault.exists() && rootVault.canWrite()) {
+                        val nomedia = File(rootVault, ".nomedia")
+                        if (!nomedia.exists()) {
+                            try { nomedia.createNewFile() } catch (_: Exception) {}
+                        }
+                        return rootVault
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // 2. Detect via externalDirs
+            val externalDirs = try {
+                context.getExternalFilesDirs(null).filterNotNull()
+            } catch (_: Exception) {
+                emptyList()
+            }
+
             for (extDir in externalDirs) {
-                val extRoot = extDir.absolutePath.substringBefore("/Android/")
-                if (filePath.startsWith(extRoot)) {
+                val extRootStr = extDir.absolutePath.substringBefore("/Android/")
+                if (filePath.startsWith(extRootStr)) {
+                    val extRoot = File(extRootStr)
+                    try {
+                        val rootVault = File(extRoot, ".secure_vault")
+                        if (!rootVault.exists()) rootVault.mkdirs()
+                        if (rootVault.exists() && rootVault.canWrite()) {
+                            val nomedia = File(rootVault, ".nomedia")
+                            if (!nomedia.exists()) {
+                                try { nomedia.createNewFile() } catch (_: Exception) {}
+                            }
+                            return rootVault
+                        }
+                    } catch (_: Exception) {}
+
+                    // Try Movies/.secure_vault on that volume as a writable fallback
+                    try {
+                        val moviesVault = File(extRoot, "Movies/.secure_vault")
+                        if (!moviesVault.exists()) moviesVault.mkdirs()
+                        if (moviesVault.exists() && moviesVault.canWrite()) {
+                            val nomedia = File(moviesVault, ".nomedia")
+                            if (!nomedia.exists()) {
+                                try { nomedia.createNewFile() } catch (_: Exception) {}
+                            }
+                            return moviesVault
+                        }
+                    } catch (_: Exception) {}
+
+                    // Fallback to app-specific external dir on that volume
                     val vDir = File(extDir, ".secure_vault")
                     if (!vDir.exists()) vDir.mkdirs()
                     val nomedia = File(vDir, ".nomedia")
@@ -486,6 +538,22 @@ object FileOperationsUtil {
                 }
             }
         }
+
+        // Primary storage root default: /storage/emulated/0/.secure_vault
+        try {
+            val primaryRoot = Environment.getExternalStorageDirectory()
+            if (primaryRoot != null && primaryRoot.exists()) {
+                val rootVault = File(primaryRoot, ".secure_vault")
+                if (!rootVault.exists()) rootVault.mkdirs()
+                if (rootVault.exists() && rootVault.canWrite()) {
+                    val nomedia = File(rootVault, ".nomedia")
+                    if (!nomedia.exists()) {
+                        try { nomedia.createNewFile() } catch (_: Exception) {}
+                    }
+                    return rootVault
+                }
+            }
+        } catch (_: Exception) {}
 
         val fallbackBase = context.getExternalFilesDir(null) ?: context.filesDir
         val vDir = File(fallbackBase, ".secure_vault")
