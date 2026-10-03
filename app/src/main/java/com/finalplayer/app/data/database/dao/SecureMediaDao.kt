@@ -12,6 +12,9 @@ interface SecureMediaDao {
     @Query("SELECT * FROM secure_media ORDER BY addedAt DESC")
     fun getAllSecureMedia(): Flow<List<SecureMediaEntity>>
 
+    @Query("SELECT * FROM secure_media ORDER BY addedAt DESC")
+    suspend fun getAllSecureMediaOnce(): List<SecureMediaEntity>
+
     @Query("SELECT videoId FROM secure_media")
     fun getAllSecureVideoIds(): Flow<List<String>>
 

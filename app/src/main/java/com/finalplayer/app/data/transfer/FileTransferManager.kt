@@ -50,6 +50,66 @@ class FileTransferManager(
     private val _transferCompletionEvents = MutableSharedFlow<Pair<Boolean, String>>()
     val transferCompletionEvents: SharedFlow<Pair<Boolean, String>> = _transferCompletionEvents.asSharedFlow()
 
+    init {
+        scope.launch {
+            sanitizeVaultFiles()
+        }
+    }
+
+    suspend fun sanitizeVaultFiles() = withContext(Dispatchers.IO) {
+        try {
+            val secureEntities = secureMediaDao.getAllSecureMediaOnce()
+            for (entity in secureEntities) {
+                val file = File(entity.vaultPath)
+                if (file.exists()) {
+                    val name = file.name
+                    val needsSanitize = name.endsWith(".mp4", ignoreCase = true) ||
+                            name.endsWith(".mkv", ignoreCase = true) ||
+                            name.endsWith(".avi", ignoreCase = true) ||
+                            name.endsWith(".mov", ignoreCase = true) ||
+                            name.endsWith(".3gp", ignoreCase = true) ||
+                            name.endsWith(".webm", ignoreCase = true) ||
+                            !name.startsWith(".") ||
+                            !name.endsWith(".vlt")
+                    if (needsSanitize) {
+                        val safeId = entity.videoId.replace(Regex("[^a-zA-Z0-9_]"), "_")
+                        val newName = ".sec_${safeId}_${System.currentTimeMillis()}.vlt"
+                        val parent = file.parentFile ?: continue
+                        val newFile = File(parent, newName)
+                        val renamed = try {
+                            file.renameTo(newFile)
+                        } catch (_: Exception) {
+                            false
+                        }
+                        if (renamed) {
+                            secureMediaDao.insert(entity.copy(vaultPath = newFile.absolutePath))
+                            FileOperationsUtil.purgeFromMediaStore(context, file)
+                            FileOperationsUtil.purgeFromMediaStore(context, newFile)
+                        }
+                    } else {
+                        FileOperationsUtil.purgeFromMediaStore(context, file)
+                    }
+                }
+            }
+            val vaultDir = FileOperationsUtil.getVaultDir(context)
+            if (vaultDir.exists() && vaultDir.isDirectory) {
+                val nomedia = File(vaultDir, ".nomedia")
+                if (!nomedia.exists()) {
+                    try { nomedia.createNewFile() } catch (_: Exception) {}
+                }
+                vaultDir.listFiles()?.forEach { f ->
+                    if (f.isFile && (f.name.endsWith(".mp4", ignoreCase = true) || f.name.endsWith(".mkv", ignoreCase = true))) {
+                        val newF = File(vaultDir, ".sec_${System.currentTimeMillis()}_${f.nameWithoutExtension}.vlt")
+                        if (f.renameTo(newF)) {
+                            FileOperationsUtil.purgeFromMediaStore(context, f)
+                            FileOperationsUtil.purgeFromMediaStore(context, newF)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     fun startTransfer(
         videos: List<VideoItem>,
         destination: File? = null,
@@ -255,10 +315,8 @@ class FileTransferManager(
                             val sourceFile = FileOperationsUtil.getVideoFile(video, context)
                             val vaultDir = FileOperationsUtil.getVaultDir(context, if (sourceFile.exists()) sourceFile else null)
 
-                            val rawName = if (sourceFile.exists()) sourceFile.name else video.title
-                            val safeExt = rawName.substringAfterLast('.', "mp4")
                             val safeId = video.id.replace(Regex("[^a-zA-Z0-9_]"), "_")
-                            val vaultTargetFile = File(vaultDir, ".sec_${safeId}_${System.currentTimeMillis()}_$index.$safeExt")
+                            val vaultTargetFile = File(vaultDir, ".sec_${safeId}_${System.currentTimeMillis()}_$index.vlt")
                             val originalPathStr = if (sourceFile.exists()) sourceFile.absolutePath else if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
 
                             _transferState.value = _transferState.value?.copy(
@@ -340,7 +398,7 @@ class FileTransferManager(
                                 }
                             }
 
-                            FileOperationsUtil.scanFile(context, vaultTargetFile)
+                            FileOperationsUtil.purgeFromMediaStore(context, vaultTargetFile)
 
                             val actualSize = if (vaultTargetFile.exists()) vaultTargetFile.length() else video.sizeBytes
 
@@ -422,7 +480,7 @@ class FileTransferManager(
                                 if (restored && destinationFile.exists()) {
                                     totalBytesProcessed += fileSize
                                     finalizeFileProgress()
-                                    FileOperationsUtil.scanFile(context, vaultFile)
+                                    FileOperationsUtil.purgeFromMediaStore(context, vaultFile)
                                 }
                             }
 
@@ -442,7 +500,7 @@ class FileTransferManager(
                                 finalizeFileProgress()
 
                                 vaultFile.delete()
-                                FileOperationsUtil.scanFile(context, vaultFile)
+                                FileOperationsUtil.purgeFromMediaStore(context, vaultFile)
                             }
 
                             FileOperationsUtil.scanFile(context, destinationFile)

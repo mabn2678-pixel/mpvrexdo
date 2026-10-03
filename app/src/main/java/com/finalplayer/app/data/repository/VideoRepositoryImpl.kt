@@ -153,9 +153,8 @@ class VideoRepositoryImpl(
                 val originalPathStr = if (originalFile.exists()) originalFile.absolutePath else if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
                 
                 val vaultDir = FileOperationsUtil.getVaultDir(context, if (originalFile.exists()) originalFile else null)
-                val safeFileName = (if (originalFile.exists()) originalFile.name else video.title).replace(Regex("[^a-zA-Z0-9._-]"), "_")
                 val safeId = video.id.replace(Regex("[^a-zA-Z0-9_]"), "_")
-                val vaultFile = File(vaultDir, "${safeId}_$safeFileName")
+                val vaultFile = File(vaultDir, ".sec_${safeId}_${System.currentTimeMillis()}.vlt")
 
                 var finalVaultPath = originalPathStr
                 var moved = false
@@ -236,12 +235,7 @@ class VideoRepositoryImpl(
                                 null
                             )
                         }
-                        android.media.MediaScannerConnection.scanFile(
-                            context,
-                            arrayOf(vaultFile.absolutePath),
-                            null,
-                            null
-                        )
+                        FileOperationsUtil.purgeFromMediaStore(context, vaultFile)
                     } catch (_: Exception) {}
                 }
 
@@ -303,10 +297,11 @@ class VideoRepositoryImpl(
                     try {
                         android.media.MediaScannerConnection.scanFile(
                             context,
-                            arrayOf(destinationFile.absolutePath, vaultFile.absolutePath),
-                            null,
+                            arrayOf(destinationFile.absolutePath),
+                            arrayOf("video/*"),
                             null
                         )
+                        FileOperationsUtil.purgeFromMediaStore(context, vaultFile)
                     } catch (_: Exception) {}
 
                     val videoEntity = com.finalplayer.app.data.database.entities.VideoEntity(

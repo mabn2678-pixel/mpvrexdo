@@ -25,12 +25,60 @@ import androidx.compose.ui.unit.sp
 import coil.ImageLoader
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
+import coil.decode.DecodeResult
+import coil.decode.Decoder
+import coil.decode.ImageSource
 import coil.decode.VideoFrameDecoder
 import coil.disk.DiskCache
+import coil.fetch.SourceResult
 import coil.memory.MemoryCache
 import coil.request.ImageRequest
+import coil.request.Options
 import coil.request.videoFrameMillis
 import com.finalplayer.app.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import android.graphics.drawable.BitmapDrawable
+import android.media.MediaMetadataRetriever
+
+class VaultVideoFrameDecoder(
+    private val source: ImageSource,
+    private val options: Options
+) : Decoder {
+    override suspend fun decode(): DecodeResult = withContext(Dispatchers.IO) {
+        val file = source.fileOrNull()?.toFile()
+        if (file == null || !file.exists()) {
+            throw IllegalArgumentException("Vault source file does not exist")
+        }
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(file.absolutePath)
+            val frameMicros = options.parameters.value(VideoFrameDecoder.VIDEO_FRAME_MICROS_KEY) ?: 3000000L
+            val bitmap = retriever.getFrameAtTime(frameMicros, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: retriever.frameAtTime
+            if (bitmap != null) {
+                DecodeResult(
+                    drawable = BitmapDrawable(options.context.resources, bitmap),
+                    isSampled = false
+                )
+            } else {
+                throw IllegalStateException("Failed to decode frame from vault file")
+            }
+        } finally {
+            try { retriever.release() } catch (_: Exception) {}
+        }
+    }
+
+    class Factory : Decoder.Factory {
+        override fun create(result: SourceResult, options: Options, imageLoader: ImageLoader): Decoder? {
+            val file = result.source.fileOrNull()?.toFile()
+            if (file != null && (file.name.endsWith(".vlt") || file.name.startsWith(".sec_") || file.absolutePath.contains(".secure_vault"))) {
+                return VaultVideoFrameDecoder(result.source, options)
+            }
+            return null
+        }
+    }
+}
 
 private var globalVideoImageLoader: ImageLoader? = null
 
@@ -38,6 +86,7 @@ fun getVideoImageLoader(context: Context): ImageLoader {
     return globalVideoImageLoader ?: synchronized(VideoThumbnailImageProviderLock) {
         globalVideoImageLoader ?: ImageLoader.Builder(context.applicationContext)
             .components {
+                add(VaultVideoFrameDecoder.Factory())
                 add(VideoFrameDecoder.Factory())
             }
             .memoryCache {

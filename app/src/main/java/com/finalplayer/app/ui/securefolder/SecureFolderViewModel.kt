@@ -46,6 +46,9 @@ class SecureFolderViewModel(
 
     init {
         viewModelScope.launch {
+            fileTransferManager.sanitizeVaultFiles()
+        }
+        viewModelScope.launch {
             pinPreferences.hasPin.asFlow().collect { hasPin ->
                 _isPinSet.value = hasPin
             }
