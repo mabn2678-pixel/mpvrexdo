@@ -227,7 +227,7 @@ class VideoRepositoryImpl(
                 if (moved && vaultFile.exists()) {
                     finalVaultPath = vaultFile.absolutePath
                     try {
-                        if (originalFile.exists()) {
+                        if (!originalFile.exists()) {
                             android.media.MediaScannerConnection.scanFile(
                                 context,
                                 arrayOf(originalFile.absolutePath),
@@ -235,7 +235,6 @@ class VideoRepositoryImpl(
                                 null
                             )
                         }
-                        FileOperationsUtil.purgeFromMediaStore(context, vaultFile)
                     } catch (_: Exception) {}
                 }
 
@@ -301,7 +300,6 @@ class VideoRepositoryImpl(
                             arrayOf("video/*"),
                             null
                         )
-                        FileOperationsUtil.purgeFromMediaStore(context, vaultFile)
                     } catch (_: Exception) {}
 
                     val videoEntity = com.finalplayer.app.data.database.entities.VideoEntity(

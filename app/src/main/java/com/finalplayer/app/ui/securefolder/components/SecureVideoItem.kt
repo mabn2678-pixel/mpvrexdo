@@ -173,19 +173,29 @@ fun SecureVideoItem(
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (video.sizeBytes > 0) {
+                    val fileExists = remember(video.uri) { java.io.File(video.uri).exists() }
+                    if (!fileExists) {
                         Text(
-                            text = formatFileSize(video.sizeBytes),
+                            text = "الملف غير متوفر على الذاكرة",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium
                         )
-                    }
-                    if (!video.resolution.isNullOrBlank()) {
-                        Text(
-                            text = " • ${video.resolution}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    } else {
+                        if (video.sizeBytes > 0) {
+                            Text(
+                                text = formatFileSize(video.sizeBytes),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (!video.resolution.isNullOrBlank()) {
+                            Text(
+                                text = " • ${video.resolution}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -396,14 +406,27 @@ fun SecureVideoGridItem(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            Text(
-                text = formatFileSize(video.sizeBytes),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Start,
-                fontSize = 11.sp,
-                modifier = Modifier.fillMaxWidth()
-            )
+            val fileExists = remember(video.uri) { java.io.File(video.uri).exists() }
+            if (!fileExists) {
+                Text(
+                    text = "الملف غير متوفر على الذاكرة",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Start,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Text(
+                    text = formatFileSize(video.sizeBytes),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Start,
+                    fontSize = 11.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }

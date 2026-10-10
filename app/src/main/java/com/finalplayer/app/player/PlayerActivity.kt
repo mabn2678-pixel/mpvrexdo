@@ -177,6 +177,12 @@ class PlayerActivity : ComponentActivity() {
             ?: intent.data?.toString()
             ?: ""
         videoId = normalizeVideoKey(videoPath)
+
+        if (videoPath.isNotBlank() && videoPath.startsWith("/") && !java.io.File(videoPath).exists()) {
+            android.widget.Toast.makeText(this, "تعذر تشغيل الفيديو: الملف غير موجود على مساحة الهاتف", android.widget.Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         
         val customTitle = intent.getStringExtra(EXTRA_VIDEO_TITLE)
         if (!customTitle.isNullOrEmpty()) {

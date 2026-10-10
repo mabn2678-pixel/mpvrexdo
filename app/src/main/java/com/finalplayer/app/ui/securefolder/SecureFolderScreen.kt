@@ -217,8 +217,15 @@ fun SecureFolderScreen(
                     onPlayClick = {
                         val first = selectedVideos.firstOrNull()
                         if (first != null) {
-                            val idx = secureVideos.indexOf(first).coerceAtLeast(0)
-                            onVideoClick(first, secureVideos, idx)
+                            val f = java.io.File(first.uri)
+                            if (!f.exists()) {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("الملف غير متوفر على مساحة الهاتف (قد تم حذفه سابقاً)")
+                                }
+                            } else {
+                                val idx = secureVideos.indexOf(first).coerceAtLeast(0)
+                                onVideoClick(first, secureVideos, idx)
+                            }
                         }
                     }
                 )
@@ -318,7 +325,14 @@ fun SecureFolderScreen(
                                     if (isSelectionMode) {
                                         selectedVideos = if (isSelected) selectedVideos - video else selectedVideos + video
                                     } else {
-                                        onVideoClick(video, secureVideos, index)
+                                        val f = java.io.File(video.uri)
+                                        if (!f.exists()) {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("الملف غير متوفر على مساحة الهاتف (قد تم حذفه سابقاً)")
+                                            }
+                                        } else {
+                                            onVideoClick(video, secureVideos, index)
+                                        }
                                     }
                                 },
                                 onLongClick = {
@@ -350,7 +364,14 @@ fun SecureFolderScreen(
                                     if (isSelectionMode) {
                                         selectedVideos = if (isSelected) selectedVideos - video else selectedVideos + video
                                     } else {
-                                        onVideoClick(video, secureVideos, index)
+                                        val f = java.io.File(video.uri)
+                                        if (!f.exists()) {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("الملف غير متوفر على مساحة الهاتف (قد تم حذفه سابقاً)")
+                                            }
+                                        } else {
+                                            onVideoClick(video, secureVideos, index)
+                                        }
                                     }
                                 },
                                 onLongClick = {

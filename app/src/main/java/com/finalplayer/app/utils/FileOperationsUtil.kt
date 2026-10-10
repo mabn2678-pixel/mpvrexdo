@@ -336,38 +336,20 @@ object FileOperationsUtil {
     }
 
     suspend fun scanFile(context: Context, file: File) = withContext(Dispatchers.IO) {
-        // Never register files inside secure vault into MediaStore!
+        // Never register or touch files inside secure vault with MediaStore!
         if (file.name.endsWith(".vlt") || file.name.startsWith(".sec_") || file.absolutePath.contains(".secure_vault")) {
-            purgeFromMediaStore(context, file)
             return@withContext
         }
         try {
             MediaScannerConnection.scanFile(
                 context,
                 arrayOf(file.absolutePath),
-                arrayOf("video/*"),
+                null,
                 null
             )
         } catch (e: Exception) {
             e.printStackTrace()
         }
-    }
-
-    suspend fun purgeFromMediaStore(context: Context, file: File) = withContext(Dispatchers.IO) {
-        try {
-            context.contentResolver.delete(
-                android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                "${android.provider.MediaStore.Video.Media.DATA} = ?",
-                arrayOf(file.absolutePath)
-            )
-        } catch (_: Exception) {}
-        try {
-            context.contentResolver.delete(
-                android.provider.MediaStore.Files.getContentUri("external"),
-                "${android.provider.MediaStore.MediaColumns.DATA} = ?",
-                arrayOf(file.absolutePath)
-            )
-        } catch (_: Exception) {}
     }
 
     fun formatFileSize(bytes: Long): String {

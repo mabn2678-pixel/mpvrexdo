@@ -81,13 +81,9 @@ class FileTransferManager(
                         } catch (_: Exception) {
                             false
                         }
-                        if (renamed) {
+                        if (renamed && newFile.exists()) {
                             secureMediaDao.insert(entity.copy(vaultPath = newFile.absolutePath))
-                            FileOperationsUtil.purgeFromMediaStore(context, file)
-                            FileOperationsUtil.purgeFromMediaStore(context, newFile)
                         }
-                    } else {
-                        FileOperationsUtil.purgeFromMediaStore(context, file)
                     }
                 }
             }
@@ -100,10 +96,7 @@ class FileTransferManager(
                 vaultDir.listFiles()?.forEach { f ->
                     if (f.isFile && (f.name.endsWith(".mp4", ignoreCase = true) || f.name.endsWith(".mkv", ignoreCase = true))) {
                         val newF = File(vaultDir, ".sec_${System.currentTimeMillis()}_${f.nameWithoutExtension}.vlt")
-                        if (f.renameTo(newF)) {
-                            FileOperationsUtil.purgeFromMediaStore(context, f)
-                            FileOperationsUtil.purgeFromMediaStore(context, newF)
-                        }
+                        f.renameTo(newF)
                     }
                 }
             }
@@ -359,6 +352,11 @@ class FileTransferManager(
                                     totalBytesProcessed += fileSize
                                     finalizeFileProgress()
                                     FileOperationsUtil.scanFile(context, sourceFile)
+                                    if (video.uri.startsWith("content://")) {
+                                        try {
+                                            context.contentResolver.delete(Uri.parse(video.uri), null, null)
+                                        } catch (_: Exception) {}
+                                    }
                                 }
                             }
 
@@ -397,8 +395,6 @@ class FileTransferManager(
                                     } catch (_: Exception) {}
                                 }
                             }
-
-                            FileOperationsUtil.purgeFromMediaStore(context, vaultTargetFile)
 
                             val actualSize = if (vaultTargetFile.exists()) vaultTargetFile.length() else video.sizeBytes
 
@@ -480,7 +476,6 @@ class FileTransferManager(
                                 if (restored && destinationFile.exists()) {
                                     totalBytesProcessed += fileSize
                                     finalizeFileProgress()
-                                    FileOperationsUtil.purgeFromMediaStore(context, vaultFile)
                                 }
                             }
 
@@ -500,7 +495,6 @@ class FileTransferManager(
                                 finalizeFileProgress()
 
                                 vaultFile.delete()
-                                FileOperationsUtil.purgeFromMediaStore(context, vaultFile)
                             }
 
                             FileOperationsUtil.scanFile(context, destinationFile)
