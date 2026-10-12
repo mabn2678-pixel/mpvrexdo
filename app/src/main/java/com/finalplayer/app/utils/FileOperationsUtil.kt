@@ -174,15 +174,24 @@ object FileOperationsUtil {
 
     suspend fun deleteFiles(context: Context, files: List<File>): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            if (!hasStoragePermission(context)) {
-                return@withContext Result.failure(SecurityException("يلزم منح إذن الوصول للتخزين"))
-            }
-
             for (file in files) {
-                if (!file.exists()) continue
-                val deleted = file.delete()
-                if (deleted) {
-                    scanFile(context, file)
+                if (file.exists()) {
+                    val deleted = try { file.delete() } catch (_: Exception) { false }
+                    if (deleted) {
+                        try {
+                            val where = "${MediaStore.Video.Media.DATA} = ?"
+                            val args = arrayOf(file.absolutePath)
+                            context.contentResolver.delete(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, where, args)
+                        } catch (_: Exception) {}
+                        scanFile(context, file)
+                    }
+                } else {
+                    // Clean up any stale MediaStore row for this missing file
+                    try {
+                        val where = "${MediaStore.Video.Media.DATA} = ?"
+                        val args = arrayOf(file.absolutePath)
+                        context.contentResolver.delete(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, where, args)
+                    } catch (_: Exception) {}
                 }
             }
             Result.success(Unit)

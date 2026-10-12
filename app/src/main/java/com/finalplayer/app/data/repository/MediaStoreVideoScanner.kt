@@ -60,7 +60,34 @@ class MediaStoreVideoScanner(private val context: Context) {
                     val height = c.getInt(heightColumn)
                     val mimeType = c.getString(mimeTypeColumn) ?: "video/*"
 
+                    // Ignore secure vault files or private hidden files
+                    if (fullPath.contains(".secure_vault") || fullPath.endsWith(".vlt") || title.startsWith(".sec_")) {
+                        continue
+                    }
+
                     val fileOnDisk = if (fullPath.isNotEmpty()) File(fullPath) else null
+
+                    // If file path is recorded in MediaStore but the file does not exist on disk,
+                    // this is a stale ghost entry from a previously deleted video!
+                    if (fileOnDisk != null && !fileOnDisk.exists()) {
+                        try {
+                            val deadUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+                            context.contentResolver.delete(deadUri, null, null)
+                        } catch (_: Exception) {}
+                        continue
+                    }
+
+                    // Ignore ghost files that have 0 bytes and 0 duration
+                    if (sizeBytes <= 0 && duration <= 0) {
+                        if (fileOnDisk == null || !fileOnDisk.exists() || fileOnDisk.length() <= 0L) {
+                            try {
+                                val deadUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+                                context.contentResolver.delete(deadUri, null, null)
+                            } catch (_: Exception) {}
+                            continue
+                        }
+                    }
+
                     val fileLmSeconds = if (fileOnDisk != null && fileOnDisk.exists()) fileOnDisk.lastModified() / 1000L else 0L
                     val trueDateAdded = maxOf(dateAdded, dateModified, fileLmSeconds)
 
@@ -81,13 +108,20 @@ class MediaStoreVideoScanner(private val context: Context) {
                         extractDurationForVideo(fullPath, uri)
                     }
 
+                    // If the duration is 0 and the file is empty or missing, skip it completely
+                    if (finalDuration <= 0L && (fileOnDisk == null || fileOnDisk.length() <= 0L)) {
+                        continue
+                    }
+
+                    val finalSizeBytes = if (sizeBytes > 0L) sizeBytes else (fileOnDisk?.length() ?: 0L)
+
                     videoList.add(
                         VideoEntity(
                             id = videoKey,
                             uri = finalPlaybackUri,
                             title = title,
                             duration = finalDuration,
-                            sizeBytes = sizeBytes,
+                            sizeBytes = finalSizeBytes,
                             thumbnailPath = null,
                             dateAdded = trueDateAdded,
                             resolution = resolution,
@@ -165,14 +199,15 @@ class MediaStoreVideoScanner(private val context: Context) {
                 dir.walkTopDown()
                     .onEnter { subDir ->
                         val name = subDir.name
-                        !name.startsWith(".") && name != "Android" && name != "cache"
+                        !name.startsWith(".") && name != "Android" && name != "cache" && !name.contains("vault", ignoreCase = true)
                     }
                     .maxDepth(3)
                     .filter { file ->
                         file.isFile && 
                         file.extension.lowercase() in videoExtensions && 
                         file.length() > 0 &&
-                        !file.name.startsWith(".")
+                        !file.name.startsWith(".") &&
+                        !file.name.endsWith(".vlt")
                     }
                     .forEach { file ->
                         val path = file.absolutePath

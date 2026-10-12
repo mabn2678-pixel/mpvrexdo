@@ -419,6 +419,7 @@ private data class SortConfig(
     ) {
         viewModelScope.launch {
             val result = videoRepository.deleteVideos(videos, context)
+            refreshVideos()
             if (result.isSuccess) {
                 onComplete(true, "تم حذف ${videos.size} ملف بنجاح")
             } else {
@@ -479,8 +480,14 @@ private data class SortConfig(
                         dir.deleteRecursively()
                         deletedCount++
                     }
+                    try {
+                        val where = "${android.provider.MediaStore.Video.Media.DATA} LIKE ?"
+                        val args = arrayOf("$cleanPath/%")
+                        context.contentResolver.delete(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, where, args)
+                    } catch (_: Exception) {}
                 }
                 scanForVideosUseCase()
+                refreshVideos()
                 withContext(kotlinx.coroutines.Dispatchers.Main) {
                     onComplete(true, "تم حذف $deletedCount مجلد بنجاح")
                 }

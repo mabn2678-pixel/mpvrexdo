@@ -122,6 +122,20 @@ class VideoRepositoryImpl(
         if (scannedVideos.isNotEmpty()) {
             videoDao.insertVideos(scannedVideos)
             videoDao.deleteMissingVideos(scannedVideos.map { it.id })
+            videoDao.deleteZeroDurationAndSizeVideos()
+
+            // Remove any ghost videos from Room DB whose files were physically deleted
+            try {
+                val currentVideos = videoDao.getAllVideosSync()
+                for (entity in currentVideos) {
+                    if (!entity.uri.startsWith("content://")) {
+                        val f = File(entity.uri)
+                        if (!f.exists()) {
+                            videoDao.deleteVideo(entity.id)
+                        }
+                    }
+                }
+            } catch (_: Throwable) {}
             
             try {
                 val zeroDurationList = videoDao.getZeroDurationVideos()
@@ -418,10 +432,44 @@ class VideoRepositoryImpl(
 
     override suspend fun deleteVideos(videos: List<VideoItem>, context: android.content.Context): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val files = videos.map { FileOperationsUtil.getVideoFile(it) }
-            FileOperationsUtil.deleteFiles(context, files)
             for (video in videos) {
+                // 1. If it's a content URI, delete from MediaStore
+                if (video.uri.startsWith("content://")) {
+                    try {
+                        context.contentResolver.delete(android.net.Uri.parse(video.uri), null, null)
+                    } catch (_: Exception) {}
+                }
+
+                // 2. Resolve physical file with context
+                val file = FileOperationsUtil.getVideoFile(video, context)
+                val filePath = if (file.exists()) file.absolutePath else if (video.folderPath.isNotBlank()) "${video.folderPath}/${video.title}" else video.uri
+                
+                // 3. Delete physical file
+                if (file.exists()) {
+                    try {
+                        file.delete()
+                    } catch (_: Exception) {}
+                }
+
+                // 4. Delete from MediaStore by DATA path and DISPLAY_NAME
+                try {
+                    val where = "${android.provider.MediaStore.Video.Media.DATA} = ? OR ${android.provider.MediaStore.Video.Media.DISPLAY_NAME} = ?"
+                    val args = arrayOf(filePath, video.title)
+                    context.contentResolver.delete(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, where, args)
+                } catch (_: Exception) {}
+
+                // 5. Notify MediaScanner
+                if (filePath.startsWith("/")) {
+                    try {
+                        android.media.MediaScannerConnection.scanFile(context, arrayOf(filePath), null, null)
+                    } catch (_: Exception) {}
+                }
+
+                // 6. Delete from database
                 videoDao.deleteVideo(video.id)
+                videoDao.deleteVideo(video.uri)
+                videoDao.deleteVideo(filePath)
+                secureMediaDao.remove(video.id)
             }
             Result.success(Unit)
         } catch (e: Exception) {

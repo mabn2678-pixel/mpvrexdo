@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
@@ -16,6 +17,7 @@ import android.util.Log
 import android.util.Rational
 import android.view.KeyEvent
 import android.view.WindowManager
+import com.finalplayer.app.R
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -274,7 +276,7 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    fun updatePipParams() {
+    fun buildPipParams(): PictureInPictureParams? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val aspect = viewModel.videoAspect.value ?: 1.7777
             val rawW = (aspect * 100).toInt()
@@ -293,9 +295,13 @@ class PlayerActivity : ComponentActivity() {
                 Intent(ACTION_PIP_CONTROL).putExtra(EXTRA_PIP_CONTROL, PIP_CONTROL_PLAY_PAUSE),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val nextPendingIntent = PendingIntent.getBroadcast(
-                this, 3,
-                Intent(ACTION_PIP_CONTROL).putExtra(EXTRA_PIP_CONTROL, PIP_CONTROL_NEXT),
+            // Expand action: Brings PlayerActivity to the front, instantly expanding PiP to full screen!
+            val expandIntent = Intent(this, PlayerActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            val expandPendingIntent = PendingIntent.getActivity(
+                this, 4,
+                expandIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -313,14 +319,14 @@ class PlayerActivity : ComponentActivity() {
                 playPauseTitle,
                 playPausePendingIntent
             )
-            val nextAction = RemoteAction(
-                Icon.createWithResource(this, android.R.drawable.ic_media_next),
-                "التالي",
-                "التالي",
-                nextPendingIntent
+            val expandAction = RemoteAction(
+                Icon.createWithResource(this, R.drawable.ic_pip_expand),
+                "تكبير",
+                "تكبير الشاشة بحجم يوتيوب",
+                expandPendingIntent
             )
 
-            val actions = listOf(prevAction, playPauseAction, nextAction)
+            val actions = listOf(prevAction, playPauseAction, expandAction)
             val paramsBuilder = PictureInPictureParams.Builder()
                 .setAspectRatio(rational)
                 .setActions(actions)
@@ -328,10 +334,30 @@ class PlayerActivity : ComponentActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val autoPip = viewModel.playerPrefs?.autoPiPOnNavigation?.get() ?: true
                 paramsBuilder.setAutoEnterEnabled(autoPip)
+                // Allows smooth resizing/expansion of PiP window (e.g. double-tapping to enlarge to full width)
+                paramsBuilder.setSeamlessResizeEnabled(true)
             }
 
             try {
-                setPictureInPictureParams(paramsBuilder.build())
+                val visibleRect = Rect()
+                window.decorView.getGlobalVisibleRect(visibleRect)
+                if (!visibleRect.isEmpty) {
+                    paramsBuilder.setSourceRectHint(visibleRect)
+                }
+            } catch (_: Exception) {}
+
+            return paramsBuilder.build()
+        }
+        return null
+    }
+
+    fun updatePipParams() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val params = buildPipParams()
+                if (params != null) {
+                    setPictureInPictureParams(params)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to set PiP params", e)
             }
@@ -341,15 +367,12 @@ class PlayerActivity : ComponentActivity() {
     fun enterPiPMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
-                updatePipParams()
-                val aspect = viewModel.videoAspect.value ?: 1.7777
-                val rawW = (aspect * 100).toInt()
-                val clampedW = rawW.coerceIn(42, 238)
-                val rational = Rational(clampedW, 100)
-                val params = PictureInPictureParams.Builder()
-                    .setAspectRatio(rational)
-                    .build()
-                enterPictureInPictureMode(params)
+                val params = buildPipParams()
+                if (params != null) {
+                    enterPictureInPictureMode(params)
+                } else {
+                    enterPictureInPictureMode()
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to enter Picture-in-Picture mode", e)
             }
@@ -450,6 +473,12 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        viewModel.setControlsShown(true)
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         val isPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
@@ -470,6 +499,12 @@ class PlayerActivity : ComponentActivity() {
                     viewModel.setBackgroundPlay(false)
                     MediaPlaybackService.stopService(applicationContext)
                     finishAndRemoveTask()
+                    // Returned from PiP mode to full-screen player (e.g. via expand action or window tap)
+                    val prefKey: String = viewModel.playerPrefs?.playerOrientation?.get() ?: "video"
+                    val aspect = viewModel.videoAspect.value
+                    applyOrientation(prefKey, aspect, null, false)
+                    // Resume playback seamlessly
+                    viewModel.play()
                 }
             }
         }

@@ -42,6 +42,12 @@ interface VideoDao {
     @Query("SELECT * FROM videos WHERE duration <= 0")
     suspend fun getZeroDurationVideos(): List<VideoEntity>
 
+    @Query("DELETE FROM videos WHERE duration <= 0 AND sizeBytes <= 0")
+    suspend fun deleteZeroDurationAndSizeVideos()
+
+    @Query("SELECT * FROM videos")
+    suspend fun getAllVideosSync(): List<VideoEntity>
+
     @Query("""
         SELECT * FROM videos 
         WHERE title LIKE :query OR folderPath LIKE :query
