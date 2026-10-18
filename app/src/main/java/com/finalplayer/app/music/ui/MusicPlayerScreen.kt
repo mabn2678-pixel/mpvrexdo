@@ -81,6 +81,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -478,13 +479,18 @@ fun MusicPlayerScreen(
                                 else -> 0.18f
                             }
 
+                            val isArabic = remember(line.text) {
+                                line.text.any { c -> c in '\u0600'..'\u06FF' || c in '\u0750'..'\u077F' }
+                            }
+
                             Text(
                                 text = line.text,
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontSize = if (isCurrent) 26.sp else 20.sp,
                                     fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Bold,
                                     color = if (isCurrent) Color.White else Color.White.copy(alpha = opacity),
-                                    lineHeight = if (isCurrent) 38.sp else 30.sp
+                                    lineHeight = if (isCurrent) 38.sp else 30.sp,
+                                    textDirection = if (isArabic) TextDirection.Rtl else TextDirection.Ltr
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -492,8 +498,8 @@ fun MusicPlayerScreen(
                                         userInteracted()
                                         viewModel.seekToLine(line)
                                     }
-                                    .padding(vertical = 6.dp),
-                                textAlign = TextAlign.Right
+                                    .padding(vertical = 6.dp, horizontal = 4.dp),
+                                textAlign = if (isArabic) TextAlign.Right else TextAlign.Left
                             )
                         }
                     }

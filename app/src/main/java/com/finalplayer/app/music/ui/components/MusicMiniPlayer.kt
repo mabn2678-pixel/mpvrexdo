@@ -35,6 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,12 +69,12 @@ fun MusicMiniPlayer(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
         ) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(62.dp)
+                    .height(64.dp)
                     .shadow(elevation = 8.dp, shape = CircleShape)
                     .clip(CircleShape)
                     .clickable(onClick = onClick),
@@ -83,7 +87,7 @@ fun MusicMiniPlayer(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(60.dp)
+                            .height(62.dp)
                             .padding(start = 6.dp, end = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -97,38 +101,80 @@ fun MusicMiniPlayer(
                                 .clip(CircleShape)
                         )
 
-                        Spacer(modifier = Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
 
                         Column(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text(
                                 text = song.title,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                style = TextStyle(
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    textDirection = TextDirection.ContentOrLtr
+                                ),
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                softWrap = false,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .basicMarquee(
+                                        iterations = Int.MAX_VALUE,
+                                        initialDelayMillis = 1500
+                                    )
                             )
-                            Spacer(modifier = Modifier.height(1.dp))
-                            Text(
-                                text = song.artist,
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            val currentLyric = state.currentLyric
+                            if (!currentLyric.isNullOrBlank()) {
+                                Text(
+                                    text = "♪ $currentLyric",
+                                    style = TextStyle(
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        textDirection = TextDirection.ContentOrLtr
+                                    ),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .basicMarquee(
+                                            iterations = Int.MAX_VALUE,
+                                            initialDelayMillis = 1000
+                                        )
+                                )
+                            } else {
+                                Text(
+                                    text = song.artist,
+                                    style = TextStyle(
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textDirection = TextDirection.ContentOrLtr
+                                    ),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .basicMarquee(
+                                            iterations = Int.MAX_VALUE,
+                                            initialDelayMillis = 1500
+                                        )
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.width(4.dp))
 
                         IconButton(
                             onClick = onPreviousClick,
-                            modifier = Modifier.size(34.dp)
+                            modifier = Modifier.size(30.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipPrevious,
                                 contentDescription = "السابق",
                                 tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                         }
 
@@ -146,25 +192,25 @@ fun MusicMiniPlayer(
 
                         IconButton(
                             onClick = onNextClick,
-                            modifier = Modifier.size(34.dp)
+                            modifier = Modifier.size(30.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.SkipNext,
                                 contentDescription = "التالي",
                                 tint = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                         }
 
                         IconButton(
                             onClick = onCloseClick,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "إغلاق الأغنية",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(17.dp)
                             )
                         }
                     }

@@ -9,6 +9,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.finalplayer.app.music.data.local.LrcParser
 import com.finalplayer.app.music.data.model.MusicPlayerState
 import com.finalplayer.app.music.data.model.Song
 import com.google.common.util.concurrent.ListenableFuture
@@ -26,12 +27,18 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 @OptIn(UnstableApi::class)
-class MusicController(private val context: Context) {
+class MusicController(
+    private val context: Context,
+    private val lrcParser: LrcParser = LrcParser()
+) {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private var pollingJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main + Job())
+
+    private var cachedLrcSongId: Long? = null
+    private var cachedLrc: LrcParser.ParsedLrc? = null
 
     private val _state = MutableStateFlow(MusicPlayerState())
     val state: StateFlow<MusicPlayerState> = _state.asStateFlow()
@@ -132,15 +139,36 @@ class MusicController(private val context: Context) {
         val currentSpeed = controller.playbackParameters.speed
         val validSpeed = if (currentSpeed > 0.05f) currentSpeed else 1.0f
 
+        val posMs = controller.currentPosition.coerceAtLeast(0L)
+
+        // Check and fetch LRC if new song is playing
+        if (currentSong != null && currentSong.id != cachedLrcSongId) {
+            cachedLrcSongId = currentSong.id
+            scope.launch(Dispatchers.IO) {
+                try {
+                    cachedLrc = lrcParser.findLrcForSong(currentSong)
+                } catch (_: Exception) {
+                    cachedLrc = null
+                }
+            }
+        }
+
+        val lrc = cachedLrc
+        val lyricText = if (lrc != null && lrc.lines.isNotEmpty()) {
+            val idx = lrcParser.getCurrentLineIndex(lrc.lines, posMs)
+            if (idx in lrc.lines.indices) lrc.lines[idx].text else null
+        } else null
+
         _state.value = _state.value.copy(
             currentSong = currentSong,
             isPlaying = controller.isPlaying,
-            positionMs = controller.currentPosition.coerceAtLeast(0L),
+            positionMs = posMs,
             durationMs = controller.duration.coerceAtLeast(0L),
             repeatMode = controller.repeatMode,
             shuffleEnabled = controller.shuffleModeEnabled,
             currentQueueIndex = currentIndex,
-            playbackSpeed = validSpeed
+            playbackSpeed = validSpeed,
+            currentLyric = lyricText
         )
     }
 

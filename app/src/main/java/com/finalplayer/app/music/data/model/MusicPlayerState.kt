@@ -9,5 +9,6 @@ data class MusicPlayerState(
     val shuffleEnabled: Boolean = false,
     val queue: List<Song> = emptyList(),
     val currentQueueIndex: Int = 0,
-    val playbackSpeed: Float = 1.0f
+    val playbackSpeed: Float = 1.0f,
+    val currentLyric: String? = null
 )

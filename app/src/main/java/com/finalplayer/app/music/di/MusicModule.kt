@@ -16,7 +16,7 @@ val musicModule = module {
     single { MediaStoreScanner(androidContext()) }
     single { LrcParser() }
     single<MusicRepository> { MusicRepositoryImpl(androidContext(), get(), get()) }
-    single { MusicController(androidContext()) }
+    single { MusicController(androidContext(), get()) }
     single { MusicDatabase.getInstance(androidContext()) }
     single { get<MusicDatabase>().playlistDao() }
     viewModel { MusicLibraryViewModel(get(), get()) }

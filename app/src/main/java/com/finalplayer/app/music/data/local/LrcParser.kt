@@ -36,6 +36,7 @@ class LrcParser {
 
         val timestampPattern = Pattern.compile("\\[(\\d{1,3}):(\\d{2})(?:[.:](\\d{2,3}))?\\]")
         val tagPattern = Pattern.compile("\\[([a-zA-Z]+):(.*)\\]")
+        val inlineTimestampPattern = Pattern.compile("<\\d{1,3}:\\d{2}(?:[.:]\\d{2,3})?>|\\(\\d{1,3}:\\d{2}(?:[.:]\\d{2,3})?\\)|\\[\\d{1,3}:\\d{2}(?:[.:]\\d{2,3})?\\]|<\\d+>|\\{\\\\?[^}]+\\}")
 
         content.lines().forEach { rawLine ->
             val line = rawLine.trim()
@@ -66,9 +67,12 @@ class LrcParser {
             }
 
             if (timestamps.isNotEmpty()) {
-                val text = line.substring(lastMatchEnd).trim()
-                for (ts in timestamps) {
-                    rawLinesList.add(LrcLine(timeMs = ts, text = text))
+                val rawText = line.substring(lastMatchEnd)
+                val cleanedText = cleanLyricLine(rawText, inlineTimestampPattern)
+                if (cleanedText.isNotEmpty()) {
+                    for (ts in timestamps) {
+                        rawLinesList.add(LrcLine(timeMs = ts, text = cleanedText))
+                    }
                 }
             } else {
                 val tagMatcher = tagPattern.matcher(line)
@@ -150,6 +154,20 @@ class LrcParser {
             title = song.title,
             artist = song.artist
         )
+    }
+
+    fun cleanLyricLine(rawText: String, inlinePattern: Pattern? = null): String {
+        val pattern = inlinePattern ?: Pattern.compile("<\\d{1,3}:\\d{2}(?:[.:]\\d{2,3})?>|\\(\\d{1,3}:\\d{2}(?:[.:]\\d{2,3})?\\)|\\[\\d{1,3}:\\d{2}(?:[.:]\\d{2,3})?\\]|<\\d+>|\\{\\\\?[^}]+\\}")
+        var text = pattern.matcher(rawText).replaceAll("")
+        text = text.replace("&apos;", "'")
+            .replace("&#39;", "'")
+            .replace("&quot;", "\"")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return text
     }
 
     fun getCurrentLineIndex(lines: List<LrcLine>, positionMs: Long): Int {
