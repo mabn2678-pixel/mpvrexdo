@@ -823,10 +823,8 @@ fun HomeScreen(
                 }
             },
             onDelete = { deleteFolders ->
-                viewModel.deleteFolders(deleteFolders, context) { _, message ->
-                    coroutineScope.launch { snackbarHostState.showSnackbar(message) }
-                }
-                selectedFolders = emptySet()
+                selectedFolders = deleteFolders.toSet()
+                showDeleteFolderDialog = true
             },
             onInfo = { folder ->
                 val cleanPath = folder.path.replace("//", "/").trimEnd('/')
@@ -921,8 +919,12 @@ fun HomeScreen(
     }
 
     if (showDeleteDialog && selectedVideos.isNotEmpty()) {
+        val totalSize = selectedVideos.sumOf { it.sizeBytes }
         DeleteConfirmDialog(
             itemCount = selectedVideos.size,
+            totalSizeBytes = totalSize,
+            itemTypeLabel = if (selectedVideos.size == 1) "فيديو" else "فيديوهات",
+            itemNames = selectedVideos.take(3).map { it.title },
             onConfirm = {
                 showDeleteDialog = false
                 val items = selectedVideos.toList()
@@ -936,8 +938,22 @@ fun HomeScreen(
     }
 
     if (showDeleteFolderDialog && selectedFolders.isNotEmpty()) {
+        val folderNames = selectedFolders.joinToString("، ") { it.name.ifEmpty { it.path.substringAfterLast('/') } }
+        val videosInSelectedFolders = getVideosInFolders(selectedFolders.toList())
+        val totalVideosCount = if (videosInSelectedFolders.isNotEmpty()) videosInSelectedFolders.size else selectedFolders.sumOf { it.videoCount }
+        val totalFoldersSize = if (videosInSelectedFolders.isNotEmpty()) {
+            videosInSelectedFolders.sumOf { it.sizeBytes }
+        } else {
+            selectedFolders.sumOf { it.totalSizeBytes }
+        }
+
         DeleteConfirmDialog(
             itemCount = selectedFolders.size,
+            totalSizeBytes = totalFoldersSize,
+            itemTypeLabel = if (selectedFolders.size == 1) "مجلد ($totalVideosCount فيديو)" else "مجلدات ($totalVideosCount فيديو)",
+            title = if (selectedFolders.size == 1) "حذف فيديوهات المجلد؟" else "حذف فيديوهات المجلدات؟",
+            message = "سيتم حذف ملفات الفيديو فقط داخل ($folderNames). لن يتم حذف أي قوائم تشغيل أو ملفات صوتية أو مستندات أخرى.",
+            itemNames = selectedFolders.map { it.name.ifEmpty { it.path.substringAfterLast('/') } },
             onConfirm = {
                 showDeleteFolderDialog = false
                 val items = selectedFolders.toList()

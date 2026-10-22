@@ -284,7 +284,7 @@ fun FolderContextMenuSheet(
                 // Delete
                 FolderMenuItem(
                     icon = Icons.Default.Delete,
-                    title = if (isSingleSelection) "حذف المجلد" else "حذف المجلدات المحددة",
+                    title = if (isSingleSelection) "حذف فيديوهات المجلد" else "حذف فيديوهات المجلدات المحددة",
                     tint = MaterialTheme.colorScheme.error,
                     onClick = {
                         onDismiss()

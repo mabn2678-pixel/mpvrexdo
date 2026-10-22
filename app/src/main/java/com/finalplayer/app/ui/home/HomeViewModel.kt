@@ -472,24 +472,89 @@ private data class SortConfig(
     ) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
-                var deletedCount = 0
-                for (folder in folders) {
-                    val cleanPath = folder.path.replace("//", "/").trimEnd('/')
+                val videoExtensions = setOf("mp4", "mkv", "webm", "avi", "mov", "3gp", "flv", "m4v", "ts", "wmv", "asf")
+                val playlistExtensions = setOf("m3u", "m3u8", "pls", "wpl", "zpl", "xspf", "cue", "b4s")
+                val protectedDirs = setOf(
+                    "/storage/emulated/0",
+                    "/storage/emulated/0/Download",
+                    "/storage/emulated/0/Downloads",
+                    "/storage/emulated/0/DCIM",
+                    "/storage/emulated/0/Movies",
+                    "/storage/emulated/0/Pictures",
+                    "/storage/emulated/0/Music",
+                    "/storage/emulated/0/Documents",
+                    "/storage/emulated/0/Android"
+                )
+
+                val allVideos = _uiState.value.allVideos
+                val cleanFolderPaths = folders.map { it.path.replace("//", "/").trimEnd('/') }.toSet()
+
+                // 1. Gather all tracked video items in these folders
+                val videosInFolders = allVideos.filter { video ->
+                    val vFolder = video.folderPath.replace("//", "/").trimEnd('/')
+                    vFolder in cleanFolderPaths || cleanFolderPaths.any { cp -> video.uri.startsWith("$cp/") }
+                }
+
+                // 2. Delete all these videos cleanly via repository (file + MediaStore + DB)
+                if (videosInFolders.isNotEmpty()) {
+                    videoRepository.deleteVideos(videosInFolders, context)
+                }
+
+                // 3. Scan physical folders to delete remaining video files ONLY, strictly preserving playlists
+                var additionalVideosDeleted = 0
+                for (cleanPath in cleanFolderPaths) {
                     val dir = java.io.File(cleanPath)
-                    if (dir.exists()) {
-                        dir.deleteRecursively()
-                        deletedCount++
+                    if (dir.exists() && dir.isDirectory) {
+                        try {
+                            val files = dir.listFiles() ?: emptyArray()
+                            for (file in files) {
+                                if (file.isFile) {
+                                    val ext = file.extension.lowercase(java.util.Locale.ROOT)
+                                    // Strictly skip and preserve playlist files and non-video files
+                                    if (ext in playlistExtensions) continue
+                                    if (ext in videoExtensions) {
+                                        val deleted = try { file.delete() } catch (_: Exception) { false }
+                                        if (deleted) {
+                                            additionalVideosDeleted++
+                                            try {
+                                                val where = "${android.provider.MediaStore.Video.Media.DATA} = ?"
+                                                val args = arrayOf(file.absolutePath)
+                                                context.contentResolver.delete(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, where, args)
+                                            } catch (_: Exception) {}
+                                            com.finalplayer.app.utils.FileOperationsUtil.scanFile(context, file)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 4. Folder directory deletion check:
+                            // NEVER delete root/system directories like Download, Movies, DCIM!
+                            val isProtected = protectedDirs.any { p ->
+                                cleanPath.equals(p, ignoreCase = true) || cleanPath.equals("$p/", ignoreCase = true)
+                            }
+                            if (!isProtected) {
+                                // Only delete the directory if it is completely empty (no playlists, no files)
+                                val remaining = dir.listFiles()
+                                if (remaining.isNullOrEmpty()) {
+                                    try { dir.delete() } catch (_: Exception) {}
+                                }
+                            }
+                        } catch (_: Exception) {}
                     }
+
+                    // Prune video MediaStore records for this folder path
                     try {
                         val where = "${android.provider.MediaStore.Video.Media.DATA} LIKE ?"
                         val args = arrayOf("$cleanPath/%")
                         context.contentResolver.delete(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, where, args)
                     } catch (_: Exception) {}
                 }
+
                 scanForVideosUseCase()
                 refreshVideos()
                 withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    onComplete(true, "تم حذف $deletedCount مجلد بنجاح")
+                    val total = videosInFolders.size + additionalVideosDeleted
+                    onComplete(true, "تم حذف $total فيديو من المجلد بنجاح مع الحفاظ على قوائم التشغيل")
                 }
             } catch (e: Exception) {
                 withContext(kotlinx.coroutines.Dispatchers.Main) {

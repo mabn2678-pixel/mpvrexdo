@@ -538,8 +538,12 @@ fun FolderDetailScreen(
     }
 
     if (showDeleteDialog && selectedVideos.isNotEmpty()) {
+        val totalSize = selectedVideos.sumOf { it.sizeBytes }
         DeleteConfirmDialog(
             itemCount = selectedVideos.size,
+            totalSizeBytes = totalSize,
+            itemTypeLabel = if (selectedVideos.size == 1) "فيديو" else "فيديوهات",
+            itemNames = selectedVideos.take(3).map { it.title },
             onConfirm = {
                 showDeleteDialog = false
                 val items = selectedVideos.toList()

@@ -482,8 +482,12 @@ fun MusicLibraryScreen(
             }
 
             if (showDeleteDialog && selectedSongs.isNotEmpty()) {
+                val totalSize = selectedSongs.sumOf { it.size }
                 DeleteConfirmDialog(
                     itemCount = selectedSongs.size,
+                    totalSizeBytes = totalSize,
+                    itemTypeLabel = if (selectedSongs.size == 1) "أغنية" else "أغاني",
+                    itemNames = selectedSongs.take(3).map { it.title },
                     onConfirm = {
                         val toDelete = selectedSongs.toList()
                         viewModel.deleteSongs(toDelete, context)

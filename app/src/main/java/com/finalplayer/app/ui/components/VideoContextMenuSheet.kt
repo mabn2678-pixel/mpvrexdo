@@ -325,9 +325,13 @@ fun VideoContextMenuSheet(
         )
     }
 
-    if (showDeleteDialog) {
+    if (showDeleteDialog && selectedItems.isNotEmpty()) {
+        val totalSize = selectedItems.sumOf { it.sizeBytes }
         DeleteConfirmDialog(
             itemCount = selectedItems.size,
+            totalSizeBytes = totalSize,
+            itemTypeLabel = if (selectedItems.size == 1) "فيديو" else "فيديوهات",
+            itemNames = selectedItems.take(3).map { it.title },
             onConfirm = {
                 showDeleteDialog = false
                 onDismiss()

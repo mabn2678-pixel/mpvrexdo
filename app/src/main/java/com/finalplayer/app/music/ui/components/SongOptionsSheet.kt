@@ -201,6 +201,9 @@ fun SongOptionsSheet(
     if (showDeleteConfirmDialog) {
         DeleteConfirmDialog(
             itemCount = 1,
+            totalSizeBytes = song.size,
+            itemTypeLabel = "أغنية",
+            itemNames = listOf(song.title),
             onConfirm = {
                 showDeleteConfirmDialog = false
                 onDismiss()
