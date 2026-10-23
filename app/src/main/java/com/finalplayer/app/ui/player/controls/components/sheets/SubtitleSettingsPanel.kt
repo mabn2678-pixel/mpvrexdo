@@ -827,16 +827,31 @@ private fun applyTypographyToMPV(
 ) {
     if (fontName.isNotBlank() && !fontName.contains("System", ignoreCase = true) && !fontName.contains("نظام", ignoreCase = true)) {
         val matching = SubtitleFontManager.DEFAULT_FONTS.find {
-            it.name.equals(fontName, ignoreCase = true) || it.fileName.equals(fontName, ignoreCase = true)
+            it.name.equals(fontName, ignoreCase = true) || 
+            it.fileName.equals(fontName, ignoreCase = true) ||
+            it.familyName.equals(fontName, ignoreCase = true) ||
+            it.id.equals(fontName, ignoreCase = true)
         }
-        val target = matching?.fileName ?: fontName
+        val target = matching?.familyName ?: fontName
+        MPVLib.setPropertyString("embeddedfonts", "no")
+        MPVLib.setOptionString("embeddedfonts", "no")
         MPVLib.setPropertyString("sub-font", target)
         MPVLib.setOptionString("sub-font", target)
         MPVLib.setPropertyString("osd-font", target)
         MPVLib.setOptionString("osd-font", target)
+        MPVLib.setPropertyString("sub-ass-override", "force")
+        MPVLib.setOptionString("sub-ass-override", "force")
+        MPVLib.setPropertyString("sub-ass-force-style", "FontName=$target")
+        MPVLib.setOptionString("sub-ass-force-style", "FontName=$target")
     } else {
+        MPVLib.setPropertyString("embeddedfonts", "yes")
+        MPVLib.setOptionString("embeddedfonts", "yes")
         MPVLib.setPropertyString("sub-font", "")
         MPVLib.setOptionString("sub-font", "")
+        MPVLib.setPropertyString("osd-font", "")
+        MPVLib.setOptionString("osd-font", "")
+        MPVLib.setPropertyString("sub-ass-force-style", "")
+        MPVLib.setOptionString("sub-ass-force-style", "")
     }
 
     // sub-bold: تفعيل أو إلغاء الخط العريض

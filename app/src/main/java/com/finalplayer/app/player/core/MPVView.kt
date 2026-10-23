@@ -377,6 +377,11 @@ class MPVView @JvmOverloads constructor(
     fun applySubtitleOptions(libParam: MPVLib? = null) {
         val lib = libParam ?: getActiveLib() ?: return
         try {
+            val fontsDir = com.finalplayer.app.subtitles.SubtitleFontManager.getFontsDirectory(context)
+            com.finalplayer.app.subtitles.SubtitleFontManager.ensureBundledFontsExtracted(context)
+            lib.setOptionString("sub-fonts-dir", fontsDir.absolutePath)
+            lib.setOptionString("sub-font-provider", "fontconfig")
+
             lib.setOptionString("sub-auto", "no")
             val isPortrait = context.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
             val initialSize = if (isPortrait) 21 else 41
@@ -387,7 +392,7 @@ class MPVView @JvmOverloads constructor(
             lib.setOptionString("sub-ass-scale-with-window", "yes")
             lib.setOptionString("sub-use-margins", "yes")
             lib.setOptionString("sub-ass-override", "force")
-            lib.setOptionString("embeddedfonts", "yes")
+            lib.setOptionString("embeddedfonts", "no")
             lib.setOptionString("blend-subtitles", "no")
             lib.setOptionString("sub-margin-y", "5")
             lib.setOptionString("sub-border-size", "3.0")

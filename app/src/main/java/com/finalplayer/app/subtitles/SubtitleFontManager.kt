@@ -3,6 +3,7 @@ package com.finalplayer.app.subtitles
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.system.Os
 import android.util.Log
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -16,6 +17,7 @@ data class SubtitleFont(
     val id: String,
     val name: String,
     val fileName: String,
+    val familyName: String = name,
     val isBundled: Boolean = true,
     val isCustom: Boolean = false,
     val isSystemDefault: Boolean = false,
@@ -25,14 +27,15 @@ data class SubtitleFont(
 
 object SubtitleFontManager {
     private const val TAG = "SubtitleFontManager"
-    private const val SUB_FONTS_DIR_NAME = "sub_fonts"
+    private const val SUB_FONTS_DIR_NAME = "fonts"
 
-    // القائمة الافتراضية للخطوط المطابقة تماماً للصورة والمشهورة في الترجمة
+    // القائمة الافتراضية للخطوط المطابقة تماماً للصورة والمشهورة في الترجمة العربية
     val DEFAULT_FONTS = listOf(
         SubtitleFont(
             id = "system_default",
             name = "خط النظام الافتراضي (System Default)",
             fileName = "",
+            familyName = "",
             isBundled = false,
             isSystemDefault = true
         ),
@@ -40,114 +43,132 @@ object SubtitleFontManager {
             id = "b_arabic_style",
             name = "B Arabic Style",
             fileName = "b_arabic_style.ttf",
+            familyName = "B Arabic Style",
             isBundled = true
         ),
         SubtitleFont(
             id = "bein_black",
             name = "BeIn Black",
             fileName = "bein_black.ttf",
+            familyName = "BeIn Black",
             isBundled = true
         ),
         SubtitleFont(
             id = "boutros_asma",
             name = "BoutrosAsma",
             fileName = "boutros_asma.ttf",
+            familyName = "BoutrosAsma",
             isBundled = true
         ),
         SubtitleFont(
             id = "dima_shekari",
             name = "DimaShekari",
             fileName = "dima_shekari.ttf",
+            familyName = "DimaShekari",
             isBundled = true
         ),
         SubtitleFont(
             id = "the_year_of_handicraft",
             name = "The Year Of Handicraft",
             fileName = "the_year_of_handicraft.ttf",
+            familyName = "The Year Of Handicraft",
             isBundled = true
         ),
         SubtitleFont(
             id = "takeaway_combo",
             name = "Takeaway Combo",
             fileName = "takeaway_combo.ttf",
+            familyName = "Takeaway Combo",
             isBundled = true
         ),
         SubtitleFont(
             id = "cairo",
             name = "Cairo (خط كايرو)",
             fileName = "cairo.ttf",
+            familyName = "Cairo",
             isBundled = true
         ),
         SubtitleFont(
             id = "tajawal",
             name = "Tajawal (خط تجوال)",
             fileName = "tajawal.ttf",
+            familyName = "Tajawal",
+            isBundled = true
+        ),
+        SubtitleFont(
+            id = "amiri",
+            name = "Amiri (الخط الأميري)",
+            fileName = "amiri.ttf",
+            familyName = "Amiri",
             isBundled = true
         ),
         SubtitleFont(
             id = "almarai",
             name = "Almarai (خط المراعي)",
             fileName = "almarai.ttf",
-            isBundled = true
-        ),
-        SubtitleFont(
-            id = "amiri",
-            name = "Amiri (خط أميري الكلاسيكي)",
-            fileName = "amiri.ttf",
-            isBundled = true
-        ),
-        SubtitleFont(
-            id = "readex_pro",
-            name = "Readex Pro (خط ريدكس برو)",
-            fileName = "readex_pro.ttf",
+            familyName = "Almarai",
             isBundled = true
         ),
         SubtitleFont(
             id = "changa",
             name = "Changa (خط تشانغا)",
             fileName = "changa.ttf",
+            familyName = "Changa",
+            isBundled = true
+        ),
+        SubtitleFont(
+            id = "readex_pro",
+            name = "Readex Pro",
+            fileName = "readex_pro.ttf",
+            familyName = "Readex Pro",
             isBundled = true
         ),
         SubtitleFont(
             id = "el_messiri",
-            name = "El Messiri (خط المسيري)",
+            name = "El Messiri (المسيري)",
             fileName = "el_messiri.ttf",
+            familyName = "El Messiri",
             isBundled = true
         ),
         SubtitleFont(
             id = "alexandria",
-            name = "Alexandria (خط الإسكندرية)",
+            name = "Alexandria (الإسكندرية)",
             fileName = "alexandria.ttf",
+            familyName = "Alexandria",
             isBundled = true
         ),
         SubtitleFont(
             id = "lalezar",
-            name = "Lalezar (خط لاله زار العريض)",
+            name = "Lalezar (لاليزار)",
             fileName = "lalezar.ttf",
+            familyName = "Lalezar",
             isBundled = true
         ),
         SubtitleFont(
             id = "rubik",
-            name = "Rubik (خط روبيك الحديث)",
+            name = "Rubik (روبيك)",
             fileName = "rubik.ttf",
+            familyName = "Rubik Light",
             isBundled = true
         ),
         SubtitleFont(
             id = "kufam",
-            name = "Kufam (خط كوفام العربي)",
+            name = "Kufam (خط كوفام)",
             fileName = "kufam.ttf",
+            familyName = "Kufam",
             isBundled = true
         ),
         SubtitleFont(
             id = "aref_ruqaa",
-            name = "Aref Ruqaa (خط الرقعة)",
+            name = "Aref Ruqaa (عارف رقعة)",
             fileName = "aref_ruqaa.ttf",
+            familyName = "Aref Ruqaa",
             isBundled = true
         )
     )
 
     /**
-     * إرجاع المجلد المخصص لحفظ الخطوط في ذاكرة التطبيق الداخلية لضمان وصول MPV إليه دون قيود أذونات
+     * المجلد الافتراضي لخطوط الترجمة في ذاكرة التطبيق الداخلية (MPV standard ~~/fonts)
      */
     fun getFontsDirectory(context: Context): File {
         val dir = File(context.filesDir, SUB_FONTS_DIR_NAME)
@@ -158,36 +179,93 @@ object SubtitleFontManager {
     }
 
     /**
-     * استخراج كافة الخطوط المدمجة في assets إلى مجلد الخطوط الفعلي في التخزين الداخلي
+     * استخراج جميع الخطوط المدمجة في assets إلى مجلد التطبيق وتهيئة ملف fontconfig ومكتبة MPV
      */
     fun ensureBundledFontsExtracted(context: Context) {
-        val targetDir = getFontsDirectory(context)
+        val fontsDir = getFontsDirectory(context)
+        val legacySubFontsDir = File(context.filesDir, "sub_fonts")
+        if (!legacySubFontsDir.exists()) {
+            legacySubFontsDir.mkdirs()
+        }
+
         try {
-            val assetFonts = context.assets.list(SUB_FONTS_DIR_NAME) ?: emptyArray()
-            for (assetName in assetFonts) {
-                if (assetName.endsWith(".ttf", ignoreCase = true) || assetName.endsWith(".otf", ignoreCase = true)) {
-                    val targetFile = File(targetDir, assetName)
-                    if (!targetFile.exists() || targetFile.length() == 0L) {
-                        try {
-                            context.assets.open("$SUB_FONTS_DIR_NAME/$assetName").use { input ->
-                                FileOutputStream(targetFile).use { output ->
-                                    input.copyTo(output)
-                                }
+            val assetList = context.assets.list("sub_fonts") ?: emptyArray()
+            for (fileName in assetList) {
+                if (fileName.endsWith(".ttf") || fileName.endsWith(".otf")) {
+                    val destFile = File(fontsDir, fileName)
+                    val legacyFile = File(legacySubFontsDir, fileName)
+                    if (!destFile.exists() || destFile.length() == 0L) {
+                        context.assets.open("sub_fonts/$fileName").use { input ->
+                            FileOutputStream(destFile).use { output ->
+                                input.copyTo(output)
                             }
-                            Log.d(TAG, "Extracted font asset $assetName to ${targetFile.absolutePath}")
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to extract font asset $assetName", e)
                         }
+                    }
+                    if (!legacyFile.exists() || legacyFile.length() == 0L) {
+                        try {
+                            destFile.copyTo(legacyFile, overwrite = true)
+                        } catch (_: Throwable) {}
                     }
                 }
             }
+
+            // إنشاء ملف fonts.conf لتهيئة Fontconfig تلقائياً داخل MPV
+            setupFontconfigFile(context, fontsDir)
+            setupMpvConfigFile(context, fontsDir)
+
+            Log.d(TAG, "Bundled fonts extracted successfully to: ${fontsDir.absolutePath}")
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking asset fonts", e)
+            Log.e(TAG, "Error extracting bundled fonts", e)
         }
     }
 
+    private fun setupFontconfigFile(context: Context, fontsDir: File) {
+        try {
+            val cacheFontDir = File(context.cacheDir, "fontconfig")
+            if (!cacheFontDir.exists()) cacheFontDir.mkdirs()
+
+            val fontsConfFile = File(context.filesDir, "fonts.conf")
+            val confXml = """
+                <?xml version="1.0"?>
+                <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+                <fontconfig>
+                    <dir>/system/fonts</dir>
+                    <dir>${fontsDir.absolutePath}</dir>
+                    <cachedir>${cacheFontDir.absolutePath}</cachedir>
+                    <config>
+                        <rescan>
+                            <int>30</int>
+                        </rescan>
+                    </config>
+                </fontconfig>
+            """.trimIndent()
+
+            fontsConfFile.writeText(confXml)
+
+            // ضبط متغيرات البيئة لـ Fontconfig
+            try {
+                Os.setenv("FONTCONFIG_FILE", fontsConfFile.absolutePath, true)
+                Os.setenv("FONTCONFIG_PATH", context.filesDir.absolutePath, true)
+            } catch (_: Throwable) {}
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error writing fonts.conf", e)
+        }
+    }
+
+    private fun setupMpvConfigFile(context: Context, fontsDir: File) {
+        try {
+            val mpvConf = File(context.filesDir, "mpv.conf")
+            val content = """
+                sub-fonts-dir=${fontsDir.absolutePath}
+                sub-font-provider=fontconfig
+                sub-ass-override=force
+            """.trimIndent()
+            mpvConf.writeText(content)
+        } catch (_: Throwable) {}
+    }
+
     /**
-     * جلب جميع الخطوط المتوفرة (المدمجة + المستوردة + الموجودة في مجلد مخصص إن وجد)
+     * استرداد قائمة الخطوط الكاملة (المدمجة + المستوردة + من مجلد خارجي)
      */
     suspend fun getAllFonts(context: Context, customFolderPath: String? = null): List<SubtitleFont> = withContext(Dispatchers.IO) {
         ensureBundledFontsExtracted(context)
@@ -201,30 +279,30 @@ object SubtitleFontManager {
                 continue
             }
             val localFile = File(fontsDir, defaultFont.fileName)
-            val exists = localFile.exists()
-            val size = if (exists) localFile.length() else 0L
+            val exists = localFile.exists() && localFile.length() > 0
             result.add(
                 defaultFont.copy(
                     localFilePath = if (exists) localFile.absolutePath else null,
-                    fileSize = size
+                    fileSize = if (exists) localFile.length() else 0L
                 )
             )
         }
 
-        // 2. البحث عن أي خطوط إضافية مستوردة في مجلد sub_fonts
+        // 2. البحث عن أي خطوط إضافية مستوردة في مجلد التطبيق
         val internalFiles = fontsDir.listFiles() ?: emptyArray()
-        val defaultFileNames = DEFAULT_FONTS.map { it.fileName.lowercase() }.toSet()
         for (file in internalFiles) {
             val nameLower = file.name.lowercase()
-            if ((nameLower.endsWith(".ttf") || nameLower.endsWith(".otf")) && nameLower !in defaultFileNames) {
-                val cleanTitle = file.nameWithoutExtension.replace('_', ' ').replace('-', ' ')
-                    .split(' ')
-                    .joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+            if (nameLower.endsWith(".ttf") || nameLower.endsWith(".otf")) {
+                if (result.any { it.fileName.equals(file.name, ignoreCase = true) }) {
+                    continue
+                }
+                val familyName = FontNameExtractor.extractFamilyName(file)
                 result.add(
                     SubtitleFont(
                         id = "imported_${file.name}",
-                        name = cleanTitle,
+                        name = familyName,
                         fileName = file.name,
+                        familyName = familyName,
                         isBundled = false,
                         isCustom = true,
                         localFilePath = file.absolutePath,
@@ -243,20 +321,20 @@ object SubtitleFontManager {
                     for (file in customFiles) {
                         val nameLower = file.name.lowercase()
                         if (nameLower.endsWith(".ttf") || nameLower.endsWith(".otf")) {
-                            // نسخ الخط إلى مجلد التطبيق الداخلي ليتمكن MPV من قراءته فوراً
                             val targetCopy = File(fontsDir, file.name)
                             if (!targetCopy.exists()) {
                                 try {
                                     file.copyTo(targetCopy, overwrite = true)
                                 } catch (_: Exception) {}
                             }
-                            val cleanTitle = file.nameWithoutExtension.replace('_', ' ').replace('-', ' ')
+                            val familyName = FontNameExtractor.extractFamilyName(file)
                             if (result.none { it.fileName.equals(file.name, ignoreCase = true) }) {
                                 result.add(
                                     SubtitleFont(
                                         id = "custom_folder_${file.name}",
-                                        name = cleanTitle,
+                                        name = familyName,
                                         fileName = file.name,
+                                        familyName = familyName,
                                         isBundled = false,
                                         isCustom = true,
                                         localFilePath = targetCopy.absolutePath,
@@ -300,11 +378,12 @@ object SubtitleFontManager {
                 }
             } ?: return@withContext Result.failure(Exception("تعذر فتح ملف الخط"))
 
-            val cleanName = destFile.nameWithoutExtension.replace('_', ' ').replace('-', ' ')
+            val familyName = FontNameExtractor.extractFamilyName(destFile)
             val font = SubtitleFont(
                 id = "imported_${destFile.name}",
-                name = cleanName,
+                name = familyName,
                 fileName = destFile.name,
+                familyName = familyName,
                 isBundled = false,
                 isCustom = true,
                 localFilePath = destFile.absolutePath,
@@ -328,39 +407,62 @@ object SubtitleFontManager {
             // 1. تحديد مجلد الخطوط لـ MPV
             MPVLib.setOptionString("sub-fonts-dir", fontsDir.absolutePath)
             MPVLib.setPropertyString("sub-fonts-dir", fontsDir.absolutePath)
+            MPVLib.setOptionString("sub-font-provider", "fontconfig")
 
-            // 2. تطبيق اسم الخط أو اسم ملف الخط
-            if (fontName.isNotBlank() && !fontName.contains("System Default", ignoreCase = true) && !fontName.contains("خط النظام", ignoreCase = true)) {
-                // إيجاد ملف الخط الدقيق إن وجد
+            val isSystemDefault = fontName.isBlank() ||
+                    fontName.contains("System Default", ignoreCase = true) ||
+                    fontName.contains("خط النظام", ignoreCase = true)
+
+            if (!isSystemDefault) {
+                // إيجاد عائلة الخط الحقيقية الدقيقة
                 val matchingFont = DEFAULT_FONTS.find { 
-                    it.name.equals(fontName, ignoreCase = true) || it.fileName.equals(fontFileName, ignoreCase = true) || it.fileName.equals(fontName, ignoreCase = true)
-                }
-                
-                val targetFontValue = when {
-                    !fontFileName.isNullOrBlank() -> fontFileName
-                    matchingFont != null -> matchingFont.fileName
-                    else -> fontName
+                    it.name.equals(fontName, ignoreCase = true) ||
+                    it.fileName.equals(fontFileName, ignoreCase = true) ||
+                    it.fileName.equals(fontName, ignoreCase = true) ||
+                    it.familyName.equals(fontName, ignoreCase = true) ||
+                    it.id.equals(fontName, ignoreCase = true)
                 }
 
-                // نمرر الاسم واسم الملف
-                MPVLib.setPropertyString("sub-font", targetFontValue)
-                MPVLib.setOptionString("sub-font", targetFontValue)
-                MPVLib.setPropertyString("osd-font", targetFontValue)
-                MPVLib.setOptionString("osd-font", targetFontValue)
+                val targetFamilyName = matchingFont?.familyName ?: fontName
+
+                // تعطيل خطوط الحاوية المدمجة واستبدالها بخط المستخدم المختار
+                MPVLib.setPropertyString("embeddedfonts", "no")
+                MPVLib.setOptionString("embeddedfonts", "no")
+
+                // تطبيق اسم الخط على ترجمات SRT و VTT
+                MPVLib.setPropertyString("sub-font", targetFamilyName)
+                MPVLib.setOptionString("sub-font", targetFamilyName)
+
+                // تطبيق اسم الخط على نصوص الواجهة OSD
+                MPVLib.setPropertyString("osd-font", targetFamilyName)
+                MPVLib.setOptionString("osd-font", targetFamilyName)
+
+                // فرض تطبيق الخط على ترجمات ASS و SSA المعقدة
+                MPVLib.setPropertyString("sub-ass-override", "force")
+                MPVLib.setOptionString("sub-ass-override", "force")
+                MPVLib.setPropertyString("sub-ass-force-style", "FontName=$targetFamilyName")
+                MPVLib.setOptionString("sub-ass-force-style", "FontName=$targetFamilyName")
             } else {
+                MPVLib.setPropertyString("embeddedfonts", "yes")
+                MPVLib.setOptionString("embeddedfonts", "yes")
                 MPVLib.setPropertyString("sub-font", "")
                 MPVLib.setOptionString("sub-font", "")
                 MPVLib.setPropertyString("osd-font", "")
                 MPVLib.setOptionString("osd-font", "")
+                MPVLib.setPropertyString("sub-ass-force-style", "")
+                MPVLib.setOptionString("sub-ass-force-style", "")
             }
 
-            // 3. فرض تطبيق الخط على كافة الترجمات (Override ASS/SSA/SRT)
-            MPVLib.setPropertyString("sub-ass-override", "force")
-            MPVLib.setOptionString("sub-ass-override", "force")
-
-            // 4. إعادة تحميل الترجمة وتحديث عرضها فوراً
+            // إعادة تحميل الترجمة وتحديث العرض فوراً
             try {
                 MPVLib.command("sub-reload")
+            } catch (_: Throwable) {}
+
+            try {
+                val currentSid = MPVLib.getPropertyString("sid")
+                if (!currentSid.isNullOrBlank() && currentSid != "no" && currentSid != "auto") {
+                    MPVLib.setPropertyString("sid", currentSid)
+                }
             } catch (_: Throwable) {}
 
             Log.d(TAG, "Successfully applied subtitle font '$fontName' to MPV from dir: ${fontsDir.absolutePath}")

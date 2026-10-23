@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -41,14 +43,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,40 +59,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogProperties
 import com.finalplayer.app.subtitles.SubtitleFont
 import com.finalplayer.app.subtitles.SubtitleFontManager
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
- * نافذة حوارية أنيقة متكاملة لاختيار وتثبيت خطوط الترجمة وإدارتها
- * مستوحاة من الصورة ومزودة بالمعاينة الحقيقية لكل خط، واستيراد الخطوط، وتحديد المجلدات.
+ * نافذة حوارية لاختيار وتصفح خطوط الترجمة من شاشة الإعدادات العامة (Settings)
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubtitleFontPickerDialog(
     currentFontName: String,
     customFolderPath: String = "",
     onDismiss: () -> Unit,
     onFontSelected: (SubtitleFont) -> Unit,
-    onCustomFolderSelected: ((String) -> Unit)? = null
+    onCustomFolderSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var searchQuery by remember { mutableStateOf("") }
     var fontsList by remember { mutableStateOf<List<SubtitleFont>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-    var selectedFontId by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFont by remember { mutableStateOf<SubtitleFont?>(null) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -104,9 +97,10 @@ fun SubtitleFontPickerDialog(
                 result.onSuccess { newFont ->
                     Toast.makeText(context, "تم استيراد الخط: ${newFont.name}", Toast.LENGTH_SHORT).show()
                     fontsList = SubtitleFontManager.getAllFonts(context, customFolderPath)
+                    selectedFont = newFont
                     onFontSelected(newFont)
-                }.onFailure { err ->
-                    Toast.makeText(context, "فشل استيراد الخط: ${err.message}", Toast.LENGTH_LONG).show()
+                }.onFailure { error ->
+                    Toast.makeText(context, "فشل استيراد الخط: ${error.message}", Toast.LENGTH_SHORT).show()
                 }
                 isLoading = false
             }
@@ -117,8 +111,8 @@ fun SubtitleFontPickerDialog(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            val path = uri.path ?: uri.toString()
-            onCustomFolderSelected?.invoke(path)
+            val path = uri.path ?: ""
+            onCustomFolderSelected(path)
             scope.launch {
                 isLoading = true
                 fontsList = SubtitleFontManager.getAllFonts(context, path)
@@ -130,64 +124,42 @@ fun SubtitleFontPickerDialog(
     LaunchedEffect(customFolderPath) {
         isLoading = true
         fontsList = SubtitleFontManager.getAllFonts(context, customFolderPath)
-        val initialSelected = fontsList.find {
-            it.name.equals(currentFontName, ignoreCase = true) ||
-            it.fileName.equals(currentFontName, ignoreCase = true)
-        }
-        selectedFontId = initialSelected?.id ?: if (currentFontName.isBlank()) "system_default" else ""
+        val initialSelected = fontsList.find { 
+            it.name.equals(currentFontName, ignoreCase = true) || it.fileName.equals(currentFontName, ignoreCase = true)
+        } ?: fontsList.firstOrNull { it.isSystemDefault }
+        selectedFont = initialSelected
         isLoading = false
     }
 
     val filteredFonts = remember(fontsList, searchQuery) {
         if (searchQuery.isBlank()) fontsList
-        else fontsList.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        else fontsList.filter { 
+            it.name.contains(searchQuery, ignoreCase = true) || 
+            it.fileName.contains(searchQuery, ignoreCase = true) 
+        }
     }
-
-    val configuration = LocalConfiguration.current
-    val dialogMaxHeight = (configuration.screenHeightDp * 0.85f).dp
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier
-            .fillMaxWidth(0.92f)
-            .heightIn(max = dialogMaxHeight)
-            .clip(RoundedCornerShape(24.dp))
-            .testTag("subtitle_font_picker_dialog"),
         title = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(40.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.FontDownload,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "خطوط الترجمة (Fonts)",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "اختر خط الترجمة أو استورد خطوطك المفضلة",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.FontDownload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(26.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "مجلد وخطوط الترجمة",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
                 IconButton(onClick = onDismiss) {
                     Icon(imageVector = Icons.Default.Close, contentDescription = "إغلاق")
@@ -198,35 +170,8 @@ fun SubtitleFontPickerDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+                    .heightIn(max = 500.dp)
             ) {
-                // شريط البحث
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("بحث عن خط (مثل: Cairo, Tajawal, BeIn...)") },
-                    leadingIcon = {
-                        Icon(imageVector = Icons.Default.Search, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
-                                Icon(imageVector = Icons.Default.Close, contentDescription = "مسح")
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // أزرار العمليات العلوية: استيراد خط + اختيار مجلد
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -235,49 +180,81 @@ fun SubtitleFontPickerDialog(
                         onClick = {
                             filePickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/x-font-opentype", "*/*"))
                         },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
                         Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("استيراد خط", fontSize = 12.sp, maxLines = 1)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("استيراد خط", fontSize = 12.sp)
                     }
 
-                    if (onCustomFolderSelected != null) {
-                        OutlinedButton(
-                            onClick = { folderPickerLauncher.launch(null) },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("مجلد خطوط", fontSize = 12.sp, maxLines = 1)
-                        }
+                    OutlinedButton(
+                        onClick = { folderPickerLauncher.launch(null) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("مجلد خطوط", fontSize = 12.sp)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("بحث عن خط...", fontSize = 14.sp) },
+                    leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(imageVector = Icons.Default.Close, contentDescription = "مسح")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 if (isLoading) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp),
+                            .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
+                    }
+                } else if (filteredFonts.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "لا توجد خطوط مطابقة للبحث",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f, fill = false),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(filteredFonts, key = { it.id }) { font ->
-                            val isSelected = font.id == selectedFontId || 
-                                font.name.equals(currentFontName, ignoreCase = true) ||
-                                (font.isSystemDefault && currentFontName.isBlank())
+                            val isSelected = selectedFont?.id == font.id ||
+                                    (selectedFont == null && font.name.equals(currentFontName, ignoreCase = true))
 
                             val fontComposeFamily = remember(font) {
                                 SubtitleFontManager.getComposeFontFamily(context, font)
@@ -285,78 +262,93 @@ fun SubtitleFontPickerDialog(
 
                             Card(
                                 onClick = {
-                                    selectedFontId = font.id
-                                    SubtitleFontManager.applyFontToMPV(context, font.name, font.fileName)
+                                    selectedFont = font
                                     onFontSelected(font)
+                                    SubtitleFontManager.applyFontToMPV(context, font.name, font.fileName)
                                 },
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) 
-                                        MaterialTheme.colorScheme.primaryContainer 
-                                    else 
-                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                    containerColor = if (isSelected)
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    else
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                                 ),
-                                border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                                border = if (isSelected)
+                                    androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                else
+                                    null,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("font_item_${font.id}")
                             ) {
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                        .padding(12.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = font.name,
-                                            fontFamily = fontComposeFamily,
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Spacer(modifier = Modifier.height(3.dp))
-                                        Text(
-                                            text = if (font.isSystemDefault) "الخط القياسي للنظام" 
-                                                   else if (font.isCustom) "خط مخصص تم استيراده" 
-                                                   else "خط عربي عالي الجودة للترجمات",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-
-                                    if (isSelected) {
-                                        Surface(
-                                            shape = RoundedCornerShape(10.dp),
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(32.dp)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
                                         ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = "تم الاختيار",
-                                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                                    modifier = Modifier.size(20.dp)
+                                            Text(
+                                                text = font.name,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSelected)
+                                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                                else
+                                                    MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = if (font.isSystemDefault)
+                                                    MaterialTheme.colorScheme.tertiaryContainer
+                                                else if (font.isCustom)
+                                                    MaterialTheme.colorScheme.secondaryContainer
+                                                else
+                                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                            ) {
+                                                Text(
+                                                    text = if (font.isSystemDefault) "نظام" else if (font.isCustom) "مخصص" else "مُدمج",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                 )
                                             }
                                         }
-                                    } else {
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                                            modifier = Modifier.padding(start = 8.dp)
-                                        ) {
-                                            Text(
-                                                text = "معاينة",
-                                                fontFamily = fontComposeFamily,
-                                                fontSize = 12.sp,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.CheckCircle,
+                                                contentDescription = "محدد",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(22.dp)
                                             )
                                         }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    // نص المعاينة الحية بالخط العربي المحدد
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "معاينة الخط: الترجمة العربية 123 - FinalPlayer",
+                                            fontFamily = fontComposeFamily,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Normal,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
                                     }
                                 }
                             }
@@ -377,18 +369,17 @@ fun SubtitleFontPickerDialog(
 }
 
 /**
- * لوحة منبثقة سريعة (Bottom Sheet) لاختيار خط الترجمة مباشرة أثناء تشغيل الفيديو
+ * قائمة جانبية (Side Panel) سريعة ومريحة لاختيار خط الترجمة أثناء تشغيل الفيديو
+ * تفتح جانباً كما طلب المستخدم تماماً كاللوحات الجانبية الأخرى.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SubtitleFontPickerSheet(
+fun SubtitleFontPickerSidePanel(
     currentFontName: String,
     onDismiss: () -> Unit,
     onFontSelected: (SubtitleFont) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var fontsList by remember { mutableStateOf<List<SubtitleFont>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
@@ -419,20 +410,22 @@ fun SubtitleFontPickerSheet(
 
     val filteredFonts = remember(fontsList, searchQuery) {
         if (searchQuery.isBlank()) fontsList
-        else fontsList.filter { it.name.contains(searchQuery, ignoreCase = true) }
+        else fontsList.filter { 
+            it.name.contains(searchQuery, ignoreCase = true) || 
+            it.fileName.contains(searchQuery, ignoreCase = true) 
+        }
     }
 
-    ModalBottomSheet(
+    SidePanel(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.testTag("subtitle_font_picker_sheet")
+        modifier = Modifier.testTag("subtitle_font_picker_side_panel")
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            // الهيدر الرئيسي
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -445,34 +438,58 @@ fun SubtitleFontPickerSheet(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "خط الترجمة (Subtitle Font)",
+                        text = "خطوط الترجمة",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                TextButton(
-                    onClick = {
-                        filePickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/x-font-opentype", "*/*"))
-                    }
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.testTag("close_font_panel_button")
                 ) {
-                    Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("استيراد خط", fontSize = 13.sp)
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "إغلاق")
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
+            // زر استيراد ملف خط مخصص
+            OutlinedButton(
+                onClick = {
+                    filePickerLauncher.launch(arrayOf("font/ttf", "font/otf", "application/x-font-ttf", "application/x-font-opentype", "*/*"))
+                },
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("استيراد خط من الذاكرة (.ttf / .otf)", fontSize = 13.sp)
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // مربع البحث
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("بحث عن خط...") },
+                placeholder = { Text("بحث عن خط...", fontSize = 14.sp) },
                 leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "مسح")
+                        }
+                    }
+                },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -482,17 +499,29 @@ fun SubtitleFontPickerSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp),
+                        .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
+                }
+            } else if (filteredFonts.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "لا توجد نتائج مطابقة",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 420.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(filteredFonts, key = { it.id }) { font ->
                         val isSelected = font.name.equals(currentFontName, ignoreCase = true) ||
@@ -506,40 +535,89 @@ fun SubtitleFontPickerSheet(
                             onClick = {
                                 SubtitleFontManager.applyFontToMPV(context, font.name, font.fileName)
                                 onFontSelected(font)
-                                onDismiss()
                             },
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) 
-                                    MaterialTheme.colorScheme.primaryContainer 
-                                else 
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                containerColor = if (isSelected)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                             ),
-                            border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                            modifier = Modifier.fillMaxWidth()
+                            border = if (isSelected)
+                                androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                            else
+                                null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("side_font_card_${font.id}")
                         ) {
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .padding(horizontal = 14.dp, vertical = 10.dp)
                             ) {
-                                Text(
-                                    text = font.name,
-                                    fontFamily = fontComposeFamily,
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = font.name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected)
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            else
+                                                MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = if (font.isSystemDefault)
+                                                MaterialTheme.colorScheme.tertiaryContainer
+                                            else if (font.isCustom)
+                                                MaterialTheme.colorScheme.secondaryContainer
+                                            else
+                                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                        ) {
+                                            Text(
+                                                text = if (font.isSystemDefault) "نظام" else if (font.isCustom) "مخصص" else "مُدمج",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
 
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = "تم الاختيار",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "تم الاختيار",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "معاينة الخط: الترجمة العربية 123",
+                                        fontFamily = fontComposeFamily,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
                             }
@@ -548,7 +626,23 @@ fun SubtitleFontPickerSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
+}
+
+/**
+ * غلاف توافقي لـ SubtitleFontPickerSheet يوجه للقائمة الجانبية كما طلب المستخدم
+ */
+@Composable
+fun SubtitleFontPickerSheet(
+    currentFontName: String,
+    onDismiss: () -> Unit,
+    onFontSelected: (SubtitleFont) -> Unit
+) {
+    SubtitleFontPickerSidePanel(
+        currentFontName = currentFontName,
+        onDismiss = onDismiss,
+        onFontSelected = onFontSelected
+    )
 }
