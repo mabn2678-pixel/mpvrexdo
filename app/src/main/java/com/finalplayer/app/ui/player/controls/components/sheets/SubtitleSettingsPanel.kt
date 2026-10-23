@@ -17,6 +17,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.FontDownload
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.Surface
+import com.finalplayer.app.ui.components.SubtitleFontPickerSheet
+import com.finalplayer.app.subtitles.SubtitleFontManager
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatColorFill
 import androidx.compose.material.icons.filled.FormatItalic
@@ -117,12 +124,22 @@ fun SubtitleSettingsPanel(
     var bgGreen by remember { mutableIntStateOf(((backgroundColorLong shr 8) and 0xFF).toInt()) }
     var bgBlue by remember { mutableIntStateOf((backgroundColorLong and 0xFF).toInt()) }
 
+    val context = LocalContext.current
+    var currentFont by remember { mutableStateOf(subPrefs.font.get()) }
+    var showFontPickerSheet by remember { mutableStateOf(false) }
+
     // تهيئة الخصائص في مشغل MPV عند فتح اللوحة لأول مرة
     val currentSubScale = if (isPip) 1.8f else 1.0f
     LaunchedEffect(Unit) {
         val liveFontSize = MPVLib.getPropertyInt("sub-font-size") ?: fontSizePref.get()
         fontSize = liveFontSize
-        applyTypographyToMPV(isBold, isItalic, liveFontSize, borderSize, shadowOffset, subPos, borderStyle, overrideAss, currentSubScale)
+        val liveFont = subPrefs.font.get()
+        currentFont = liveFont
+        val fontsDir = SubtitleFontManager.getFontsDirectory(context)
+        SubtitleFontManager.ensureBundledFontsExtracted(context)
+        MPVLib.setOptionString("sub-fonts-dir", fontsDir.absolutePath)
+        MPVLib.setPropertyString("sub-fonts-dir", fontsDir.absolutePath)
+        applyTypographyToMPV(isBold, isItalic, liveFontSize, borderSize, shadowOffset, subPos, borderStyle, overrideAss, currentSubScale, liveFont)
         applyColorToMPV(ColorTarget.TEXT, textAlpha, textRed, textGreen, textBlue)
         applyColorToMPV(ColorTarget.BORDER, borderAlpha, borderRed, borderGreen, borderBlue)
         applyColorToMPV(ColorTarget.BACKGROUND, bgAlpha, bgRed, bgGreen, bgBlue)
@@ -181,6 +198,8 @@ fun SubtitleSettingsPanel(
                 // كارت الطباعة والخط Typography
                 item {
                     SubtitleSettingsTypographyCard(
+                        currentFont = currentFont,
+                        onFontClick = { showFontPickerSheet = true },
                         isBold = isBold,
                         onBoldChange = { boldVal ->
                             isBold = boldVal
@@ -315,6 +334,19 @@ fun SubtitleSettingsPanel(
             }
         }
     }
+
+    if (showFontPickerSheet) {
+        SubtitleFontPickerSheet(
+            currentFontName = currentFont,
+            onDismiss = { showFontPickerSheet = false },
+            onFontSelected = { font ->
+                val fontValue = if (font.isSystemDefault) "" else font.name
+                currentFont = fontValue
+                coroutineScope.launch { subPrefs.font.set(fontValue) }
+                SubtitleFontManager.applyFontToMPV(context, font.name, font.fileName)
+            }
+        )
+    }
 }
 
 /**
@@ -322,6 +354,8 @@ fun SubtitleSettingsPanel(
  */
 @Composable
 fun SubtitleSettingsTypographyCard(
+    currentFont: String,
+    onFontClick: () -> Unit,
     isBold: Boolean,
     onBoldChange: (Boolean) -> Unit,
     isItalic: Boolean,
@@ -356,6 +390,64 @@ fun SubtitleSettingsTypographyCard(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.primary
             )
+
+            // اختيار نوع الخط (Subtitle Font Selector)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    .clickable { onFontClick() }
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .testTag("subtitle_font_selector"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.FontDownload,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "نوع الخط (Font)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = if (currentFont.isNotBlank()) currentFont else "خط النظام الافتراضي",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = "تغيير",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
 
             // نمط الحدود: محيط وظل vs صندوق معتم
             Text(
@@ -730,8 +822,23 @@ private fun applyTypographyToMPV(
     subPos: Int,
     borderStyle: String,
     overrideAss: Boolean,
-    subScale: Float = 1.0f
+    subScale: Float = 1.0f,
+    fontName: String = ""
 ) {
+    if (fontName.isNotBlank() && !fontName.contains("System", ignoreCase = true) && !fontName.contains("نظام", ignoreCase = true)) {
+        val matching = SubtitleFontManager.DEFAULT_FONTS.find {
+            it.name.equals(fontName, ignoreCase = true) || it.fileName.equals(fontName, ignoreCase = true)
+        }
+        val target = matching?.fileName ?: fontName
+        MPVLib.setPropertyString("sub-font", target)
+        MPVLib.setOptionString("sub-font", target)
+        MPVLib.setPropertyString("osd-font", target)
+        MPVLib.setOptionString("osd-font", target)
+    } else {
+        MPVLib.setPropertyString("sub-font", "")
+        MPVLib.setOptionString("sub-font", "")
+    }
+
     // sub-bold: تفعيل أو إلغاء الخط العريض
     MPVLib.setPropertyBoolean("sub-bold", bold)
     MPVLib.setPropertyInt("sub-bold", if (bold) 1 else 0)
@@ -791,6 +898,10 @@ private fun applyTypographyToMPV(
     // sub-ass-override: force لتطبيق تخصيص الخط لكافة أنواع الترجمات
     MPVLib.setOptionString("sub-ass-override", "force")
     MPVLib.setPropertyString("sub-ass-override", "force")
+
+    try {
+        MPVLib.command("sub-reload")
+    } catch (_: Throwable) {}
 }
 
 /**

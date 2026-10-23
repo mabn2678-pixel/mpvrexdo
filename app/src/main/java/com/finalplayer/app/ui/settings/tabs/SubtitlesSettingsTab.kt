@@ -38,6 +38,7 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import com.finalplayer.app.ui.components.SubtitleFontPickerDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -88,6 +89,7 @@ fun SubtitlesSettingsTab() {
     val openInVideoLoc by prefs.openInVideoLocation.asFlow().collectAsState(initial = false)
     val defaultFolder by prefs.defaultFolder.asFlow().collectAsState(initial = "")
     val fontsFolder by prefs.fontsFolder.asFlow().collectAsState(initial = "")
+    val currentFont by prefs.font.asFlow().collectAsState(initial = "")
 
     val saveLocation by prefs.saveLocation.asFlow().collectAsState(initial = "")
     val subtitleSources by prefs.subtitleSources.asFlow().collectAsState(initial = "All,SubDL,Subf2m,OpenSubtitles,Podnapisi,Gestdown,AnimeTosho")
@@ -107,6 +109,7 @@ fun SubtitlesSettingsTab() {
 
     var showDefaultFolderDialog by remember { mutableStateOf(false) }
     var showFontsFolderDialog by remember { mutableStateOf(false) }
+    var showFontsPickerDialog by remember { mutableStateOf(false) }
     var showSaveLocationDialog by remember { mutableStateOf(false) }
     var showSearchLangsDialog by remember { mutableStateOf(false) }
     var showFormatsDialog by remember { mutableStateOf(false) }
@@ -213,11 +216,11 @@ fun SubtitlesSettingsTab() {
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f))
 
-                // 8. مجلد الخطوط
+                // 8. مجلد الخطوط وقائمة الخطوط
                 SubClickableRow(
                     title = "مجلد الخطوط",
-                    subtitle = if (fontsFolder.isBlank()) "غير مُعيَّن (يستخدم خطوط النظام)" else fontsFolder,
-                    onClick = { showFontsFolderDialog = true }
+                    subtitle = if (currentFont.isNotBlank()) "الخط المحدد: $currentFont" else if (fontsFolder.isBlank()) "غير مُعيَّن (يستخدم خطوط النظام)" else fontsFolder,
+                    onClick = { showFontsPickerDialog = true }
                 )
             }
         }
@@ -449,6 +452,25 @@ fun SubtitlesSettingsTab() {
             onConfirm = { newPath ->
                 scope.launch { prefs.defaultFolder.set(newPath) }
                 showDefaultFolderDialog = false
+            }
+        )
+    }
+
+    if (showFontsPickerDialog) {
+        SubtitleFontPickerDialog(
+            currentFontName = currentFont,
+            customFolderPath = fontsFolder,
+            onDismiss = { showFontsPickerDialog = false },
+            onFontSelected = { selectedFont ->
+                scope.launch {
+                    val fontValue = if (selectedFont.isSystemDefault) "" else selectedFont.name
+                    prefs.font.set(fontValue)
+                }
+            },
+            onCustomFolderSelected = { folderPath ->
+                scope.launch {
+                    prefs.fontsFolder.set(folderPath)
+                }
             }
         )
     }

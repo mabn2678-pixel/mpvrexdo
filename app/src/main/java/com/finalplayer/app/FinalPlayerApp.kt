@@ -7,6 +7,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.finalplayer.app.di.appModule
 import com.finalplayer.app.music.di.musicModule
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
@@ -16,6 +17,9 @@ class FinalPlayerApp : Application(), ImageLoaderFactory {
         startKoin {
             androidContext(this@FinalPlayerApp)
             modules(appModule, musicModule)
+        }
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            com.finalplayer.app.subtitles.SubtitleFontManager.ensureBundledFontsExtracted(this@FinalPlayerApp)
         }
     }
 

@@ -96,6 +96,8 @@ class PlayerViewModel(
     val appearancePrefs: AppearancePreferences? = null
 ) : ViewModel(), KoinComponent {
 
+    private val appContext: Context by inject()
+
     var chaptersList by mutableStateOf<List<VideoChapter>>(emptyList())
         private set
 
@@ -1038,10 +1040,11 @@ class PlayerViewModel(
             MPVLib.setPropertyString("sub-ass-override", "force")
             MPVLib.setOptionString("sub-ass-override", "force")
 
-            if (fontsDir.isNotBlank()) {
-                MPVLib.setPropertyString("sub-fonts-dir", fontsDir)
-                MPVLib.setOptionString("sub-fonts-dir", fontsDir)
-            }
+            val internalFontsDir = com.finalplayer.app.subtitles.SubtitleFontManager.getFontsDirectory(appContext)
+            com.finalplayer.app.subtitles.SubtitleFontManager.ensureBundledFontsExtracted(appContext)
+            val effectiveFontsDir = if (fontsDir.isNotBlank()) fontsDir else internalFontsDir.absolutePath
+            MPVLib.setPropertyString("sub-fonts-dir", effectiveFontsDir)
+            MPVLib.setOptionString("sub-fonts-dir", effectiveFontsDir)
 
             if (encodings.isNotBlank()) {
                 val codepage = when {
@@ -1085,9 +1088,18 @@ class PlayerViewModel(
             MPVLib.setPropertyFloat("sub-shadow-offset", shadow.toFloat())
             MPVLib.setOptionString("sub-shadow-offset", shadow.toString())
 
-            if (fontStr.isNotBlank()) {
-                MPVLib.setPropertyString("sub-font", fontStr)
-                MPVLib.setOptionString("sub-font", fontStr)
+            if (fontStr.isNotBlank() && !fontStr.contains("System", ignoreCase = true) && !fontStr.contains("نظام", ignoreCase = true)) {
+                val matching = com.finalplayer.app.subtitles.SubtitleFontManager.DEFAULT_FONTS.find {
+                    it.name.equals(fontStr, ignoreCase = true) || it.fileName.equals(fontStr, ignoreCase = true)
+                }
+                val targetFont = matching?.fileName ?: fontStr
+                MPVLib.setPropertyString("sub-font", targetFont)
+                MPVLib.setOptionString("sub-font", targetFont)
+                MPVLib.setPropertyString("osd-font", targetFont)
+                MPVLib.setOptionString("osd-font", targetFont)
+            } else {
+                MPVLib.setPropertyString("sub-font", "")
+                MPVLib.setOptionString("sub-font", "")
             }
 
             if (bStyle == "box") {
@@ -1303,6 +1315,34 @@ class PlayerViewModel(
                         MPVLib.setPropertyString("sub-fonts-dir", fontsDir)
                         MPVLib.setOptionString("sub-fonts-dir", fontsDir)
                     }
+                }
+            }
+            viewModelScope.launch {
+                prefs.font.changes().collect { fontStr ->
+                    val internalFontsDir = com.finalplayer.app.subtitles.SubtitleFontManager.getFontsDirectory(appContext)
+                    val customDir = prefs.fontsFolder.get()
+                    val effectiveFontsDir = if (customDir.isNotBlank()) customDir else internalFontsDir.absolutePath
+                    MPVLib.setPropertyString("sub-fonts-dir", effectiveFontsDir)
+                    MPVLib.setOptionString("sub-fonts-dir", effectiveFontsDir)
+
+                    if (fontStr.isNotBlank() && !fontStr.contains("System", ignoreCase = true) && !fontStr.contains("نظام", ignoreCase = true)) {
+                        val matching = com.finalplayer.app.subtitles.SubtitleFontManager.DEFAULT_FONTS.find {
+                            it.name.equals(fontStr, ignoreCase = true) || it.fileName.equals(fontStr, ignoreCase = true)
+                        }
+                        val targetFont = matching?.fileName ?: fontStr
+                        MPVLib.setPropertyString("sub-font", targetFont)
+                        MPVLib.setOptionString("sub-font", targetFont)
+                        MPVLib.setPropertyString("osd-font", targetFont)
+                        MPVLib.setOptionString("osd-font", targetFont)
+                    } else {
+                        MPVLib.setPropertyString("sub-font", "")
+                        MPVLib.setOptionString("sub-font", "")
+                    }
+                    MPVLib.setPropertyString("sub-ass-override", "force")
+                    MPVLib.setOptionString("sub-ass-override", "force")
+                    try {
+                        MPVLib.command("sub-reload")
+                    } catch (_: Throwable) {}
                 }
             }
             viewModelScope.launch {
